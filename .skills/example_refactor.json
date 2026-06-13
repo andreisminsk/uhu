@@ -1,0 +1,9 @@
+{
+    "name": "refactor",
+    "description": "Suggest refactoring improvements for code",
+    "system_prompt": "## refactor\nSuggest refactoring improvements for code.\nParameters (JSON object):\n- path (string, required): File to refactor\n- goal (string, optional): Refactoring goal — simplify, optimize, modernize, dry\n\nWhen this skill is invoked with file content, analyze the code and suggest refactoring:\n1. Identify code smells and anti-patterns\n2. Suggest specific refactoring techniques (extract method, rename, etc.)\n3. Provide before/after code examples using EDIT blocks\n4. Prioritize changes by impact",
+    "parameters": {
+        "path": {"type": "string", "required": true, "description": "File to refactor"},
+        "goal": {"type": "string", "required": false, "description": "Refactoring goal: simplify, optimize, modernize, dry"}
+    }
+}

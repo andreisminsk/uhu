@@ -1,0 +1,15 @@
+ollama>=0.4.0
+
+# Optional — Markdown to PDF conversion (md2pdf skill)
+# markdown
+# pymdown-extensions
+# xhtml2pdf
+
+# Optional — browser automation
+# playwright
+# playwright-stealth
+
+# Optional — Google Calendar integration
+# google-api-python-client
+# google-auth-httplib2
+# google-auth-oauthlib

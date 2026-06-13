@@ -1,0 +1,24 @@
+{
+  "llm_query": {
+    "api_url": "http://localhost:11434",
+    "model": "qwen3.5:397b-cloud",
+    "temperature": 0.3,
+    "timeout": 120
+  },
+  "web_fetch": {
+    "llm_model": "qwen3.5:397b-cloud",
+    "llm_summarize": true,
+    "max_chars": 3000
+  },
+  "tools": {
+    "image_analysis": {
+      "base_url": "http://localhost:11434/",
+      "model": "gemma4:31b-cloud"
+    },
+    "google_calendar": {
+      "credentials_path": "gs-cred.json",
+      "calendar_id": "yourcalendarid_email",
+      "timezone": "Asia/Tbilisi"
+    }
+  }
+}
