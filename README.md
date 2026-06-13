@@ -1,3 +1,6 @@
+**This repository is Read-Only.** 
+This project is publicly visible for educational or reference purposes
+
 # ollama-chat-agentic
 
 **uhu** (nickname) is a minimalistic agentic coder that lets you closely interact with the model and see how the agentic flow works under the hood. No magic — just a transparent feedback loop of actions, observations, and model calls you can watch unfold step by step. Unlike common agentic coders, uhu focuses on conservative context consumption, helping you achieve the most productive use of tokens. Switch between models with `--model` to compare how different LLMs — small or large, local or cloud — behave in their natural agentic habitat. You can also connect to remote Ollama instances with `--host` (e.g. a Mac Mini M4 Pro running `gemma4:31b` on your local network at `--host http://192.168.1.42:11434`), so you are able to explore and make your own assessment of conversation capabilities of local models. uhu also supports custom skills — reusable, composable workflows you define in JSON that extend the model's capabilities for specific tasks.
@@ -239,35 +242,35 @@ uhu --no-autosave --no-cache
 
 ## Slash Commands
 
-| Command                            | Description                                                                                                                                                                              |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/help`                            | Show available commands                                                                                                                                                                  |
-| `/reset`                           | Clear conversation history (keeps system prompt)                                                                                                                                         |
-| `/v`, `/ver`, `/version`           | Show version (also `-v` CLI flag)                                                                                                                                                        |
-| `/history`                         | Show context usage bar                                                                                                                                                                   |
+| Command                            | Description                                                                                                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/help`                            | Show available commands                                                                                                                                      |
+| `/reset`                           | Clear conversation history (keeps system prompt)                                                                                                             |
+| `/v`, `/ver`, `/version`           | Show version (also `-v` CLI flag)                                                                                                                            |
+| `/history`                         | Show context usage bar                                                                                                                                       |
 | `/sober`                           | Re-inject system prompt to refocus the model. Use it when you see that model becomes inadequate, but you want to preserve context and continue conversation. |
-| `/compact`                         | Summarize history into a compact briefing                                                                                                                                                |
-| `/compact memory [project\|agent]` | Compact memory file using LLM deduplication                                                                                                                                              |
-| `/memorize <text>`                 | Add entry to project memory (auto-classified)                                                                                                                                            |
-| `/memorize project <text>`         | Add entry to project memory (PROJ-MEMORY.md)                                                                                                                                             |
-| `/memorize agent <text>`           | Add entry to agent memory (AGENT-MEMORY.md)                                                                                                                                              |
-| `/auto`                            | Toggle auto-all mode / show approval settings                                                                                                                                            |
-| `/auto reset`                      | Clear session auto-approvals                                                                                                                                                             |
-| `/auto reset always`               | Clear persistent (always) approvals                                                                                                                                                      |
-| `/auto reset all`                  | Clear both session and persistent approvals                                                                                                                                              |
-| `/diff`                            | Toggle auto-diff for edits                                                                                                                                                               |
-| `/m` or `/multiline`               | Enter multiline mode                                                                                                                                                                     |
-| `/attach <path>`                   | Attach file(s) to next message                                                                                                                                                           |
-| `/attach-bin <path>`               | Attach binary file reference                                                                                                                                                             |
-| `/search <pattern> <glob>`         | Search across files                                                                                                                                                                      |
-| `/peek <path>`                     | Show head+tail of a file                                                                                                                                                                 |
-| `/ls [path]`                       | List directory contents                                                                                                                                                                  |
-| `/md <path>`                       | Create a directory                                                                                                                                                                       |
-| `/skills`                          | List available skills                                                                                                                                                                    |
-| `/save [name]`                     | Save session                                                                                                                                                                             |
-| `/restore [name]`                  | Restore a saved session                                                                                                                                                                  |
-| `/sessions`                        | List all saved sessions                                                                                                                                                                  |
-| `exit` / `/exit` / `/bye`          | Exit the session                                                                                                                                                                         |
+| `/compact`                         | Summarize history into a compact briefing                                                                                                                    |
+| `/compact memory [project\|agent]` | Compact memory file using LLM deduplication                                                                                                                  |
+| `/memorize <text>`                 | Add entry to project memory (auto-classified)                                                                                                                |
+| `/memorize project <text>`         | Add entry to project memory (PROJ-MEMORY.md)                                                                                                                 |
+| `/memorize agent <text>`           | Add entry to agent memory (AGENT-MEMORY.md)                                                                                                                  |
+| `/auto`                            | Toggle auto-all mode / show approval settings                                                                                                                |
+| `/auto reset`                      | Clear session auto-approvals                                                                                                                                 |
+| `/auto reset always`               | Clear persistent (always) approvals                                                                                                                          |
+| `/auto reset all`                  | Clear both session and persistent approvals                                                                                                                  |
+| `/diff`                            | Toggle auto-diff for edits                                                                                                                                   |
+| `/m` or `/multiline`               | Enter multiline mode                                                                                                                                         |
+| `/attach <path>`                   | Attach file(s) to next message                                                                                                                               |
+| `/attach-bin <path>`               | Attach binary file reference                                                                                                                                 |
+| `/search <pattern> <glob>`         | Search across files                                                                                                                                          |
+| `/peek <path>`                     | Show head+tail of a file                                                                                                                                     |
+| `/ls [path]`                       | List directory contents                                                                                                                                      |
+| `/md <path>`                       | Create a directory                                                                                                                                           |
+| `/skills`                          | List available skills                                                                                                                                        |
+| `/save [name]`                     | Save session                                                                                                                                                 |
+| `/restore [name]`                  | Restore a saved session                                                                                                                                      |
+| `/sessions`                        | List all saved sessions                                                                                                                                      |
+| `exit` / `/exit` / `/bye`          | Exit the session                                                                                                                                             |
 
 ## Confirmation Options
 
