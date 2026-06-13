@@ -9,17 +9,15 @@ This project is publicly visible for educational or reference purposes
 
 - **Agent mode** (`--agent`): Parse and execute WRITE/EDIT/RUN/FILE blocks from model output
 - **Tools mode** (on by default, `--no-tools` to disable): 20 structured tool calls for filesystem, git, HTTP, browser automation, and more
-- **Skills mode** (`--skills`): Invoke development skills (code-review, test-gen, doc-gen, plan)
+- **Skills mode** (`--skills` - off by default): Invoke development skills (code-review, test-gen, doc-gen, plan) and custom skills
 - **Streaming support** (`--stream`): Token-by-token output
 - **Session persistence**: Save/restore conversations with `/save` and `/restore`
 - **Auto-compaction**: `/compact` summarizes history to free context
 - **Permanent memory**: `/memorize` saves instructions/facts across sessions via PROJ-MEMORY.md and AGENT-MEMORY.md
 - **File caching**: Previous versions saved to `.uhu/.cache/` for diff review
 - **In-memory rollback**: Auto-restore files on WRITE/EDIT failures
-- **Persistent approvals**: `always` option saves auto-approvals to `.uhu/coderconfig.json`
 - **Batch write limit**: Pauses after 3 file changes per round for review
 - **Thinking mode** (`--thinking`): Handle thinking tokens from reasoning models (qwen3, deepseek-r1)
-- **Smart encoding**: UTF-8 with OEM codepage fallback for non-English Windows
 - **Browser automation** (on by default with tools): Playwright-based browser with stealth support for scraping and interaction
 
 ## Installation
