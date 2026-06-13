@@ -1,6 +1,8 @@
 **This repository is Read-Only.** 
 This project is publicly visible for educational or reference purposes
 
+Project demo video: https://youtu.be/heG0QWUt4Lw
+
 # ollama-chat-agentic
 
 **uhu** (nickname) is a minimalistic agentic coder that lets you closely interact with the model and see how the agentic flow works under the hood. No magic — just a transparent feedback loop of actions, observations, and model calls you can watch unfold step by step. Unlike common agentic coders, uhu focuses on conservative context consumption, helping you achieve the most productive use of tokens. Switch between models with `--model` to compare how different LLMs — small or large, local or cloud — behave in their natural agentic habitat. You can also connect to remote Ollama instances with `--host` (e.g. a Mac Mini M4 Pro running `gemma4:31b` on your local network at `--host http://192.168.1.42:11434`), so you are able to explore and make your own assessment of conversation capabilities of local models. uhu also supports custom skills — reusable, composable workflows you define in JSON that extend the model's capabilities for specific tasks.
