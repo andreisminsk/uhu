@@ -931,7 +931,6 @@ class ActionMixin:
         max_total_read_chars = min(self.ctx_size, 200000)
         placeholder_warnings = []
         write_count = 0
-        batch_limited = False
         for action in actions:
             action_path = action.get("path") or action.get("name")
             if action_path and action_path.lower().strip() in self._PLACEHOLDER_NAMES:
@@ -942,11 +941,6 @@ class ActionMixin:
                 )
                 continue
             if action["type"] == "write":
-                if batch_limited:
-                    observations.append(f"[Deferred: WRITE {action['path']} — batch write limit ({MAX_BATCH_WRITES}) reached, will continue next round]")
-                    if not action.get("closed"):
-                        missing_eof_paths.append(action["path"])
-                    continue
                 if not self.agent:
                     observations.append(f"[Skipped: WRITE {action['path']} — add --agent to execute]")
                     continue
@@ -968,16 +962,9 @@ class ActionMixin:
                 else:
                     has_executed_non_read = True
                     write_count += 1
-                    if write_count >= MAX_BATCH_WRITES:
-                        batch_limited = True
                 if not action.get("closed"):
                     missing_eof_paths.append(action["path"])
             elif action["type"] == "edit":
-                if batch_limited:
-                    observations.append(f"[Deferred: EDIT {action['path']} — batch write limit ({MAX_BATCH_WRITES}) reached, will continue next round]")
-                    if not action.get("closed"):
-                        missing_eof_paths.append(action["path"])
-                    continue
                 if not self.agent:
                     observations.append(f"[Skipped: EDIT {action['path']} — add --agent to execute]")
                     continue
@@ -997,8 +984,6 @@ class ActionMixin:
                 else:
                     has_executed_non_read = True
                     write_count += 1
-                    if write_count >= MAX_BATCH_WRITES:
-                        batch_limited = True
                 if not action.get("closed"):
                     missing_eof_paths.append(action["path"])
             elif action["type"] == "read":
@@ -1093,8 +1078,10 @@ class ActionMixin:
                 f"[SYSTEM WARNING: Missing **EOF:** markers for: {', '.join(missing_eof_paths)}. "
                 f"Always conclude file blocks with **EOF:`filename`** (using the same path as the opening marker) to prevent truncation or merging.]"
             )
-        if batch_limited:
-            note = f"[Batch write limit reached ({MAX_BATCH_WRITES} file changes per round). Remaining WRITE/EDIT actions deferred — continue with them in your next response.]"
+        if write_count > MAX_BATCH_WRITES:
+            note = f"[Note: {write_count} file changes in this round. Prefer {MAX_BATCH_WRITES} or fewer per round for reviewability.]"
+            print(note + "\n")
+            observations.append(note)
             print(note + "\n")
             observations.append(note)
         if placeholder_warnings:
