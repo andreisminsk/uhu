@@ -26,6 +26,8 @@ AGENT_SYSTEM_PROMPT = (
     "The SEARCH text must match the file exactly (whitespace matters).\n"
     "Use EDIT for modifying existing files — it saves context compared to rewriting.\n"
     "Use WRITE only for new files or complete rewrites.\n\n"
+    "Prefer 3 or fewer WRITE/EDIT blocks per response for reviewability.\n"
+    "If you must produce more, all will be executed — but smaller batches are easier to review.\n\n"
     "To READ a file into context (no write action), use **FILE:** with **EOF:**:\n\n"
     "**FILE:`README.md`**\n"
     "```markdown\n"
