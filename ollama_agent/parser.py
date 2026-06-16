@@ -64,6 +64,7 @@ def _parse_params(code):
     """Parse tool/skill parameters from code block.
 
     Tries JSON first, then falls back to simple key: value format.
+    Returns (params_dict, json_error_or_None).
     Handles:
       {"path": "src/app.py", "limit": 10}     -> JSON
       path: src/app.py                          -> {"path": "src/app.py"}
@@ -74,17 +75,20 @@ def _parse_params(code):
     import json as _json
     code = code.strip()
     if not code:
-        return {}
+        return {}, None
     # Sanitize curly/smart quotes to straight quotes (LLMs sometimes emit these)
     code = code.replace('\u201c', '"').replace('\u201d', '"')
     code = code.replace('\u2018', "'").replace('\u2019', "'")
     # Try JSON first
+    looks_like_json = code.startswith('{')
     try:
         result = _json.loads(code)
         if isinstance(result, dict):
-            return result
-    except (ValueError, _json.JSONDecodeError):
-        pass
+            return result, None
+    except (ValueError, _json.JSONDecodeError) as e:
+        if looks_like_json:
+            return {}, str(e)
+    # Fallback: parse simple key: value lines
     # Fallback: parse simple key: value lines
     params = {}
     for line in code.splitlines():
@@ -413,13 +417,19 @@ def parse_actions(text):
                             "span": (start, end), "closed": closed})
             write_spans.append((start, end))
         elif path and btype == "tool":
-            tool_params = _parse_params(code)
-            actions.append({"type": "tool", "name": path, "params": tool_params,
-                            "code": code, "span": (start, end), "closed": closed})
+            tool_params, tool_json_error = _parse_params(code)
+            action = {"type": "tool", "name": path, "params": tool_params,
+                            "code": code, "span": (start, end), "closed": closed}
+            if tool_json_error:
+                action["json_error"] = tool_json_error
+            actions.append(action)
         elif path and btype == "skill":
-            skill_params = _parse_params(code)
-            actions.append({"type": "skill", "name": path, "params": skill_params,
-                            "code": code, "span": (start, end), "closed": closed})
+            skill_params, skill_json_error = _parse_params(code)
+            action = {"type": "skill", "name": path, "params": skill_params,
+                            "code": code, "span": (start, end), "closed": closed}
+            if skill_json_error:
+                action["json_error"] = skill_json_error
+            actions.append(action)
         elif lang in ("bash", "sh", "shell", "cmd", "bat", "powershell", "ps1", "pwsh") and code:
             if not any(s[0] <= start < s[1] for s in write_spans):
                 actions.append({"type": "run", "code": code, "span": (start, end)})

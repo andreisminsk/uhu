@@ -749,6 +749,15 @@ class ActionMixin:
         from .tools import get as get_tool, all_tools
         tool_name = action["name"]
         params = action.get("params", {})
+        json_error = action.get("json_error")
+        if json_error:
+            msg = (
+                f"[TOOL FAILED: {tool_name} — malformed JSON in parameters: {json_error}. "
+                f"Please fix the JSON syntax and retry. "
+                f"Use: **TOOL:`{tool_name}`** then a ```json block with valid JSON, then **EOF:`{tool_name}`**]"
+            )
+            print(msg + "\n")
+            return msg
         tool = get_tool(tool_name)
         if not tool:
             # Fuzzy match: try to find a similar tool name
@@ -846,6 +855,15 @@ class ActionMixin:
         from .skills import get as get_skill
         skill_name = action["name"]
         params = action.get("params", {})
+        json_error = action.get("json_error")
+        if json_error:
+            msg = (
+                f"[SKILL FAILED: {skill_name} — malformed JSON in parameters: {json_error}. "
+                f"Please fix the JSON syntax and retry. "
+                f"Use: **SKILL:`{skill_name}`** then a ```json block with valid JSON, then **EOF:`{skill_name}`**]"
+            )
+            print(msg + "\n")
+            return msg
         skill = get_skill(skill_name)
         if not skill:
             msg = f"[SKILL FAILED: Unknown skill '{skill_name}']"
