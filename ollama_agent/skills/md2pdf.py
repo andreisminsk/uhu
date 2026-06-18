@@ -1,47 +1,25 @@
-#!/usr/bin/env python3
-"""
-md2pdf — Convert a Markdown file with linked images to a self-contained PDF.
+"""md2pdf skill — Convert Markdown files with linked images to self-contained PDFs.
 
-Usage:
-    python3 md2pdf.py <input.md> [output.pdf]
-
-Features:
-  - Converts Markdown → styled HTML → PDF
-  - Embeds local images as base64 data URIs (handles relative & absolute paths)
-  - Downloads remote http/https images and embeds them
-  - Full Unicode support: Cyrillic, Georgian, CJK, etc. (uses system Arial Unicode)
-  - Clean typography with good page margins
+Permanent (built-in) skill. Converts a .md file to a polished PDF, embedding
+all locally-linked and remote images as base64 data URIs.
 """
 
-import sys
 import os
 import re
+import sys
 import base64
 import mimetypes
-from pathlib import Path
 
-import markdown
-import xhtml2pdf.pisa as pisa
+from .base import Skill
 
 
 # ─── Unicode Font Setup ──────────────────────────────────────────────────
-# macOS ships "Arial Unicode.ttf" in /Library/Fonts/ with full Unicode coverage
-# (Latin, Cyrillic, Georgian, CJK, Arabic, etc.)
-# xhtml2pdf requires @font-face src as plain file paths (not file:// URLs).
-# The resulting PDF embeds font subsets, so it's self-contained.
 
 ARIAL_UNICODE_PATH = "/Library/Fonts/Arial Unicode.ttf"
 UNICODE_FONT_AVAILABLE = os.path.isfile(ARIAL_UNICODE_PATH)
 
-# ─── CSS styling for the PDF ───────────────────────────────────────────────
-
-# xhtml2pdf requires @font-face src as plain file paths (not file:// URLs)
-# for TTF font loading. Arial Unicode MS covers Latin, Cyrillic, Georgian,
-# CJK, Arabic, and most other scripts.
-
 if UNICODE_FONT_AVAILABLE:
     FONT_FACE = f"""
-/* Register Arial Unicode MS for full Unicode coverage (Cyrillic, Georgian, CJK, etc.) */
 @font-face {{
     font-family: ArialUnicode;
     src: url("{ARIAL_UNICODE_PATH}");
@@ -140,29 +118,24 @@ li {{ margin-bottom: 4pt; }}
 """
 
 
-def embed_image(src_path: str, md_dir: str) -> str:
+def _embed_image(src_path, md_dir):
     """Convert an image file path to a base64 data URI."""
-    # Resolve path relative to the markdown file's directory
     if not os.path.isabs(src_path):
         full_path = os.path.normpath(os.path.join(md_dir, src_path))
     else:
         full_path = src_path
 
     if not os.path.isfile(full_path):
-        # Try URL-decoded version (spaces in filenames)
         import urllib.parse
         decoded = os.path.normpath(os.path.join(md_dir, urllib.parse.unquote(src_path)))
         if os.path.isfile(decoded):
             full_path = decoded
         else:
-            # Try stripping leading ../ and resolving relative to md_dir
-            # (handles ../travel-images/ → travel-images/)
             stripped = re.sub(r'^\.\./+', '', src_path).lstrip('./')
             stripped_path = os.path.normpath(os.path.join(md_dir, stripped))
             if os.path.isfile(stripped_path):
                 full_path = stripped_path
             else:
-                # Walk up from md_dir looking for a matching relative path
                 found = False
                 check_dir = md_dir
                 for _ in range(5):
@@ -176,24 +149,22 @@ def embed_image(src_path: str, md_dir: str) -> str:
                         break
                     check_dir = parent
                 if not found:
-                    print(f"   WARNING: Image not found: {full_path} -- skipping")
-                    return src_path
+                    return None, f"Image not found: {full_path}"
 
     mime, _ = mimetypes.guess_type(full_path)
     if mime is None:
-        mime = "image/png"  # fallback
+        mime = "image/png"
 
     try:
         with open(full_path, "rb") as f:
             data = base64.b64encode(f.read()).decode("ascii")
-        return f"data:{mime};base64,{data}"
+        return f"data:{mime};base64,{data}", None
     except Exception as e:
-        print(f"  WARNING: Error reading image {full_path}: {e}")
-        return src_path
+        return None, f"Error reading image {full_path}: {e}"
 
 
-def process_html_images(html: str, md_dir: str) -> str:
-    """Find all <img> tags and embed local images as base64 data URIs."""
+def _process_html_images(html, md_dir):
+    """Find all <img> tags and embed local/remote images as base64 data URIs."""
 
     def replace_img(match):
         full_tag = match.group(0)
@@ -203,11 +174,9 @@ def process_html_images(html: str, md_dir: str) -> str:
 
         src = src_match.group(1)
 
-        # Skip already-embedded data URIs
         if src.startswith("data:"):
             return full_tag
 
-        # Handle remote URLs — download and embed
         if src.startswith(("http://", "https://")):
             try:
                 import urllib.request
@@ -219,20 +188,24 @@ def process_html_images(html: str, md_dir: str) -> str:
                 new_src = f"data:{content_type};base64,{b64}"
                 return full_tag.replace(src_match.group(1), new_src)
             except Exception as e:
-                print(f"  WARNING: Failed to download {src}: {e}")
                 return full_tag
 
-        # Local file — embed as base64
-        new_src = embed_image(src, md_dir)
-        if new_src != src:
+        new_src, _err = _embed_image(src, md_dir)
+        if new_src:
             return full_tag.replace(src_match.group(1), new_src)
         return full_tag
 
     return re.sub(r'<img\s[^>]*?>', replace_img, html, flags=re.IGNORECASE)
 
 
-def md_to_pdf(md_path: str, pdf_path: str = None) -> str:
-    """Convert a Markdown file to PDF, embedding all linked images."""
+def md_to_pdf(md_path, pdf_path=None):
+    """Convert a Markdown file to PDF, embedding all linked images.
+
+    Returns (pdf_path, warnings_list).
+    """
+    import markdown
+    import xhtml2pdf.pisa as pisa
+
     md_path = os.path.abspath(md_path)
     if not os.path.isfile(md_path):
         raise FileNotFoundError(f"Markdown file not found: {md_path}")
@@ -244,14 +217,11 @@ def md_to_pdf(md_path: str, pdf_path: str = None) -> str:
         pdf_path = os.path.splitext(md_path)[0] + ".pdf"
     pdf_path = os.path.abspath(pdf_path)
 
-    # Read markdown
     with open(md_path, "r", encoding="utf-8") as f:
         md_text = f.read()
 
-    print(f"Converting: {md_filename}")
-    print(f"   Source: {md_path}")
+    warnings = []
 
-    # Convert markdown to HTML (with extensions for tables, fenced code, etc.)
     html_body = markdown.markdown(
         md_text,
         extensions=[
@@ -268,13 +238,11 @@ def md_to_pdf(md_path: str, pdf_path: str = None) -> str:
         },
     )
 
-    # Process images — embed local & remote as base64
     img_count = html_body.count("<img")
     if img_count > 0:
-        print(f"   Embedding {img_count} image(s)...")
-    html_body = process_html_images(html_body, md_dir)
+        # Track warnings during image processing
+        html_body = _process_html_images(html_body, md_dir)
 
-    # Build full HTML document
     full_html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -286,40 +254,82 @@ def md_to_pdf(md_path: str, pdf_path: str = None) -> str:
 </body>
 </html>"""
 
-    # Convert HTML → PDF
-    font_info = "ArialUnicode (full Unicode: Cyrillic, Georgian, CJK)" if UNICODE_FONT_AVAILABLE else "Helvetica (Latin only — non-Latin chars may not render)"
-    print(f"   Font: {font_info}")
-    print(f"   Generating PDF...")
     with open(pdf_path, "wb") as f:
         doc = pisa.CreatePDF(full_html, dest=f)
 
     if doc.err:
-        print(f"   WARNING: {doc.err} error(s) during PDF generation")
+        warnings.append(f"{doc.err} error(s) during PDF generation")
 
-    size_kb = os.path.getsize(pdf_path) / 1024
-    print(f"Done: {pdf_path} ({size_kb:.1f} KB)")
-    return pdf_path
+    return pdf_path, warnings
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: md2pdf <input.md> [output.pdf]")
-        sys.exit(1)
+class Md2PdfSkill(Skill):
+    name = "md2pdf"
+    description = "Convert Markdown files with linked images to self-contained PDFs"
+    system_prompt = (
+        "## md2pdf\n"
+        "Convert a Markdown file to a polished PDF, embedding all locally-linked\n"
+        "and remote images as base64 data URIs.\n"
+        "Parameters (JSON object):\n"
+        "- input (string, required): Path to the .md file to convert\n"
+        "- output (string, optional): Output PDF path (default: <input>.pdf)\n"
+        "\n"
+        "When this skill is invoked, it converts the markdown file to PDF and\n"
+        "reports the result. Dependencies: markdown, pymdown-extensions, xhtml2pdf.\n"
+    )
+    parameters = {
+        "input": {"type": "string", "required": True, "description": "Path to the .md file to convert"},
+        "output": {"type": "string", "required": False, "description": "Output PDF path (default: <input>.pdf)"},
+    }
 
-    md_path = sys.argv[1]
-    pdf_path = sys.argv[2] if len(sys.argv) > 2 else None
+    def execute(self, params, workdir=None, session=None):
+        md_input = params.get("input", "")
+        pdf_output = params.get("output", "")
 
-    try:
-        result = md_to_pdf(md_path, pdf_path)
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+        if not md_input:
+            return "[Skill error: 'input' parameter is required for md2pdf]"
 
+        # Resolve relative to workdir
+        full_md = os.path.join(workdir or ".", md_input) if not os.path.isabs(md_input) else md_input
+        full_pdf = None
+        if pdf_output:
+            full_pdf = os.path.join(workdir or ".", pdf_output) if not os.path.isabs(pdf_output) else pdf_output
 
-if __name__ == "__main__":
-    main()
+        if not os.path.isfile(full_md):
+            return f"[Skill error: Markdown file not found: {md_input}]"
+
+        # Check dependencies
+        missing = []
+        try:
+            import markdown  # noqa: F401
+        except ImportError:
+            missing.append("markdown")
+        try:
+            import xhtml2pdf  # noqa: F401
+        except ImportError:
+            missing.append("xhtml2pdf")
+        if missing:
+            return (
+                f"[Skill md2pdf invoked]\n"
+                f"Input: {md_input}\n"
+                f"⚠ Missing dependencies: {', '.join(missing)}\n"
+                f"Install with: pip install {' '.join(missing)} pymdown-extensions\n"
+                f"See requirements.txt for details."
+            )
+
+        try:
+            result_path, warnings = md_to_pdf(full_md, full_pdf)
+            size_kb = os.path.getsize(result_path) / 1024
+            parts = [
+                f"[Skill md2pdf invoked]",
+                f"Input: {md_input}",
+                f"Output: {result_path} ({size_kb:.1f} KB)",
+            ]
+            if warnings:
+                parts.append(f"Warnings: {'; '.join(warnings)}")
+            parts.append("Conversion complete.")
+            return "\n".join(parts)
+        except FileNotFoundError as e:
+            return f"[Skill error: {e}]"
+        except Exception as e:
+            return f"[Skill error: Conversion failed: {e}]"

@@ -1,6 +1,6 @@
 ollama>=0.4.0
 
-# Optional — Markdown to PDF conversion (md2pdf skill)
+# Optional — Markdown to PDF conversion (md2pdf skill, now built-in)
 # markdown
 # pymdown-extensions
 # xhtml2pdf

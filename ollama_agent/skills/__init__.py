@@ -17,6 +17,7 @@ from .code_review import CodeReviewSkill
 from .test_gen import TestGenSkill
 from .doc_gen import DocGenSkill
 from .plan import PlanSkill
+from .md2pdf import Md2PdfSkill
 
 
 # ── Registry ───────────────────────────────────────────────────────────
@@ -701,3 +702,4 @@ register(CodeReviewSkill())
 register(TestGenSkill())
 register(DocGenSkill())
 register(PlanSkill())
+register(Md2PdfSkill())
