@@ -28,8 +28,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     """Encapsulates all state and logic for an interactive Ollama chat session."""
     def __init__(self, host, model, ctx_size, stream=True, log_path=None,
                 sessions_dir=None, agent=True, workdir=".", autosave=True,
-                 tools=True, skills=False, skills_dir="./.skills", cache_files=True,
-                 thinking=True, quiet=False):
+                tools=True, skills=False, skills_dir="./.skills", cache_files=True,
+                thinking=True, quiet=False, mcp=False):
         _reconfigure_stdout()
         self.quiet = quiet
         self.client = Client(host=host)
@@ -38,6 +38,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.stream = stream
         self.agent = agent
         self.tools = tools
+        self.mcp = mcp
         self.skills = skills
         self.skills_dir = skills_dir
         self.workdir = os.path.abspath(workdir)
@@ -75,6 +76,20 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             system_prompt = system_prompt.replace("{shell_lang}", info["shell_lang"])
             self.history.append({"role": "system", "content": system_prompt + get_platform_shell_guidance()})
 
+        # Connect MCP servers and register their tools BEFORE building tools prompt
+        if self.mcp:
+            from .tools.mcp import MCPManager
+            self._mcp_manager = MCPManager(workdir=self.workdir, quiet=self.quiet)
+            mcp_tools = self._mcp_manager.load_and_connect()
+            if mcp_tools:
+                from .tools import register
+                for tool in mcp_tools:
+                    register(tool)
+                    # Auto-approve MCP tools only if server is marked auto_approve
+                    if getattr(tool, 'auto_approve', False):
+                        self.always_runs.add(tool.name)
+            print(f"[MCP] {len(mcp_tools)} tool(s) registered from {len(self._mcp_manager.transports)} server(s)")
+
         if self.tools:
             from .tools import tools_system_prompt
             tool_prompt = tools_system_prompt()
@@ -106,7 +121,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             else:
                 self.history.insert(0, {"role": "system", "content": skill_prompt})
 
-        # Load permanent memory (project + agent) — all modes
+    # Load permanent memory (project + agent) — all modes
         from .memory import build_memory_prompt
         mem_prompt, mem_warnings = build_memory_prompt(self.workdir)
         if mem_prompt:

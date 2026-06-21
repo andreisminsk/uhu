@@ -256,7 +256,8 @@ uhu --no-autosave --no-cache
 | `--skills-dir`    | `./.skills`                | Custom skill definitions directory                                       |
 | `--no-autosave`   | off                        | Disable automatic session saving                                         |
 | `--no-thinking`   | off (thinking on)          | Disable thinking mode for reasoning models                               |
-| `--no-cache`      | off                        | Disable file caching to `.uhu/.cache/`                                   |
+| `--mcp`           | off                        | Enable MCP server tools (configured in `.ollama_agent.json`)             |
+| `--no-cache`      | off                        | Disable file caching to `.uhu/.cache/` directory                         |
 
 ## Slash Commands
 
@@ -417,6 +418,73 @@ Available when running with tools enabled (default):
 | `google_calendar` | No           | Manage Google Calendar events                                                                                          |
 | `llm_query`       | No           | Send prompts to a secondary LLM                                                                                        |
 | `browser`         | No           | Playwright browser automation with stealth support (navigate, extract, screenshot, PDF, click, fill, scroll, evaluate) |
+
+## MCP (Model Context Protocol)
+
+Enable MCP server tools with `--mcp`. MCP servers are configured in `.ollama_agent.json` under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "mcp-imagineer": {
+      "url": "http://localhost:18080/sse",
+      "timeout": 120
+    },
+    "huggingface": {
+      "url": "https://huggingface.co/mcp",
+      "timeout": 120
+    },
+    "canva": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.canva.com/mcp"],
+      "timeout": 120
+    },
+    "my-local-server": {
+      "command": "my-mcp-server",
+      "args": ["--port", "3000"],
+      "env": { "API_KEY": "..." }
+    }
+  }
+}
+```
+
+Three transport types are supported:
+- **SSE** — URL ending with `/sse`: HTTP Server-Sent Events connection (e.g. `http://localhost:18080/sse`)
+- **Streamable HTTP** — URL not ending with `/sse`: Direct JSON-RPC POST (e.g. `https://huggingface.co/mcp`)
+- **stdio** — `command` field: Subprocess communication
+
+Config options per server:
+| Field | Required | Description |
+|-------|----------|-------------|
+| `url` or `command` | Yes | Server URL or executable |
+| `timeout` | No | Request timeout in seconds (default: 120) |
+| `auto_approve` | No | Auto-approve tool calls without confirmation (default: false) |
+| `headers` | No | Custom HTTP headers (e.g. `{"Authorization": "Bearer ..."}`) |
+| `args` | No | Arguments for stdio command |
+| `env` | No | Environment variables for stdio command |
+
+When `--mcp` is enabled, uhu connects to all configured servers in parallel at startup, discovers available tools, and registers them with prefixed names (e.g. `mcp_imagineer_generate_image`). The model can then invoke MCP tools using the standard `**TOOL:**` block format. Binary content (images) from MCP responses is automatically saved to the working directory.
+
+```bash
+uhu --mcp
+uhu --mcp "Generate an image of a cat"
+uhu --mcp --skills "Search HuggingFace for sentiment analysis models"
+```
+
+### HuggingFace MCP example
+
+The HuggingFace MCP server provides tools for model, dataset, space, and paper search — useful for discovering models to pull into Ollama without leaving the terminal:
+
+```bash
+# Find the best coding model that fits 16GB memory
+uhu --mcp
+You: Find the best Qwen3 model for coding that fits 16GB unified memory
+AI: [calls mcp_huggingface_model_search] → returns ranked list with sizes
+You: Pull the top result
+AI: [runs ollama pull qwen3:8b-q4_K_M]
+```
+
+Available HuggingFace tools: `model_search`, `dataset_search`, `space_search`, `paper_search`, `doc_search`, and image generation (anonymous tier).
 
 ## Project Configuration
 

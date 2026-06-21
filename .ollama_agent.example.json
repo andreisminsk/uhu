@@ -1,4 +1,20 @@
 {
+  "mcpServers": {
+    "mcp-imagineer": {
+      "url": "http://localhost:18080/sse",
+      "timeout": 120
+    },
+    "huggingface": {
+      "url": "https://huggingface.co/mcp",
+      "timeout": 120,
+      "auto_approve": true
+    },
+    "canva": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.canva.com/mcp"],
+      "timeout": 120
+    }
+  },
   "llm_query": {
     "api_url": "http://localhost:11434",
     "model": "qwen3.5:397b-cloud",

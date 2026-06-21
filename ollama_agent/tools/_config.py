@@ -49,10 +49,17 @@ CONFIG_FILENAME = ".ollama_agent.json"
 _config = None
 
 
+def _agent_dir():
+    """Find the uhu agent installation directory (where .ollama_agent.json lives)."""
+    # ollama_agent/tools/_config.py → project root
+    this_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.dirname(os.path.dirname(this_dir))
+
+
 def load_config(workdir=None):
     """Load tool configuration from .ollama_agent.json.
 
-    Search order: workdir first, then home directory.
+    Search order: workdir first, then agent installation dir, then home directory.
     Falls back to built-in defaults if no config file is found.
     Caches the result for subsequent get_config() calls.
     """
@@ -61,6 +68,7 @@ def load_config(workdir=None):
     paths = []
     if workdir:
         paths.append(os.path.join(workdir, CONFIG_FILENAME))
+    paths.append(os.path.join(_agent_dir(), CONFIG_FILENAME))
     paths.append(os.path.join(os.path.expanduser("~"), CONFIG_FILENAME))
     for path in paths:
         if os.path.isfile(path):
@@ -76,10 +84,11 @@ def load_config(workdir=None):
 
 
 def _find_config_dir(workdir=None):
-    """Find the directory containing .ollama_agent.json (workdir or home)."""
+    """Find the directory containing .ollama_agent.json (workdir, agent dir, or home)."""
     paths = []
     if workdir:
         paths.append(os.path.join(workdir, CONFIG_FILENAME))
+    paths.append(os.path.join(_agent_dir(), CONFIG_FILENAME))
     paths.append(os.path.join(os.path.expanduser("~"), CONFIG_FILENAME))
     for path in paths:
         if os.path.isfile(path):

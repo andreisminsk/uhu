@@ -31,6 +31,7 @@ class Tool:
         raise NotImplementedError
 
 
+from .mcp import MCPTool  # noqa: E402 — must be after Tool class
 from .model_test import ModelTestTool  # noqa: E402 — must be after Tool class
 
 # ── Tool registry ───────────────────────────────────────────────────────
