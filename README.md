@@ -37,7 +37,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    - Verify: `ollama list` (should show installed models, or an empty list)
    - Pull a model: `ollama pull glm-5.1:cloud` (or any model you prefer)
    - Verify Ollama is running: `curl http://localhost:11434/api/tags` 
-   - Verify that model is was deployed successfully: `ollama run glm-5.1:cloud` 
+   - Verify that model was deployed successfully: `ollama run glm-5.1:cloud` 
    - Check your model's context window size for the `--ctx` parameter (e.g. [glm-5.1](https://ollama.com/library/glm-5.1) specifies 198K → `--ctx 202752` since 198 × 1024 = 202752)
 
 3. **Clone this repository**
