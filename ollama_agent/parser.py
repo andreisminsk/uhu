@@ -119,7 +119,7 @@ def _parse_params(code):
                 elif val.lower() in ('false', 'no'):
                     val = False
             params[key] = val
-    return params
+    return params, None
 
 
 def parse_edit_content(content):
