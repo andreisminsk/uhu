@@ -27,10 +27,11 @@ from .persistence import PersistenceMixin
 class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     """Encapsulates all state and logic for an interactive Ollama chat session."""
     def __init__(self, host, model, ctx_size, stream=True, log_path=None,
-                 sessions_dir=None, agent=True, workdir=".", autosave=True,
+                sessions_dir=None, agent=True, workdir=".", autosave=True,
                  tools=True, skills=False, skills_dir="./.skills", cache_files=True,
-                 thinking=True):
+                 thinking=True, quiet=False):
         _reconfigure_stdout()
+        self.quiet = quiet
         self.client = Client(host=host)
         self.model = model
         self.ctx_size = ctx_size
@@ -89,13 +90,16 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             if os.path.isdir(skills_dir_abs):
                 loaded, errors = load_skills_from_dir(skills_dir_abs, workdir=self.workdir)
                 if loaded:
-                    print(f"[Loaded {loaded} custom skill(s) from {self.skills_dir}]")
+                    if not self.quiet:
+                        print(f"[Loaded {loaded} custom skill(s) from {self.skills_dir}]")
                 if errors:
-                    for err in errors:
-                        print(f"[Skill load warning: {err}]")
-                    print()
+                    if not self.quiet:
+                        for err in errors:
+                            print(f"[Skill load warning: {err}]")
+                        print()
                 elif loaded:
-                    print()
+                    if not self.quiet:
+                        print()
             skill_prompt = skills_system_prompt()
             if self.history and self.history[0]["role"] == "system":
                 self.history[0]["content"] += "\n\n" + skill_prompt
@@ -110,8 +114,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 self.history[0]["content"] += "\n\n" + mem_prompt
             else:
                 self.history.insert(0, {"role": "system", "content": mem_prompt})
-        for w in mem_warnings:
-            print(f"[⚠ {w}]")
+        if not self.quiet:
+            for w in mem_warnings:
+                print(f"[⚠ {w}]")
 
         # Auto-create parent directory for log file
         if log_path:
@@ -629,7 +634,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.history.append({"role": "assistant", "content": "Noted."})
         print(f"⚠  Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
 
-    def _send(self, message):
+    def _send(self, message, max_rounds=MAX_FEEDBACK_ROUNDS):
         self._log("user", message)
         self.history.append({"role": "user", "content": message})
         history_len_before = len(self.history)
@@ -642,7 +647,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             self.history.append({"role": "assistant", "content": assistant_msg})
             self.show_ctx(prompt_eval_count)
             self._check_context_pressure()
-            self._feedback_loop(max_rounds=MAX_FEEDBACK_ROUNDS)
+            self._feedback_loop(max_rounds=max_rounds)
             if self.autosave and self.autosave_name:
                 self._do_autosave()
         except KeyboardInterrupt:
@@ -661,6 +666,18 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             # _skill_auto_approve persists across continuation messages.
             # It is reset in run() for new substantive user messages.
             pass
+
+    # ── One-shot mode ────────────────────────────────────────────────────
+
+    def run_once(self, prompt):
+        """Execute a single prompt with full feedback loop and exit.
+
+        One-shot mode: auto-approves all actions, runs the feedback loop,
+        then exits. No interactive input needed.
+        """
+        # Auto-approve all actions for non-interactive mode
+        self.auto_all = True
+        self._send(prompt, max_rounds=7)
 
     # ── Main loop ──────────────────────────────────────────────────────
 

@@ -172,6 +172,22 @@ or:
 python ollama_agent.py
 ```
 
+### One-shot mode (non-interactive)
+
+Execute a single prompt with full feedback loop (7 rounds) and exit. No banner, no interactive input. All actions are auto-approved.
+
+```
+uhu "What does this project do?"
+uhu --model qwen2.5:14b "Summarize README.md"
+uhu --skills "Review src/app.py"
+```
+
+or:
+
+```
+python ollama_agent.py "What does this project do?"
+```
+
 ### Disable agent mode
 
 ```
@@ -224,6 +240,7 @@ uhu --no-autosave --no-cache
 
 | Option            | Default                    | Description                                |
 | ----------------- | -------------------------- | ------------------------------------------ |
+| `prompt`          | —                          | One-shot prompt — execute and exit (7 feedback rounds, auto-approve all) |
 | `-v`, `--version` | —                          | Show version and exit                      |
 | `--host`          | `http://localhost:11434`   | Ollama server URL                          |
 | `--model`         | `glm-5.1:cloud`            | Model name                                 |

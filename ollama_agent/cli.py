@@ -41,6 +41,8 @@ def main():
                         help="Disable thinking mode (enabled by default)")
     parser.add_argument("--no-cache", action="store_true",
                         help="Disable file caching to .uhu/.cache/ directory")
+    parser.add_argument("prompt", nargs="*", default=[],
+                        help="One-shot prompt — execute and exit (no interactive loop)")
     args = parser.parse_args()
 
     # Strip surrounding quotes that Windows shell may include in arguments
@@ -67,7 +69,6 @@ def main():
         log_path = None
     else:
         log_path = os.path.join(os.path.abspath(workdir), ".uhu", f"uhu-{os.path.basename(os.path.abspath(workdir))}.log")
-
     session = ChatSession(
         host=args.host,
         model=args.model,
@@ -83,8 +84,13 @@ def main():
         autosave=not args.no_autosave,
         cache_files=not args.no_cache,
         thinking=args.thinking,
+        quiet=bool(args.prompt),
     )
-    session.run()
+
+    if args.prompt:
+        session.run_once(" ".join(args.prompt))
+    else:
+        session.run()
 
 
 if __name__ == "__main__":

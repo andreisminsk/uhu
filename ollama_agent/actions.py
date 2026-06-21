@@ -291,7 +291,8 @@ class ActionMixin:
                     parts.append(f"{n_writes} always-write path(s)")
                 if n_runs:
                     parts.append(f"{n_runs} always-run command(s)")
-                print(f"[Loaded {config_path}: {', '.join(parts)}]")
+                if not getattr(self, 'quiet', False):
+                    print(f"[Loaded {config_path}: {', '.join(parts)}]")
         except Exception:
             pass
 
