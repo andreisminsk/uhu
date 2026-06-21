@@ -486,6 +486,22 @@ AI: [runs ollama pull qwen3:8b-q4_K_M]
 
 Available HuggingFace tools: `model_search`, `dataset_search`, `space_search`, `paper_search`, `doc_search`, and image generation (anonymous tier).
 
+### Canva MCP example
+
+The Canva MCP server provides design creation and editing tools via OAuth (browser login on first connect):
+
+```json
+{
+  "canva": {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "https://mcp.canva.com/mcp"],
+    "timeout": 120
+  }
+}
+```
+
+Requires Node.js (`npx`) installed. On first connect, a browser window opens for OAuth login. After authentication, Canva tools like `create_design`, `get_asset`, and `search_brand` become available.
+
 ## Project Configuration
 
 ### CODERGUIDE.md
