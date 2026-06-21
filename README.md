@@ -36,7 +36,8 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    - After installation, Ollama runs as a background service
    - Verify: `ollama list` (should show installed models, or an empty list)
    - Pull a model: `ollama pull glm-5.1:cloud` (or any model you prefer)
-   - Verify Ollama is running: `curl http://localhost:11434/api/tags` or just start `uhu`
+   - Verify Ollama is running: `curl http://localhost:11434/api/tags` 
+   - Verify that model is was deployed successfully: `ollama run glm-5.1:cloud` 
    - Check your model's context window size for the `--ctx` parameter (e.g. [glm-5.1](https://ollama.com/library/glm-5.1) specifies 198K → `--ctx 202752` since 198 × 1024 = 202752)
 
 3. **Clone this repository**
@@ -238,24 +239,24 @@ uhu --no-autosave --no-cache
 
 ## Command-line Options
 
-| Option            | Default                    | Description                                |
-| ----------------- | -------------------------- | ------------------------------------------ |
+| Option            | Default                    | Description                                                              |
+| ----------------- | -------------------------- | ------------------------------------------------------------------------ |
 | `prompt`          | —                          | One-shot prompt — execute and exit (7 feedback rounds, auto-approve all) |
-| `-v`, `--version` | —                          | Show version and exit                      |
-| `--host`          | `http://localhost:11434`   | Ollama server URL                          |
-| `--model`         | `glm-5.1:cloud`            | Model name                                 |
-| `--ctx`           | `202752`                   | Context window size in tokens              |
-| `--no-stream`     | off (streaming on)         | Disable streaming output                   |
-| `--no-log`        | off (logging on)           | Disable conversation logging               |
-| `--sessions-dir`  | `<workdir>/.uhu/.sessions` | Directory for saved sessions               |
-| `--no-agent`      | off (agent on)             | Disable agentic coder mode                 |
-| `--workdir`       | `.`                        | Working directory for file operations      |
-| `--no-tools`      | off (tools on)             | Disable structured tool calls              |
-| `--skills`        | off                        | Enable skill invocations                   |
-| `--skills-dir`    | `./.skills`                | Custom skill definitions directory         |
-| `--no-autosave`   | off                        | Disable automatic session saving           |
-| `--no-thinking`   | off (thinking on)          | Disable thinking mode for reasoning models |
-| `--no-cache`      | off                        | Disable file caching to `.uhu/.cache/`     |
+| `-v`, `--version` | —                          | Show version and exit                                                    |
+| `--host`          | `http://localhost:11434`   | Ollama server URL                                                        |
+| `--model`         | `glm-5.1:cloud`            | Model name                                                               |
+| `--ctx`           | `202752`                   | Context window size in tokens                                            |
+| `--no-stream`     | off (streaming on)         | Disable streaming output                                                 |
+| `--no-log`        | off (logging on)           | Disable conversation logging                                             |
+| `--sessions-dir`  | `<workdir>/.uhu/.sessions` | Directory for saved sessions                                             |
+| `--no-agent`      | off (agent on)             | Disable agentic coder mode                                               |
+| `--workdir`       | `.`                        | Working directory for file operations                                    |
+| `--no-tools`      | off (tools on)             | Disable structured tool calls                                            |
+| `--skills`        | off                        | Enable skill invocations                                                 |
+| `--skills-dir`    | `./.skills`                | Custom skill definitions directory                                       |
+| `--no-autosave`   | off                        | Disable automatic session saving                                         |
+| `--no-thinking`   | off (thinking on)          | Disable thinking mode for reasoning models                               |
+| `--no-cache`      | off                        | Disable file caching to `.uhu/.cache/`                                   |
 
 ## Slash Commands
 
