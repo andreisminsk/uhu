@@ -449,6 +449,7 @@ Enable MCP server tools with `--mcp`. MCP servers are configured in `.ollama_age
 ```
 
 Three transport types are supported:
+
 - **SSE** — URL ending with `/sse`: HTTP Server-Sent Events connection (e.g. `http://localhost:18080/sse`)
 - **Streamable HTTP** — URL not ending with `/sse`: Direct JSON-RPC POST (e.g. `https://huggingface.co/mcp`)
 - **stdio** — `command` field: Subprocess communication
@@ -536,3 +537,11 @@ This project is AI-assisted — code was produced with the help of large languag
 Full license text: [LICENSE](LICENSE) · https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 
 **Disclaimer:** This project is provided "as is", without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors be liable for any claim, damages, or other liability arising from the use of this software.
+
+## Copyright
+
+Author: 
+
+Andrei Suvorov
+
+https://www.linkedin.com/in/andreisuvorov/
