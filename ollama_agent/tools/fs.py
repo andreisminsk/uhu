@@ -8,6 +8,7 @@ import shutil
 import sys
 
 from ._config import DEFAULT_CONFIG
+from ..actions import agent_print
 
 
 class FilesystemTool:
@@ -86,7 +87,7 @@ class ReadFileTool(FilesystemTool):
             return f"Error: File not found: {path}"
         if fuzzy:
             resolved = os.path.relpath(full_path, workdir)
-            print(f"[Auto-resolved: {path} -> {resolved}]")
+            agent_print(f"[Auto-resolved: {path} -> {resolved}]")
 
         ext = os.path.splitext(path)[1].lower()
         if ext in {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.svg',
@@ -439,7 +440,7 @@ class PeekFileTool(FilesystemTool):
             return f"Error: File not found: {path}"
         if fuzzy:
             resolved = os.path.relpath(full_path, workdir)
-            print(f"[Auto-resolved: {path} -> {resolved}]")
+            agent_print(f"[Auto-resolved: {path} -> {resolved}]")
 
         try:
             with open(full_path, "r", encoding="utf-8", errors="replace") as f:
@@ -566,7 +567,7 @@ class ReplaceInFileTool(FilesystemTool):
             return f"Error: File not found: {path}"
         if fuzzy:
             resolved = os.path.relpath(full_path, workdir)
-            print(f"[Auto-resolved: {path} -> {resolved}]")
+            agent_print(f"[Auto-resolved: {path} -> {resolved}]")
 
         try:
             with open(full_path, "r", encoding="utf-8", errors="replace") as f:

@@ -170,6 +170,8 @@ SAFE_TOOLS = {
 # ANSI terminal color codes
 ANSI_RESET = "\033[0m"
 ANSI_LIGHT_GRAY = "\033[37m"
+ANSI_AGENT = "\033[93m"  # Bright yellow — used for agent action output
+ANSI_TOOL = "\033[97;2;3m"  # Dim bright white italic — used for tool/file read output
 
 # MIME type mapping for binary file reference
 MIME_TYPES = {

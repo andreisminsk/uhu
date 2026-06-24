@@ -13,6 +13,7 @@ with prefixed names: mcp_<server>_<tool>.
 import json
 import os
 import subprocess
+from ..actions import agent_print
 import threading
 import uuid
 
@@ -188,7 +189,7 @@ class SSETransport:
             base = urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
             self.message_url = f"{base}/messages/"
             if not self.quiet:
-                print(f"[MCP] Warning: endpoint discovery timed out for {self.name}, trying {self.message_url}")
+                agent_print(f"[MCP] Warning: endpoint discovery timed out for {self.name}, trying {self.message_url}")
 
         init_result = self._send_request("initialize", {
             "protocolVersion": "2025-03-26",
@@ -206,7 +207,7 @@ class SSETransport:
                 if not line:
                     continue
                 if not self.message_url and not self.quiet:
-                    print(f"[MCP] SSE {self.name}: {line[:120]}")
+                    agent_print(f"[MCP] SSE {self.name}: {line[:120]}")
                 if line.startswith("event:"):
                     event_type = line[6:].strip()
                 elif line.startswith("data:"):
@@ -554,7 +555,7 @@ class MCPManager:
         threads = []
         for server_name, server_config in mcp_servers.items():
             if not self.quiet:
-                print(f"[MCP] Connecting to {server_name}...")
+                agent_print(f"[MCP] Connecting to {server_name}...")
             t = threading.Thread(target=_connect_server, args=(server_name, server_config))
             t.start()
             threads.append(t)
@@ -564,8 +565,8 @@ class MCPManager:
 
         for server_name, (transport, tools) in results.items():
             if not self.quiet:
-                print(f"[MCP] Connected to {server_name}")
-                print(f"[MCP] Discovered {len(tools)} tool(s) from {server_name}")
+                agent_print(f"[MCP] Connected to {server_name}")
+                agent_print(f"[MCP] Discovered {len(tools)} tool(s) from {server_name}")
 
             for tool_def in tools:
                 original_name = tool_def.get("name", "")
@@ -589,7 +590,7 @@ class MCPManager:
 
         for server_name, error in errors.items():
             if not self.quiet:
-                print(f"[MCP] Failed to connect to {server_name}: {error}")
+                agent_print(f"[MCP] Failed to connect to {server_name}: {error}")
 
         return self.tools
 
@@ -617,7 +618,7 @@ class MCPManager:
             )
         else:
             if not self.quiet:
-                print(f"[MCP] Skipping {name}: no 'url' or 'command' field")
+                agent_print(f"[MCP] Skipping {name}: no 'url' or 'command' field")
             return None
 
     def close_all(self):

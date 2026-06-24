@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 from ollama import Client
 
-from .constants import AGENT_SYSTEM_PROMPT, MODEL_TEMPERATURE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
+from .constants import AGENT_SYSTEM_PROMPT, MODEL_TEMPERATURE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
+from .actions import agent_print, tool_print
 from .parser import parse_actions
 from .input_utils import read_full_input, _reconfigure_stdout
 from . import input_utils as _iu
@@ -88,7 +89,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     # Auto-approve MCP tools only if server is marked auto_approve
                     if getattr(tool, 'auto_approve', False):
                         self.always_runs.add(tool.name)
-            print(f"[MCP] {len(mcp_tools)} tool(s) registered from {len(self._mcp_manager.transports)} server(s)")
+            agent_print(f"[MCP] {len(mcp_tools)} tool(s) registered from {len(self._mcp_manager.transports)} server(s)")
 
         if self.tools:
             from .tools import tools_system_prompt
@@ -106,15 +107,15 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 loaded, errors = load_skills_from_dir(skills_dir_abs, workdir=self.workdir)
                 if loaded:
                     if not self.quiet:
-                        print(f"[Loaded {loaded} custom skill(s) from {self.skills_dir}]")
+                        agent_print(f"[Loaded {loaded} custom skill(s) from {self.skills_dir}]")
                 if errors:
                     if not self.quiet:
                         for err in errors:
-                            print(f"[Skill load warning: {err}]")
-                        print()
+                            agent_print(f"[Skill load warning: {err}]")
+                        agent_print()
                 elif loaded:
                     if not self.quiet:
-                        print()
+                        agent_print()
             skill_prompt = skills_system_prompt()
             if self.history and self.history[0]["role"] == "system":
                 self.history[0]["content"] += "\n\n" + skill_prompt
@@ -131,7 +132,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 self.history.insert(0, {"role": "system", "content": mem_prompt})
         if not self.quiet:
             for w in mem_warnings:
-                print(f"[⚠ {w}]")
+                agent_print(f"[⚠ {w}]")
 
         # Auto-create parent directory for log file
         if log_path:
@@ -236,7 +237,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                                 spinner.stop()
                                 self._log("system", f"[Model streaming timeout — no response for {chunk_timeout}s]")
                                 logger.warning("Model streaming timeout — no response for %ds", chunk_timeout)
-                                print(f"\n[Model streaming timeout — no response for {chunk_timeout}s]\n")
+                                agent_print(f"\n[Model streaming timeout — no response for {chunk_timeout}s]\n")
                                 break
                             time.sleep(0.05)  # interruptible on Windows; yields for Ctrl+C
                             continue
@@ -455,12 +456,12 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
 
         if pct >= 95:
             logger.warning("Context at %d%% — auto-compacting", int(pct))
-            print(f"\n[\u26a0 Context at {pct:.0f}% \u2014 auto-compacting to prevent overflow]\n")
+            agent_print(f"\n[\u26a0 Context at {pct:.0f}% \u2014 auto-compacting to prevent overflow]\n")
             self.do_compact()
             return False
         elif pct >= 85:
             logger.warning("Context at %d%% — consider /compact", int(pct))
-            print(f"\n[\u26a0 Context at {pct:.0f}% \u2014 consider /compact to free up space]\n")
+            agent_print(f"\n[\u26a0 Context at {pct:.0f}% \u2014 consider /compact to free up space]\n")
         return True
 
     def _feedback_loop(self, max_rounds=3):
@@ -535,23 +536,23 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             if skip_execution:
                 logger.warning("Loop detected — skipping execution | sig=%s | rounds=%d", sig, rounds_seen)
                 # Don't execute — just add the loop nudge and call model again
-                print(loop_nudge + "\n")
+                agent_print(loop_nudge + "\n")
                 self._log("system", loop_nudge)
                 self.history.append({"role": "user", "content": loop_nudge})
                 try:
-                    print()
+                    agent_print()
                     feedback_msg, fb_eval_count = self._call_model()
                     self._log("assistant", feedback_msg)
                     self.history.append({"role": "assistant", "content": feedback_msg})
                     self.show_ctx(fb_eval_count)
                 except KeyboardInterrupt:
                     self._log("system", "[Loop nudge interrupted by user]")
-                    print("\n[Loop nudge interrupted]\n")
+                    agent_print("\n[Loop nudge interrupted]\n")
                     self.history.append({"role": "assistant", "content": "Noted."})
                     return
                 except Exception as e:
                     self._log("system", f"[Loop nudge error: {e}]")
-                    print(f"\n[Loop nudge error: {e}]\n")
+                    agent_print(f"\n[Loop nudge error: {e}]\n")
                     self.history.append({"role": "assistant", "content": "Noted."})
                     return
                 continue
@@ -569,11 +570,11 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 nudge = self._nudge_if_stuck(assistant_msg, had_actions=False)
                 if nudge and not is_last_round:
                     # Not the last round — nudge the model to act
-                    print(nudge + "\n")
+                    agent_print(nudge + "\n")
                     self._log("system", nudge)
                     self.history.append({"role": "user", "content": nudge})
                     try:
-                        print(f"⟳ {round_label} — nudging model...")
+                        agent_print(f"⟳ {round_label} — nudging model...")
                         feedback_msg, fb_eval_count = self._call_model()
                         self._log("assistant", feedback_msg)
                         self.history.append({"role": "assistant", "content": feedback_msg})
@@ -582,35 +583,35 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                         continue
                     except KeyboardInterrupt:
                         self._log("system", "[Nudge interrupted by user]")
-                        print("\n[Nudge interrupted]\n")
+                        agent_print("\n[Nudge interrupted]\n")
                         self.history.append({"role": "assistant", "content": "Noted."})
                         return
                     except Exception as e:
                         self._log("system", f"[Nudge error: {e}]")
-                        print(f"\n[Nudge error: {e}]\n")
+                        agent_print(f"\n[Nudge error: {e}]\n")
                         self.history.append({"role": "assistant", "content": "Noted."})
                         return
                 if is_last_round and nudge:
                     # Model is stuck on last round — skip to max rounds message
                     continue
                 else:
-                    print("✓ Done — no more actions\n")
+                    agent_print("✓ Done — no more actions\n")
                     return
             self._log("system", obs)
             self.history.append({"role": "user", "content": obs})
             if cancelled_run:
                 self.history.append({"role": "assistant", "content": "Noted."})
-                print("⊘ Cancelled\n")
+                agent_print("⊘ Cancelled\n")
                 return
             if not has_non_read and not has_skill:
                 consecutive_read_only += 1
                 if consecutive_read_only >= max_consecutive_read_only:
                     # Too many consecutive read-only rounds — stop and nudge
                     self.history.append({"role": "assistant", "content": "Noted."})
-                    print(f"⚠  Stopped after {consecutive_read_only} read-only rounds\n")
+                    agent_print(f"⚠  Stopped after {consecutive_read_only} read-only rounds\n")
                     return
                 # Read-only observations — call model again so it can act on what it read
-                print(f"⟳ {round_label} (reading) — model is gathering information...\n")
+                agent_print(f"⟳ {round_label} (reading) — model is gathering information...\n")
                 # Add a nudge if the model has been reading without acting
                 if consecutive_read_only >= 2:
                     nudge = (
@@ -621,23 +622,23 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     self.history[-1]["content"] += "\n" + nudge
             else:
                 consecutive_read_only = 0
-                print(f"⟳ {round_label} — model continuing...\n")
+                agent_print(f"⟳ {round_label} — model continuing...\n")
             # Call model for feedback (whether read-only or not)
             self._check_context_pressure()
             try:
-                print()
+                agent_print()
                 feedback_msg, fb_eval_count = self._call_model()
                 self._log("assistant", feedback_msg)
                 self.history.append({"role": "assistant", "content": feedback_msg})
                 self.show_ctx(fb_eval_count)
             except KeyboardInterrupt:
                 self._log("system", "[Feedback interrupted by user]")
-                print("\n[Feedback interrupted]\n")
+                agent_print("\n[Feedback interrupted]\n")
                 self.history.append({"role": "assistant", "content": "Noted."})
                 return
             except Exception as e:
                 self._log("system", f"[Feedback error: {e}]")
-                print(f"\n[Feedback error: {e}]\n")
+                agent_print(f"\n[Feedback error: {e}]\n")
                 self.history.append({"role": "assistant", "content": "Noted."})
                 return
         # Exhausted max rounds — process any remaining actions but don't call model again
@@ -647,7 +648,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             self._log("system", obs)
             self.history.append({"role": "user", "content": obs})
         self.history.append({"role": "assistant", "content": "Noted."})
-        print(f"⚠  Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
+        agent_print(f"⚠  Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
 
     def _send(self, message, max_rounds=MAX_FEEDBACK_ROUNDS):
         self._log("user", message)
@@ -656,7 +657,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         # When skills mode is active, auto-approve all actions — the user has
         # opted into the skill's workflow by enabling --skills
         try:
-            print()
+            agent_print()
             assistant_msg, prompt_eval_count = self._call_model()
             self._log("assistant", assistant_msg)
             self.history.append({"role": "assistant", "content": assistant_msg})
@@ -668,13 +669,13 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         except KeyboardInterrupt:
             self._log("system", "[Interrupted by user]")
             logger.info("User interrupted _send (Ctrl+C)")
-            print("\n[Interrupted]\n")
+            agent_print("\n[Interrupted]\n")
             while len(self.history) > history_len_before:
                 self.history.pop()
         except Exception as e:
             self._log("system", f"[Error: {e}]")
             logger.exception("Error in _send: %s", e)
-            print(f"\n[Error: {e}]\n")
+            agent_print(f"\n[Error: {e}]\n")
             while len(self.history) > history_len_before:
                 self.history.pop()
         finally:
@@ -699,16 +700,16 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     def run(self):
         """Main interactive loop."""
         info = get_platform_info()
-        print(f"Connected to {self.client._client.base_url} | Model: {self.model} | "
+        agent_print(f"Connected to {self.client._client.base_url} | Model: {self.model} | "
               f"Context: {self.ctx_size} | Stream: {self.stream} | Agent: {self.agent} | "
               f"Tools: {self.tools} | Skills: {self.skills} | Thinking: {self.thinking} | "
               f"Cache: {self.cache_files} | Autosave: {self.autosave}")
-        print(f"Platform: {info['platform_label']} | Shell: {info['shell_label']}")
+        agent_print(f"Platform: {info['platform_label']} | Shell: {info['shell_label']}")
         if self.agent:
-            print(f"Workdir: {self.workdir}")
+            agent_print(f"Workdir: {self.workdir}")
         if self.log_file:
-            print(f"Logging to: {self.log_file.name}")
-        print("Type /help for available commands.\n")
+            agent_print(f"Logging to: {self.log_file.name}")
+        agent_print("Type /help for available commands.\n")
 
         try:
             while True:
@@ -720,15 +721,15 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     if not self.autosave:
                         msgs = [m for m in self.history if m["role"] != "system"]
                         if msgs:
-                            print("\n[Session not saved — use /save before exiting]")
-                    print("\nBye.")
+                            agent_print("\n[Session not saved — use /save before exiting]")
+                    agent_print("\nBye.")
                     break
                 except UnicodeEncodeError as e:
-                    print(f"\n[Input encoding error: {e}]")
-                    print("[If this involved emoji or special characters, try pasting without them or use /attach]\n")
+                    agent_print(f"\n[Input encoding error: {e}]")
+                    agent_print("[If this involved emoji or special characters, try pasting without them or use /attach]\n")
                     continue
                 except Exception as e:
-                    print(f"\n[Input error: {type(e).__name__}: {e}]")
+                    agent_print(f"\n[Input error: {type(e).__name__}: {e}]")
                     continue
                 if not user_input:
                     if self.pending_content:
@@ -751,9 +752,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                         user_input.encode('utf-8')
                     except UnicodeEncodeError:
                         user_input = user_input.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
-                        print("[Note: Some characters were replaced due to encoding issues]\n")
+                        agent_print("[Note: Some characters were replaced due to encoding issues]\n")
                     self.pending_content.append(f"[Pasted text ({line_count} lines)]\n{user_input}")
-                    print(f"[Pasted text ({line_count} lines)]\n")
+                    agent_print(f"[Pasted text ({line_count} lines)]\n")
                     continue
                 if user_input.lower() in ("exit", "/exit", "/bye", "bye"):
                     logger.info("Session ending (user exit)")
@@ -765,9 +766,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                             except (KeyboardInterrupt, EOFError):
                                 ans = "y"
                             if ans != "y":
-                                print("[Cancelled — use /save to save first]\n")
+                                agent_print("[Cancelled — use /save to save first]\n")
                                 continue
-                    print("Bye.")
+                    agent_print("Bye.")
                     break
                 if user_input.lower() in ("reset", "/reset"):
                     sys_msgs = [m for m in self.history if m["role"] == "system"]
@@ -775,7 +776,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     self.history.extend(sys_msgs)
                     self.pending_content.clear()
                     self._log("system", "[reset]")
-                    print("[Context cleared]\n")
+                    agent_print("[Context cleared]\n")
                     continue
                 if user_input.lower() in ("history", "/history"):
                     self.show_ctx()
@@ -795,7 +796,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     continue
                 if user_input.lower() == "/diff":
                     self.show_diff = not self.show_diff
-                    print(f"[Diff display: {'ON' if self.show_diff else 'OFF'}]\n")
+                    agent_print(f"[Diff display: {'ON' if self.show_diff else 'OFF'}]\n")
                     continue
                 if user_input.lower().startswith("/memorize"):
                     self.do_memorize(user_input[9:].strip())

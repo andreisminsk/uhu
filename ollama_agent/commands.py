@@ -5,6 +5,7 @@ import re
 import sys
 
 from .constants import MIME_TYPES, SKIP_EXT, MODEL_TEMPERATURE
+from .actions import agent_print
 
 
 class CommandMixin:
@@ -15,9 +16,9 @@ class CommandMixin:
         from .skills import all_skills
         skills = all_skills()
         if not skills:
-            print("[No skills available]\n")
+            agent_print("[No skills available]\n")
             return
-        print(f"Available skills ({len(skills)}):")
+        agent_print(f"Available skills ({len(skills)}):")
         for s in skills:
             param_str = ""
             if s.parameters:
@@ -35,8 +36,8 @@ class CommandMixin:
                 extras += f" [{len(s.references)} ref(s)]"
             if s.skill_dir:
                 extras += f" (from {os.path.relpath(s.skill_dir, self.workdir)})"
-            print(f"  {s.name}: {s.description}{extras}{param_str}")
-        print()
+            agent_print(f"  {s.name}: {s.description}{extras}{param_str}")
+        agent_print()
 
     def show_ctx(self, exact_tokens=None):
         if exact_tokens is not None:
@@ -51,7 +52,7 @@ class CommandMixin:
         bar = "█" * filled + "░" * (bar_len - filled)
         warning = " ⚠ Consider '/compact'" if pct >= 80 else ""
         ctx_msg = f"[ctx: {bar} {source}{total_tokens}/{self.ctx_size} ({pct:.1f}%){warning}]"
-        print(ctx_msg + "\n")
+        agent_print(ctx_msg + "\n")
         self._log("system", ctx_msg)
 
     def do_help(self):
@@ -64,7 +65,7 @@ class CommandMixin:
             mode_parts.append("skills")
         mode_str = f" | Mode: {'+'.join(mode_parts)}" if mode_parts else ""
 
-        print(
+        agent_print(
             f"Available commands{mode_str}:\n"
             "\n"
             "  /help                        Show this help message\n"
@@ -102,7 +103,7 @@ class CommandMixin:
         )
 
         if self.agent:
-            print(
+            agent_print(
                 "\n"
             "Agent mode (--agent) is active. The model can:\n"
             "  **WRITE:`path`** ... **EOF:`path`**   Create or overwrite files\n"
@@ -115,14 +116,14 @@ class CommandMixin:
             "  always (all sessions, saved to .uhu/coderconfig.json), d (show diff), N (skip)\n"
             )
         if self.tools:
-            print(
+            agent_print(
                 "\n"
             "Tools mode (--tools) is active. The model can invoke tools:\n"
             "  **TOOL:`name`** + JSON params + **EOF:`name`**\n"
             "  Available tools: web_search, web_fetch, image-analysis, llm_query, google_calendar\n"
             )
         if self.skills:
-            print(
+            agent_print(
                 "\n"
                 "Skills mode (--skills) is active. The model can invoke skills:\n"
                 "  **SKILL:`name`** + JSON params + **EOF:`name`**\n"
@@ -131,7 +132,7 @@ class CommandMixin:
             )
 
     def do_multiline(self):
-        print("[Multiline mode — type freely, Enter on empty line or /end to submit, Ctrl+C to cancel]")
+        agent_print("[Multiline mode — type freely, Enter on empty line or /end to submit, Ctrl+C to cancel]")
         lines = []
         while True:
             try:
@@ -144,11 +145,11 @@ class CommandMixin:
                         break
                     line = line.rstrip('\n\r')
             except KeyboardInterrupt:
-                print("\n[Cancelled]\n")
+                agent_print("\n[Cancelled]\n")
                 return None
             except EOFError:
                 if not lines:
-                    print("\n[Cancelled]\n")
+                    agent_print("\n[Cancelled]\n")
                     return None
                 break
             stripped = line.strip()
@@ -158,10 +159,10 @@ class CommandMixin:
                 break
             lines.append(line)
         if not lines:
-            print("[Empty input]\n")
+            agent_print("[Empty input]\n")
             return None
         text = "\n".join(lines)
-        print(f"[Multiline: {len(lines)} line(s)]\n")
+        agent_print(f"[Multiline: {len(lines)} line(s)]\n")
         return text
 
     def do_version(self):
@@ -171,20 +172,20 @@ class CommandMixin:
         try:
             with open(ver_path, "r", encoding="utf-8") as f:
                 version = f.read().strip()
-            print(f"uhu v{version}\n")
+            agent_print(f"uhu v{version}\n")
         except FileNotFoundError:
-            print("[Version file not found]\n")
+            agent_print("[Version file not found]\n")
 
     def do_sober(self):
         """Re-inject the system prompt to refocus the model."""
         sys_msgs = [m for m in self.history if m["role"] == "system"]
         if not sys_msgs:
-            print("[No system prompt found in context]\n")
+            agent_print("[No system prompt found in context]\n")
             return
         system_content = sys_msgs[0]["content"]
         self.history.append({"role": "system", "content": system_content})
         self.history.append({"role": "assistant", "content": "Understood. I will follow all instructions above carefully."})
-        print(f"[System prompt re-injected ({len(system_content)} chars)]\n")
+        agent_print(f"[System prompt re-injected ({len(system_content)} chars)]\n")
         self.show_ctx()
 
     def do_compact(self, args_str=""):
@@ -201,24 +202,24 @@ class CommandMixin:
             sections = load_memory(scope, self.workdir)
             if not sections:
                 label = "Project" if scope == "project" else "Agent"
-                print(f"[{label} memory is empty — nothing to compact]\n")
+                agent_print(f"[{label} memory is empty — nothing to compact]\n")
                 return
-            print(f"[Compacting {scope} memory...]")
+            agent_print(f"[Compacting {scope} memory...]")
             try:
                 new_lines = compact_memory(scope, self.workdir)
-                print(f"[Memory compacted: {new_lines} lines]\n")
+                agent_print(f"[Memory compacted: {new_lines} lines]\n")
             except RuntimeError as e:
-                print(f"[Error compacting memory: {e}]\n")
+                agent_print(f"[Error compacting memory: {e}]\n")
             return
 
         if not self.history:
-            print("[Nothing to compact]\n")
+            agent_print("[Nothing to compact]\n")
             return
         msgs = [m for m in self.history if m["role"] != "system"]
         if not msgs:
-            print("[Nothing to compact]\n")
+            agent_print("[Nothing to compact]\n")
             return
-        print("[Compacting context...]\n")
+        agent_print("[Compacting context...]\n")
 
         # Two-tier strategy: keep recent messages verbatim, summarize older ones.
         # Reserve 30% of context for recent messages, try to summarize the rest.
@@ -240,7 +241,7 @@ class CommandMixin:
 
         if not older_msgs:
             # No older messages to summarize — just keep what we have
-            print("[Context is already compact — no older messages to compress]\n")
+            agent_print("[Context is already compact — no older messages to compress]\n")
             self.show_ctx()
             return
 
@@ -285,26 +286,26 @@ class CommandMixin:
             self.history.append({"role": "user", "content": f"[Conversation summary]\n{summary}"})
             self.history.append({"role": "assistant", "content": "Understood. Ready to continue."})
             self._log("system", f"[/compact summary]\n{summary}")
-            print(f"Summary of older messages:\n{summary}\n")
+            agent_print(f"Summary of older messages:\n{summary}\n")
         else:
             # Summarization failed or produced garbage — drop older messages with a note
             self.history.append({"role": "user", "content": "[Earlier conversation was compacted but could not be summarized. Key context may be lost.]"})
             self.history.append({"role": "assistant", "content": "Understood. I'll work with the remaining context."})
             self._log("system", "[/compact: summary failed or too short, older messages dropped]")
-            print("[Could not generate a useful summary — older messages dropped, recent context preserved]\n")
+            agent_print("[Could not generate a useful summary — older messages dropped, recent context preserved]\n")
 
         # Always append recent messages verbatim
         self.history.extend(recent_msgs)
 
-        print(f"[Compacted: {len(older_msgs)} older messages {'summarized' if summary else 'dropped'}, {len(recent_msgs)} recent messages kept]\n")
+        agent_print(f"[Compacted: {len(older_msgs)} older messages {'summarized' if summary else 'dropped'}, {len(recent_msgs)} recent messages kept]\n")
         self.show_ctx()
-        print("[\u26a0 Note: Context usage above is estimated. It will adjust to actual after your next message.]\n")
+        agent_print("[\u26a0 Note: Context usage above is estimated. It will adjust to actual after your next message.]\n")
         self._do_autosave()
 
     def do_attach(self, args_str):
         args_str = args_str.strip()
         if not args_str:
-            print("[Usage: /attach <path|glob|dir> [L<start>-<end>]]\n")
+            agent_print("[Usage: /attach <path|glob|dir> [L<start>-<end>]]\n")
             return
         m = re.match(r'''["'](.+?)["']\s*(.*)''', args_str)
         if m:
@@ -320,7 +321,7 @@ class CommandMixin:
         files, is_multi = [], False
         if os.path.isdir(path):
             if line_range:
-                print("[Line ranges only work with single files]\n")
+                agent_print("[Line ranges only work with single files]\n")
                 return
             for root, _, fnames in os.walk(path):
                 for fn in sorted(fnames):
@@ -329,7 +330,7 @@ class CommandMixin:
             is_multi = True
         elif "*" in path or "?" in path:
             if line_range:
-                print("[Line ranges only work with single files]\n")
+                agent_print("[Line ranges only work with single files]\n")
                 return
             files = sorted(_glob.glob(path, recursive=True))
             is_multi = True
@@ -339,15 +340,15 @@ class CommandMixin:
             expanded = _glob.glob(path, recursive=True)
             if expanded:
                 if line_range:
-                    print("[Line ranges only work with single files]\n")
+                    agent_print("[Line ranges only work with single files]\n")
                     return
                 files = sorted(expanded)
                 is_multi = True
             else:
-                print(f"[File not found: {path}]\n")
+                agent_print(f"[File not found: {path}]\n")
                 return
         if not files:
-            print(f"[No files found: {path}]\n")
+            agent_print(f"[No files found: {path}]\n")
             return
         limit = self.ctx_size * 3
         parts, total_chars, skipped, file_info = [], 0, 0, []
@@ -368,11 +369,11 @@ class CommandMixin:
                     start, end = int(rm.group(1)) - 1, int(rm.group(2))
                     selected = all_lines[start:end]
                     content = f"[File: {rel} L{start+1}-{end}]\n{''.join(selected)}"
-                    print(f"[Attached: {rel} lines {start+1}-{end} ({len(selected)} lines)]\n")
+                    agent_print(f"[Attached: {rel} lines {start+1}-{end} ({len(selected)} lines)]\n")
                     self.pending_content.append(content)
                     return
                 else:
-                    print(f"[Bad range format, use L10-50]\n")
+                    agent_print(f"[Bad range format, use L10-50]\n")
                     return
             if total_chars + len(content_raw) > limit:
                 remaining = limit - total_chars
@@ -385,31 +386,31 @@ class CommandMixin:
             total_chars += len(content_raw)
             parts.append(f"[File: {rel}]\n{content_raw}")
         if not parts:
-            print(f"[No readable files found in {path}]\n")
+            agent_print(f"[No readable files found in {path}]\n")
             return
         content = "\n".join(parts)
         self.pending_content.append(content)
         if is_multi:
             lines = [f"  {name} ({cnt} lines)" for name, cnt in file_info]
             suffix = f"\n  ... {skipped} file(s) skipped" if skipped else ""
-            print(f"[Attached {len(parts)} file(s) from {path}{suffix}]")
+            agent_print(f"[Attached {len(parts)} file(s) from {path}{suffix}]")
             for line in lines:
-                print(line)
-            print()
+                agent_print(line)
+            agent_print()
         else:
             rel, cnt = file_info[0]
             trunc_note = " (truncated)" if total_chars >= limit else ""
-            print(f"[Attached: {rel} ({cnt} lines){trunc_note}]\n")
+            agent_print(f"[Attached: {rel} ({cnt} lines){trunc_note}]\n")
 
     def do_search(self, args_str):
         import glob as _glob
         args_str = args_str.strip()
         if not args_str:
-            print("[Usage: /search <pattern> <glob_or_path>]\n")
+            agent_print("[Usage: /search <pattern> <glob_or_path>]\n")
             return
         parts = args_str.split(None, 1)
         if len(parts) < 2:
-            print("[Usage: /search <pattern> <glob_or_path>]\n")
+            agent_print("[Usage: /search <pattern> <glob_or_path>]\n")
             return
         pattern, target = parts[0], parts[1]
         if (target.startswith('"') and target.endswith('"')) or (target.startswith("'") and target.endswith("'")):
@@ -429,12 +430,12 @@ class CommandMixin:
         else:
             files = _glob.glob(os.path.join(".", target), recursive=True)
         if not files:
-            print(f"[No files matched: {target}]\n")
+            agent_print(f"[No files matched: {target}]\n")
             return
         try:
             rx = re.compile(pattern)
         except re.error as e:
-            print(f"[Bad pattern: {e}]\n")
+            agent_print(f"[Bad pattern: {e}]\n")
             return
         matches = []
         for fpath in sorted(files):
@@ -450,7 +451,7 @@ class CommandMixin:
             if len(matches) >= 200:
                 break
         if not matches:
-            print(f"[No matches for '{pattern}' in {target}]\n")
+            agent_print(f"[No matches for '{pattern}' in {target}]\n")
             return
         total = len(matches)
         if total > 50:
@@ -461,7 +462,7 @@ class CommandMixin:
         output = "\n".join(matches) + suffix
         snippet = f"[Search: '{pattern}' in {target}]\n{output}"
         self.pending_content.append(snippet)
-        print(f"[{total} match(es){' (showing 50)' if total > 50 else ''} — staged]\n")
+        agent_print(f"[{total} match(es){' (showing 50)' if total > 50 else ''} — staged]\n")
 
     def do_peek(self, args_str):
         raw = args_str.strip()
@@ -471,10 +472,10 @@ class CommandMixin:
         if not os.path.isabs(path):
             path = os.path.join(self.workdir, path)
         if not path:
-            print("[Usage: /peek <path>]\n")
+            agent_print("[Usage: /peek <path>]\n")
             return
         if not os.path.isfile(path):
-            print(f"[File not found: {path}]\n")
+            agent_print(f"[File not found: {path}]\n")
             return
         try:
             with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -486,9 +487,9 @@ class CommandMixin:
                 content = "".join(lines[:n]) + f"\n... ({len(lines) - n*2} lines) ...\n" + "".join(lines[-n:])
             snippet = f"[Peek: {os.path.basename(path)} ({len(lines)} lines total)]\n{content}"
             self.pending_content.append(snippet)
-            print(f"[Peeked: {path} ({len(lines)} lines) — staged]\n")
+            agent_print(f"[Peeked: {path} ({len(lines)} lines) — staged]\n")
         except Exception as e:
-            print(f"[Peek failed: {e}]\n")
+            agent_print(f"[Peek failed: {e}]\n")
 
     def do_ls(self, args_str):
         raw = args_str.strip()
@@ -499,27 +500,27 @@ class CommandMixin:
             path = os.path.join(self.workdir, path)
         if not os.path.isdir(path):
             if os.path.isfile(path):
-                print(f"[Not a directory: {path} (use /peek or /attach)]\n")
+                agent_print(f"[Not a directory: {path} (use /peek or /attach)]\n")
             else:
-                print(f"[Not found: {path}]\n")
+                agent_print(f"[Not found: {path}]\n")
             return
         try:
             entries = sorted(os.listdir(path))
         except Exception as e:
-            print(f"[List failed: {e}]\n")
+            agent_print(f"[List failed: {e}]\n")
             return
         if not entries:
-            print(f"[Empty directory: {path}]\n")
+            agent_print(f"[Empty directory: {path}]\n")
             return
         dirs, files = [], []
         for name in entries:
             full = os.path.join(path, name)
             dirs.append(name + "/") if os.path.isdir(full) else files.append(name)
         lines = (dirs or []) + (files or [])
-        print(f"[{path}] ({len(dirs)} dirs, {len(files)} files)")
+        agent_print(f"[{path}] ({len(dirs)} dirs, {len(files)} files)")
         for line in lines:
-            print(f"  {line}")
-        print()
+            agent_print(f"  {line}")
+        agent_print()
 
     def do_md(self, args_str):
         raw = args_str.strip()
@@ -527,18 +528,18 @@ class CommandMixin:
             raw = raw[1:-1]
         path = os.path.expanduser(raw)
         if not path:
-            print("[Usage: /md <path>]\n")
+            agent_print("[Usage: /md <path>]\n")
             return
         if not os.path.isabs(path):
             path = os.path.join(self.workdir, path)
         if os.path.isdir(path):
-            print(f"[Already exists: {path}]\n")
+            agent_print(f"[Already exists: {path}]\n")
             return
         try:
             os.makedirs(path, exist_ok=True)
-            print(f"[Created: {path}]\n")
+            agent_print(f"[Created: {path}]\n")
         except Exception as e:
-            print(f"[mkdir failed: {e}]\n")
+            agent_print(f"[mkdir failed: {e}]\n")
 
     def do_attach_bin(self, args_str):
         """Attach a binary file reference (not content) to the next message."""
@@ -546,19 +547,19 @@ class CommandMixin:
         if (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'")):
             raw = raw[1:-1]
         if not raw:
-            print("[Usage: /attach-bin <path>]\n")
+            agent_print("[Usage: /attach-bin <path>]\n")
             return
         path = os.path.expanduser(raw)
         if not os.path.isabs(path):
             path = os.path.join(self.workdir, path)
         path = os.path.normpath(path)
         if not os.path.isfile(path):
-            print(f"[File not found: {path}]\n")
+            agent_print(f"[File not found: {path}]\n")
             return
         ext = os.path.splitext(path)[1].lower()
         mime = MIME_TYPES.get(ext)
         if not mime:
-            print(f"[Unknown binary type: {ext} — supported: {', '.join(sorted(set(MIME_TYPES.keys())))}]\n")
+            agent_print(f"[Unknown binary type: {ext} — supported: {', '.join(sorted(set(MIME_TYPES.keys())))}]\n")
             return
         size = os.path.getsize(path)
         if size < 1024:
@@ -577,7 +578,7 @@ class CommandMixin:
         )
         self.pending_content.append(ref)
         self.pending_binaries.append({"path": path, "rel": rel, "mime": mime, "size": size})
-        print(f"[Binary reference attached: {rel} ({mime}, {size_str})]\n")
+        agent_print(f"[Binary reference attached: {rel} ({mime}, {size_str})]\n")
 
     def do_memorize(self, args_str):
         """Add an entry to permanent memory."""
@@ -585,10 +586,10 @@ class CommandMixin:
 
         args = args_str.strip()
         if not args:
-            print("Usage: /memorize [project|agent] <text>")
-            print("  /memorize Use pytest for testing        → adds to project memory")
-            print("  /memorize project Use pytest for testing → adds to project memory")
-            print("  /memorize agent Always respond in Russian → adds to agent memory\n")
+            agent_print("Usage: /memorize [project|agent] <text>")
+            agent_print("  /memorize Use pytest for testing        → adds to project memory")
+            agent_print("  /memorize project Use pytest for testing → adds to project memory")
+            agent_print("  /memorize agent Always respond in Russian → adds to agent memory\n")
             return
 
         # Determine scope
@@ -602,25 +603,25 @@ class CommandMixin:
             text = args[len("agent "):].strip()
 
         if not text:
-            print("[Error: no text to memorize]\n")
+            agent_print("[Error: no text to memorize]\n")
             return
 
         path, section, was_new = add_memory_entry(scope, self.workdir, text)
         label = "Project" if scope == "project" else "Agent"
         if was_new:
-            print(f"[{label} memory created: {path}]")
+            agent_print(f"[{label} memory created: {path}]")
         else:
-            print(f"[{label} memory updated: {path}]")
-        print(f"  Added to ## {section}: {text}")
+            agent_print(f"[{label} memory updated: {path}]")
+        agent_print(f"  Added to ## {section}: {text}")
 
         # Size warning
         line_count, warn_level = check_memory_size(scope, self.workdir)
         cfg = get_memory_config(self.workdir)
         if warn_level == 1:
-            print(f"  ⚠ Memory is getting large ({line_count}/{cfg['max_lines']} lines). Consider /compact memory.")
+            agent_print(f"  ⚠ Memory is getting large ({line_count}/{cfg['max_lines']} lines). Consider /compact memory.")
         elif warn_level == 2:
-            print(f"  ⚠ Memory is at capacity ({line_count}/{cfg['max_lines']} lines). Use /compact memory to free space.")
-        print()
+            agent_print(f"  ⚠ Memory is at capacity ({line_count}/{cfg['max_lines']} lines). Use /compact memory to free space.")
+        agent_print()
 
     def do_auto(self, args_str):
         sub = args_str.strip().lower()
@@ -628,13 +629,13 @@ class CommandMixin:
             self.auto_all = False
             self.auto_writes.clear()
             self.auto_run_prefixes.clear()
-            print("[All session auto-approvals cleared]\n")
+            agent_print("[All session auto-approvals cleared]\n")
             return
         if sub == "reset always":
             self.always_writes.clear()
             self.always_runs.clear()
             self._save_coder_config()
-            print("[All persistent (always) approvals cleared]\n")
+            agent_print("[All persistent (always) approvals cleared]\n")
             return
         if sub == "reset all":
             self.auto_all = False
@@ -643,7 +644,7 @@ class CommandMixin:
             self.always_writes.clear()
             self.always_runs.clear()
             self._save_coder_config()
-            print("[All session and persistent approvals cleared]\n")
+            agent_print("[All session and persistent approvals cleared]\n")
             return
         if sub in ("on", "true", "1"):
             self.auto_all = True
@@ -652,29 +653,29 @@ class CommandMixin:
         elif sub == "":
             self.auto_all = not self.auto_all
         else:
-            print(f"[Unknown /auto option: {sub} — use: /auto, /auto on, /auto off, /auto reset]\n")
+            agent_print(f"[Unknown /auto option: {sub} — use: /auto, /auto on, /auto off, /auto reset]\n")
             return
         status = "ON" if self.auto_all else "OFF"
-        print(f"[auto-all: {status}]")
+        agent_print(f"[auto-all: {status}]")
         if self.auto_writes:
-            print(f"  Auto-writes ({len(self.auto_writes)}):")
+            agent_print(f"  Auto-writes ({len(self.auto_writes)}):")
             for p in sorted(self.auto_writes):
                 tag = " (always)" if p in self.always_writes else ""
-                print(f"    {p}{tag}")
+                agent_print(f"    {p}{tag}")
         if self.auto_run_prefixes:
-            print(f"  Auto-run commands ({len(self.auto_run_prefixes)}):")
+            agent_print(f"  Auto-run commands ({len(self.auto_run_prefixes)}):")
             for p in sorted(self.auto_run_prefixes):
                 tag = " (always)" if p in self.always_runs else ""
-                print(f"    {p}{tag}")
+                agent_print(f"    {p}{tag}")
         if self.always_writes and not self.auto_writes:
-            print(f"  Always-writes ({len(self.always_writes)}):")
+            agent_print(f"  Always-writes ({len(self.always_writes)}):")
             for p in sorted(self.always_writes):
-                print(f"    {p}")
+                agent_print(f"    {p}")
         if self.always_runs and not self.auto_run_prefixes:
-            print(f"  Always-run commands ({len(self.always_runs)}):")
+            agent_print(f"  Always-run commands ({len(self.always_runs)}):")
             for p in sorted(self.always_runs):
-                print(f"    {p}")
+                agent_print(f"    {p}")
         if not self.auto_writes and not self.auto_run_prefixes and not self.always_writes and not self.always_runs:
-            print("  (no specific auto-approvals)")
-        print(f"  Config: {self._coder_config_path()}")
-        print()
+            agent_print("  (no specific auto-approvals)")
+        agent_print(f"  Config: {self._coder_config_path()}")
+        agent_print()

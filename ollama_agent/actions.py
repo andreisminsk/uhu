@@ -14,12 +14,33 @@ from pathlib import Path
 from .constants import SAFE_SHELL_COMMANDS, SAFE_TOOLS, BLOCKED_COMMANDS, WARNING_COMMANDS
 from .constants import SKIP_EXT
 from .constants import MAX_OBSERVATION_CHARS, MAX_READ_OBSERVATION_CHARS, MAX_SKILL_OBSERVATION_CHARS, MAX_TOTAL_OBSERVATION_CHARS, MAX_CONSOLE_DISPLAY_CHARS, MAX_BATCH_WRITES
+from .constants import ANSI_AGENT, ANSI_RESET, ANSI_TOOL
 from .edit_utils import make_edit_summary, make_unified_diff
 from .input_utils import read_full_input
 from .matching import find_match_in_content
 from .parser import parse_actions, _PATH_SIGNAL, _BASH_BLOCK
 from .process import kill_proc_tree
 from .skills.base import PromptOnlySkill
+
+
+def agent_print(*args, **kwargs):
+    """Print with agent color (bright yellow) when stdout is a TTY."""
+    if sys.stdout.isatty():
+        print(ANSI_AGENT, end="", flush=True)
+        print(*args, **kwargs)
+        print(ANSI_RESET, end="", flush=True)
+    else:
+        print(*args, **kwargs)
+
+
+def tool_print(*args, **kwargs):
+    """Print with tool color (dim bright white italic) when stdout is a TTY."""
+    if sys.stdout.isatty():
+        print(ANSI_TOOL, end="", flush=True)
+        print(*args, **kwargs)
+        print(ANSI_RESET, end="", flush=True)
+    else:
+        print(*args, **kwargs)
 
 
 def _fix_win_backslash_quote(m):
@@ -198,7 +219,7 @@ class ActionMixin:
         """
         while True:
             if not force_confirm and self.auto_all:
-                print(f"[auto-all] {prompt}")
+                agent_print(f"[auto-all] {prompt}")
                 return True
             if not force_confirm and self._skill_auto_approve:
                 # Detect if this RUN is executing a skill script
@@ -209,20 +230,20 @@ class ActionMixin:
                     m = _re.search(r'\.skills/(?:[^/]+/)?([^/]+)/', cmd)
                     if m:
                         skill_hint = f" (skill: {m.group(1)})"
-                print(f"[auto-skill{skill_hint}] {prompt}")
+                agent_print(f"[auto-skill{skill_hint}] {prompt}")
                 return True
             if path and (path in self.auto_writes or path in self.always_writes):
                 source = "always" if path in self.always_writes else "auto"
-                print(f"[{source}-write: {path}] {prompt}")
+                agent_print(f"[{source}-write: {path}] {prompt}")
                 return True
             if cmd:
                 for prefix in self.auto_run_prefixes | self.always_runs:
                     if cmd.strip() == prefix or cmd.strip().startswith(prefix + " "):
                         source = "always" if prefix in self.always_runs else "auto"
-                        print(f"[{source}-run: {prefix}] {prompt}")
+                        agent_print(f"[{source}-run: {prefix}] {prompt}")
                         return True
             try:
-                ans = read_full_input(f"{prompt} (y/N/auto/all/always/d): ").strip().lower()
+                ans = read_full_input(f"{prompt} (y/N/auto/all/always/d): ", color=ANSI_AGENT).strip().lower()
             except (KeyboardInterrupt, EOFError):
                 return False
             if ans in ("y", "yes"):
@@ -232,32 +253,32 @@ class ActionMixin:
             elif ans == "auto":
                 if path:
                     self.auto_writes.add(path)
-                    print(f"[Auto-write: {path} — auto-approved this session]\n")
+                    agent_print(f"[Auto-write: {path} — auto-approved this session]\n")
                 elif cmd:
                     self.auto_run_prefixes.add(cmd.strip())
-                    print(f"[Auto-run: {cmd.strip()} — auto-approved this session]\n")
+                    agent_print(f"[Auto-run: {cmd.strip()} — auto-approved this session]\n")
                 return True
             elif ans == "always":
                 if path:
                     self.always_writes.add(path)
                     self.auto_writes.add(path)
                     self._save_coder_config()
-                    print(f"[Always-write: {path} — auto-approved in all future sessions]\n")
+                    agent_print(f"[Always-write: {path} — auto-approved in all future sessions]\n")
                 elif cmd:
                     self.always_runs.add(cmd.strip())
                     self.auto_run_prefixes.add(cmd.strip())
                     self._save_coder_config()
-                    print(f"[Always-run: {cmd.strip()} — auto-approved in all future sessions]\n")
+                    agent_print(f"[Always-run: {cmd.strip()} — auto-approved in all future sessions]\n")
                 return True
             elif ans == "all":
                 self.auto_all = True
-                print("[Auto-all enabled — all actions auto-approved this session]\n")
+                agent_print("[Auto-all enabled — all actions auto-approved this session]\n")
                 return True
             elif ans in ("d", "diff"):
                 if diff_text:
                     self._show_diff_colored(diff_text)
                 else:
-                    print("[No details available for this action]\n")
+                    agent_print("[No details available for this action]\n")
                 continue
             return False
 
@@ -292,7 +313,7 @@ class ActionMixin:
                 if n_runs:
                     parts.append(f"{n_runs} always-run command(s)")
                 if not getattr(self, 'quiet', False):
-                    print(f"[Loaded {config_path}: {', '.join(parts)}]")
+                    agent_print(f"[Loaded {config_path}: {', '.join(parts)}]")
         except Exception:
             pass
 
@@ -403,7 +424,7 @@ class ActionMixin:
         else:
             diff_text = make_unified_diff(path, "", new_content)
         if not self._confirm_or_auto(f"[WRITE] {path} ({lines} lines)", path=path, diff_text=diff_text):
-            print("[Skipped]\n")
+            agent_print("[Skipped]\n")
             return None
         try:
             os.makedirs(os.path.dirname(full_path) or ".", exist_ok=True)
@@ -414,12 +435,12 @@ class ActionMixin:
             display_msg = obs
             if file_url:
                 display_msg += f" (cached: {file_url})"
-            print(display_msg + "\n")
+            agent_print(display_msg + "\n")
             return obs
         except Exception as e:
             msg = f"[Write failed: {e}]"
-            print(msg + "\n")
-            return msg
+            agent_print(msg + "\n")
+            return 
 
     def execute_edit(self, action):
         path = action["path"]
@@ -437,7 +458,7 @@ class ActionMixin:
                     suggestion = f" Did you mean {found!r}?"
                     break
             msg = f"[EDIT FAILED: {path} does not exist. Use WRITE for new files.{suggestion}]"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
 
         try:
@@ -445,12 +466,12 @@ class ActionMixin:
                 original_content = f.read()
         except Exception as e:
             msg = f"[EDIT FAILED: cannot read {path}: {e}]"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
 
         if not edits:
             msg = f"[EDIT FAILED: {path} — no valid search/replace blocks found]"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
 
         current_content = original_content
@@ -474,7 +495,7 @@ class ActionMixin:
             if len(snippet_lines) < len(original_content.split('\n')):
                 snippet += f"\n... ({len(original_content.split(chr(10)))} lines total)"
             msg = f"[EDIT FAILED: {path} — search text not found]\nFile content:\n{snippet}"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
 
         if failures:
@@ -487,18 +508,18 @@ class ActionMixin:
                 f"File left unchanged.]\n"
                 f"Missing search blocks:\n" + '\n'.join(failed_snippets)
             )
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
 
         summary = make_edit_summary(path, edits_applied)
-        print(summary)
+        agent_print(summary)
 
         diff_text = make_unified_diff(path, original_content, current_content)
         if self.show_diff:
             self._show_diff_colored(diff_text)
 
         if not self._confirm_or_auto(f"Apply {len(edits_applied)} edit(s) to {path}?", path=path, diff_text=diff_text):
-            print("[Skipped]\n")
+            agent_print("[Skipped]\n")
             return None
 
         try:
@@ -510,11 +531,11 @@ class ActionMixin:
             if failures:
                 warning = f"\n[WARNING: {len(failures)} search block(s) not found]"
                 obs += warning
-            print(obs + "\n")
+            agent_print(obs + "\n")
             return obs
         except Exception as e:
             msg = f"[Edit failed: {e}]"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
 
     def execute_run(self, action):
@@ -545,25 +566,25 @@ class ActionMixin:
         # Safety checks
         safety_level, safety_msg = self._check_command_safety(cmd)
         if safety_level == 'blocked':
-            print(f"⛔ {safety_msg}\n")
+            agent_print(f"⛔ {safety_msg}\n")
             return None
         if safety_level == 'warning':
             # Destructive command — always require explicit confirmation, bypass auto-approve
-            print(f"{safety_msg}")
+            agent_print(f"{safety_msg}")
             if not self._confirm_or_auto(f"[CONFIRM DESTRUCTIVE] {cmd[:80]}{ell}", cmd=cmd, diff_text=cmd_details, force_confirm=True):
-                print("[Skipped]\n")
+                agent_print("[Skipped]\n")
                 return None
         elif safety_level == 'chain':
             # Shell chaining detected — warn but allow with confirmation
-            print(f"{safety_msg}")
+            agent_print(f"{safety_msg}")
             if not self._confirm_or_auto(f"[RUN] {cmd[:80]}{ell}", cmd=cmd, diff_text=cmd_details):
-                print("[Skipped]\n")
+                agent_print("[Skipped]\n")
                 return None
         elif self._is_safe_command(cmd):
             base = self._get_base_command(cmd)
-            print(f"[auto-safe: {base}] [RUN] {cmd[:80]}{ell}")
+            agent_print(f"[auto-safe: {base}] [RUN] {cmd[:80]}{ell}")
         elif not self._confirm_or_auto(f"[RUN] {cmd[:80]}{ell}", cmd=cmd, diff_text=cmd_details):
-            print("[Skipped]\n")
+            agent_print("[Skipped]\n")
             return None
         proc = None
         killed = False
@@ -613,7 +634,7 @@ class ActionMixin:
                 kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
             else:
                 kwargs["start_new_session"] = True
-            print("[Running — Ctrl+C to kill]\n")
+            agent_print("[Running — Ctrl+C to kill]\n")
             proc = subprocess.Popen(cmd, **kwargs)
 
             line_queue = _queue.Queue()
@@ -643,7 +664,7 @@ class ActionMixin:
                             break
                         if time.time() - last_output > 30:
                             killed = True
-                            print("\n[Run timed out (30s idle) — killing]\n")
+                            agent_print("\n[Run timed out (30s idle) — killing]\n")
                             kill_proc_tree(proc)
                             proc.wait(timeout=5)
                             break
@@ -652,13 +673,13 @@ class ActionMixin:
                     if line is None:
                         break
                     output_lines.append(line)
-                    print(line, end='')
+                    agent_print(line, end='')
                     sys.stdout.flush()
                     last_output = time.time()
             except KeyboardInterrupt:
                 interrupted = True
                 killed = True
-                print("\n[Killing process...]\n")
+                agent_print("\n[Killing process...]\n")
                 kill_proc_tree(proc)
                 proc.wait(timeout=5)
 
@@ -685,17 +706,17 @@ class ActionMixin:
                 combined = "\n".join(lines[-60:]) + f"\n[... trimmed, showing last 60 of {len(lines)} lines]"
             if killed:
                 obs = f"[Run killed]\n{combined}" if combined else "[Run killed, no output]"
-                print("[Run killed]\n")
+                agent_print("[Run killed]\n")
             else:
                 rc = proc.returncode
                 obs = f"[Run rc={rc}]\n{combined}" if combined else f"[Run rc={rc}, no output]"
-                print(f"[Run rc={rc}]\n")
+                agent_print(f"[Run rc={rc}]\n")
             return obs
         except Exception as e:
             if proc and proc.poll() is None:
                 kill_proc_tree(proc)
             msg = f"[Run failed: {e}]"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
 
     def execute_read(self, action):
@@ -704,19 +725,19 @@ class ActionMixin:
         full_path = os.path.join(self.workdir, path) if not os.path.isabs(path) else path
         if not os.path.isfile(full_path):
             msg = f"[READ FAILED: {path} does not exist]"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
         ext = os.path.splitext(path)[1].lower()
         if ext in SKIP_EXT:
             msg = f"[READ FAILED: {path} — binary/skipped extension ({ext})]"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
         try:
             with open(full_path, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read()
         except Exception as e:
             msg = f"[READ FAILED: {path}: {e}]"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
         lines_count = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
         # Cache the full content before truncation so file:// URL points to complete file
@@ -728,17 +749,17 @@ class ActionMixin:
             content = content[:max_chars]
             truncated = " (truncated)"
         url_info = f", cached: {file_url}" if file_url else ""
-        print(f"[Read: {path} ({lines_count} lines{truncated}{url_info})]")
+        agent_print(f"[Read: {path} ({lines_count} lines{truncated}{url_info})]")
         # Print file content to terminal so the user can see it
         max_display_lines = 200
         content_lines = content.split('\n')
         if len(content_lines) > max_display_lines:
             for line in content_lines[:max_display_lines]:
-                print(line)
-            print(f"... ({len(content_lines) - max_display_lines} more lines)")
+                tool_print(line)
+            tool_print(f"... ({len(content_lines) - max_display_lines} more lines)")
         else:
-            print(content)
-        print()
+            tool_print(content)
+        tool_print()
         # Observation sent to model: only the relative path, no cache URL
         # (cache URLs confuse the model about the working directory)
         obs = f"[File: {path}]\n{content}"
@@ -757,7 +778,7 @@ class ActionMixin:
                 f"Please fix the JSON syntax and retry. "
                 f"Use: **TOOL:`{tool_name}`** then a ```json block with valid JSON, then **EOF:`{tool_name}`**]"
             )
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
         tool = get_tool(tool_name)
         if not tool:
@@ -778,7 +799,7 @@ class ActionMixin:
                         break
             if close_match:
                 tool = get_tool(close_match)
-                print(f"[Auto-corrected tool name: '{tool_name}' → '{close_match}']")
+                agent_print(f"[Auto-corrected tool name: '{tool_name}' → '{close_match}']")
                 tool_name = close_match
             else:
                 # Common confusion: model emits **TOOL:`some-file.py`** thinking
@@ -792,11 +813,11 @@ class ActionMixin:
                             f"[TOOL FAILED: Unknown tool '{tool_name}' — this looks like a file path, not a tool name. "
                             f"To read a file's contents into context, use **FILE:`{tool_name}`** "
                             f"(closed by **EOF:`{tool_name}`**) instead of **TOOL:`{tool_name}`**.]"
-                        )
-                        print(msg + "\n")
+                       )
+                        agent_print(msg + "\n")
                         return msg
                 msg = f"[TOOL FAILED: Unknown tool '{tool_name}']"
-                print(msg + "\n")
+                agent_print(msg + "\n")
                 return msg
         params_preview = json.dumps(params, ensure_ascii=False)
         if len(params_preview) > 60:
@@ -806,28 +827,28 @@ class ActionMixin:
             cmd = params.get("command", "")
             safety_level, safety_msg = self._check_command_safety(cmd)
             if safety_level == 'blocked':
-                print(f"⛔ {safety_msg}\n")
+                agent_print(f"⛔ {safety_msg}\n")
                 return None
             if safety_level == 'warning':
-                print(f"{safety_msg}")
+                agent_print(f"{safety_msg}")
                 params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"
                 if not self._confirm_or_auto(f"[CONFIRM DESTRUCTIVE] {tool_name}({params_preview})", cmd=cmd, diff_text=params_details, force_confirm=True):
-                    print("[Skipped]\n")
+                    agent_print("[Skipped]\n")
                     return None
             elif safety_level == 'chain':
-                print(f"{safety_msg}")
+                agent_print(f"{safety_msg}")
                 params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"
                 if not self._confirm_or_auto(f"[TOOL] {tool_name}({params_preview})", cmd=cmd, diff_text=params_details):
-                    print("[Skipped]\n")
+                    agent_print("[Skipped]\n")
                     return None
 
         # Auto-approve safe tools (read-only, no side effects)
         if tool_name in SAFE_TOOLS:
-            print(f"[auto-safe: {tool_name}] [TOOL] {tool_name}({params_preview})")
+            agent_print(f"[auto-safe: {tool_name}] [TOOL] {tool_name}({params_preview})")
         else:
             params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"
             if not self._confirm_or_auto(f"[TOOL] {tool_name}({params_preview})", cmd=tool_name, diff_text=params_details):
-                print("[Skipped]\n")
+                agent_print("[Skipped]\n")
                 return None
         # Check for missing required parameters
         if not params:
@@ -839,16 +860,16 @@ class ActionMixin:
                     f"Use: **TOOL:`{tool_name}`** then a ```json block with "
                     f"{{{param_hint}}}, then **EOF:`{tool_name}`**]"
                 )
-                print(msg + "\n")
+                agent_print(msg + "\n")
                 return msg
         try:
             result = tool.execute(params, workdir=self.workdir)
             msg = f"[TOOL {tool_name}]: {result}"
-            print(self._truncate_for_console(msg) + "\n")
+            tool_print(self._truncate_for_console(msg) + "\n")
             return msg
         except Exception as e:
             msg = f"[TOOL FAILED: {tool_name}: {e}]"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
 
     def execute_skill(self, action):
@@ -863,12 +884,12 @@ class ActionMixin:
                 f"Please fix the JSON syntax and retry. "
                 f"Use: **SKILL:`{skill_name}`** then a ```json block with valid JSON, then **EOF:`{skill_name}`**]"
             )
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
         skill = get_skill(skill_name)
         if not skill:
             msg = f"[SKILL FAILED: Unknown skill '{skill_name}']"
-            print(msg + "\n")
+            agent_print(msg + "\n")
             return msg
         params_preview = json.dumps(params, ensure_ascii=False)
         if len(params_preview) > 60:
@@ -885,7 +906,7 @@ class ActionMixin:
                     missing_desc = ", ".join(f"{sn} ({sp})" for sn, sp in missing)
                     params_details += f"\n  ⚠ MISSING SCRIPTS: {missing_desc}"
         if not self._confirm_or_auto(f"[SKILL] {skill_name}({params_preview})", cmd=skill_name, diff_text=params_details):
-            print("[Skipped]\n")
+            agent_print("[Skipped]\n")
             return None
         # Skill approved — auto-approve subsequent actions in this skill's workflow
         self._skill_auto_approve = True
@@ -893,12 +914,12 @@ class ActionMixin:
         # Show explicit skill invocation indicator
         skill_type = "prompt-only" if isinstance(skill, PromptOnlySkill) else "markdown"
         desc_preview = skill.description[:80] + "..." if len(skill.description) > 80 else skill.description
-        print(f"\n{'='*60}")
-        print(f"⚡ SKILL INVOKED: {skill_name} ({skill_type})")
-        print(f"  Description: {desc_preview}")
+        agent_print(f"\n{'='*60}")
+        agent_print(f"⚡ SKILL INVOKED: {skill_name} ({skill_type})")
+        agent_print(f"  Description: {desc_preview}")
         if params:
             param_items = ", ".join(f"{k}={v!r}" for k, v in params.items())
-            print(f"  Params: {param_items}")
+            agent_print(f"  Params: {param_items}")
         if hasattr(skill, 'scripts') and skill.scripts:
             # Show resolved workdir-relative paths
             resolved_scripts = []
@@ -908,27 +929,27 @@ class ActionMixin:
                     resolved_scripts.append(f"{sn} → {rp}" if rp else f"{sn} [MISSING]")
                 else:
                     resolved_scripts.append(sn)
-            print(f"  Scripts: {', '.join(resolved_scripts)}")
-        print(f"{'='*60}\n")
+            agent_print(f"  Scripts: {', '.join(resolved_scripts)}")
+        agent_print(f"{'='*60}\n")
         try:
             result = skill.execute(params, workdir=self.workdir, session=self)
-            print(f"\n{'─'*60}")
-            print(f"⚡ SKILL RESULT: {skill_name} ({skill_type})")
-            print(self._truncate_for_console(result))
-            print(f"{'─'*60}\n")
+            agent_print(f"\n{'─'*60}")
+            agent_print(f"⚡ SKILL RESULT: {skill_name} ({skill_type})")
+            tool_print(self._truncate_for_console(result))
+            agent_print(f"{'─'*60}\n")
             msg = f"⚡ [SKILL {skill_name} ({skill_type})]: {result}"
             return msg
         except Exception as e:
-            print(f"\n{'─'*60}")
-            print(f"⚡ SKILL FAILED: {skill_name}: {e}")
-            print(f"{'─'*60}\n")
+            agent_print(f"\n{'─'*60}")
+            agent_print(f"⚡ SKILL FAILED: {skill_name}: {e}")
+            agent_print(f"{'─'*60}\n")
             msg = f"[SKILL FAILED: {skill_name}: {e}]"
             return msg
 
     def process_actions(self, response_text):
         if not self.agent and not self.tools and not self.skills:
             if _PATH_SIGNAL.search(response_text) or _BASH_BLOCK.search(response_text):
-                print("[hint: response contains **WRITE:**/**EDIT:**/**TOOL:**/**SKILL:** blocks -- add --agent, --tools, and/or --skills to execute them]\n")
+                agent_print("[hint: response contains **WRITE:**/**EDIT:**/**TOOL:**/**SKILL:** blocks -- add --agent, --tools, and/or --skills to execute them]\n")
             return (None, False, False, False)
         actions = parse_actions(response_text)
         if not actions:
@@ -1089,7 +1110,7 @@ class ActionMixin:
                         n_created = len(created)
                         self._rollback_edits(modified, created)
                         msg = f"[Rolled back {n_modified} modified, {n_created} created file(s) after {action['type']} failure]"
-                        print(msg + "\n")
+                        agent_print(msg + "\n")
                         observations.append(msg)
                     break
         if missing_eof_paths:
@@ -1099,13 +1120,13 @@ class ActionMixin:
             )
         if write_count > MAX_BATCH_WRITES:
             note = f"[Note: {write_count} file changes in this round. Prefer {MAX_BATCH_WRITES} or fewer per round for reviewability.]"
-            print(note + "\n")
+            agent_print(note + "\n")
             observations.append(note)
-            print(note + "\n")
+            agent_print(note + "\n")
             observations.append(note)
         if placeholder_warnings:
             for w in placeholder_warnings:
-                print(w + "\n")
+                agent_print(w + "\n")
             observations.extend(placeholder_warnings)
         # Truncate large observations to prevent context bloat.
         # Context is precious — raw HTML, verbose tool output, and skill reference
@@ -1135,5 +1156,5 @@ class ActionMixin:
         if result and len(result) > MAX_TOTAL_OBSERVATION_CHARS:
             trunc_note = f"\n[... total truncated, {len(result)} chars — use FILE: or TOOL: for full content]"
             result = result[:MAX_TOTAL_OBSERVATION_CHARS] + trunc_note
-            print(f"[Observations truncated to conserve context ({MAX_TOTAL_OBSERVATION_CHARS} char limit)]")
+            agent_print(f"[Observations truncated to conserve context ({MAX_TOTAL_OBSERVATION_CHARS} char limit)]")
         return (result, user_cancelled_run, has_executed_non_read, has_executed_skill)
