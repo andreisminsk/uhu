@@ -25,6 +25,7 @@ from .architect import ArchitectSkill
 from .medicine import MedicineSkill
 from .business_coach import BusinessCoachSkill
 from .pro_bidder import ProBidderSkill
+from .docx2md import Docx2MdSkill
 
 
 # ── Registry ───────────────────────────────────────────────────────────
@@ -148,13 +149,14 @@ def skills_system_prompt(enabled_names=None):
         "IMPORTANT — SKILL ACTIVATION RULES:",
         "- When a user's request matches a skill (by trigger words or description), you MUST invoke that skill.",
         "- Do NOT just answer directly when a skill applies — invoke the skill and let it guide your response.",
-        "- Match broadly: if the user asks about buying, pricing, deals, or valuations → use pro-bidder.",
-        "  If they ask about symptoms, health, or medical concerns → use medicine.",
-        "  If they ask 'what if' or about consequences → use what-if.",
-        "  If they ask why something is happening → use root-cause.",
-        "  If they ask how to solve a problem → use problem-solving.",
-        "  If they ask about software/system design or architecture → use architect.",
-        "  If they ask about business, startups, or entrepreneurship → use business-coach.",
+        "- Match broadly: if the user asks about buying, pricing, deals, or valuations → use pro-bidder.\n"
+        "  If they ask about symptoms, health, or medical concerns → use medicine.\n"
+        "  If they ask 'what if' or about consequences → use what-if.\n"
+        "  If they ask why something is happening → use root-cause.\n"
+        "  If they ask how to solve a problem → use problem-solving.\n"
+        "  If they ask about software/system design or architecture → use architect.\n"
+        "  If they ask about business, startups, or entrepreneurship → use business-coach.\n"
+        "  If they mention a .docx file or want to convert a Word document → use docx2md.\n"
         "- Use tools (file I/O, git, web search, etc.) only when NO skill matches the user's intent.",
         "",
         "Available skills:",
@@ -723,3 +725,4 @@ register(ArchitectSkill())
 register(MedicineSkill())
 register(BusinessCoachSkill())
 register(ProBidderSkill())
+register(Docx2MdSkill())
