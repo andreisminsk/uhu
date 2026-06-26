@@ -18,6 +18,12 @@ from .test_gen import TestGenSkill
 from .doc_gen import DocGenSkill
 from .plan import PlanSkill
 from .md2pdf import Md2PdfSkill
+from .what_if import WhatIfSkill
+from .root_cause import RootCauseSkill
+from .problem_solving import ProblemSolvingSkill
+from .architect import ArchitectSkill
+from .medicine import MedicineSkill
+from .business_coach import BusinessCoachSkill
 
 
 # ── Registry ───────────────────────────────────────────────────────────
@@ -703,3 +709,9 @@ register(TestGenSkill())
 register(DocGenSkill())
 register(PlanSkill())
 register(Md2PdfSkill())
+register(WhatIfSkill())
+register(RootCauseSkill())
+register(ProblemSolvingSkill())
+register(ArchitectSkill())
+register(MedicineSkill())
+register(BusinessCoachSkill())
