@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "timeout": 120,
+      "headers": {
+        "Authorization": "Bearer YOUR_GITHUB_TOKEN_HERE"
+      }
+    },
     "mcp-imagineer": {
       "url": "http://localhost:18080/sse",
       "timeout": 120
