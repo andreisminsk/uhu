@@ -17,6 +17,7 @@ from .http_request import HttpRequestTool
 from .git import GitTool
 from .browser import BrowserTool
 from .android_build import AndroidBuildTool
+from .weather import WeatherTool
 
 
 # ── Tool base class ─────────────────────────────────────────────────────
@@ -115,4 +116,5 @@ register(HttpRequestTool())
 register(GitTool())
 register(BrowserTool())
 register(AndroidBuildTool())
+register(WeatherTool())
 register(ModelTestTool())

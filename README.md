@@ -402,7 +402,7 @@ Available when running with tools enabled (default):
 | `find_file`       | Yes          | Find files by glob pattern                                                                                             |
 | `peek_file`       | Yes          | Show head+tail of a file                                                                                               |
 | `file_link`       | Yes          | Generate file:// URL for a file                                                                                        |
-| `env_info`        | Yes          | System, Python, and package info                                                                                       |
+| `env_info`        | Yes          | System, Python, and package info; geolocation with `geo:true`                                                          |
 | `mkdir`           | Yes          | Create directories (cross-platform)                                                                                    |
 | `py_compile`      | Yes          | Check Python syntax, imports, run expressions                                                                          |
 | `write_file`      | No           | Create/overwrite/append files                                                                                          |
@@ -416,6 +416,7 @@ Available when running with tools enabled (default):
 | `http_request`    | No           | Make HTTP requests (GET, POST, etc.)                                                                                   |
 | `image_analysis`  | No           | Analyze images via Ollama vision model                                                                                 |
 | `google_calendar` | No           | Manage Google Calendar events                                                                                          |
+| `weather`         | Yes          | Weather forecast via wttr.in (no API key)                                                                             |
 | `llm_query`       | No           | Send prompts to a secondary LLM                                                                                        |
 | `browser`         | No           | Playwright browser automation with stealth support (navigate, extract, screenshot, PDF, click, fill, scroll, evaluate) |
 
@@ -449,7 +450,6 @@ Enable MCP server tools with `--mcp`. MCP servers are configured in `.ollama_age
 ```
 
 Three transport types are supported:
-
 - **SSE** — URL ending with `/sse`: HTTP Server-Sent Events connection (e.g. `http://localhost:18080/sse`)
 - **Streamable HTTP** — URL not ending with `/sse`: Direct JSON-RPC POST (e.g. `https://huggingface.co/mcp`)
 - **stdio** — `command` field: Subprocess communication
@@ -537,11 +537,3 @@ This project is AI-assisted — code was produced with the help of large languag
 Full license text: [LICENSE](LICENSE) · https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 
 **Disclaimer:** This project is provided "as is", without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors be liable for any claim, damages, or other liability arising from the use of this software.
-
-## Copyright
-
-Author: 
-
-Andrei Suvorov
-
-https://www.linkedin.com/in/andreisuvorov/

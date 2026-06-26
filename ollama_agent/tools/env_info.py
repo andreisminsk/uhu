@@ -1,9 +1,11 @@
 """Environment info tool: system, Python, and installed package information."""
 
+import json
 import os
 import platform
 import subprocess
 import sys
+import urllib.request
 
 
 class EnvInfoTool:
@@ -16,7 +18,9 @@ class EnvInfoTool:
         "Parameters (JSON object):\n"
         "- packages (boolean, optional, default true): Include installed pip packages\n"
         "- check (string, optional): Check if a specific package is importable and return its version\n"
-        "Use this to understand the runtime environment before writing code that depends on specific versions."
+        "- geo (boolean, optional, default false): Include approximate geolocation (city, country, lat/lon)\n"
+        "Use this to understand the runtime environment before writing code that depends on specific versions.\n"
+        "When the user's location is needed (e.g. weather, time zone) and not provided, call env_info with geo:true to detect it."
     )
     parameters = {
         "packages": {
@@ -29,11 +33,17 @@ class EnvInfoTool:
             "description": "Check if a specific package is importable and return its version",
             "required": False,
         },
+        "geo": {
+            "type": "boolean",
+            "description": "Include approximate geolocation (city, country, lat/lon)",
+            "required": False,
+        },
     }
 
     def execute(self, params, workdir=".", **kwargs):
         include_packages = params.get("packages", True)
         check_module = params.get("check", "")
+        include_geo = params.get("geo", False)
 
         # If checking a specific module
         if check_module:
@@ -47,6 +57,12 @@ class EnvInfoTool:
         info.append(f"Python path: {sys.executable}")
         info.append(f"CWD: {os.getcwd()}")
         info.append(f"Workdir: {workdir}")
+
+        # Geolocation
+        if include_geo:
+            geo = self._get_geo()
+            if geo:
+                info.append(f"Geo: {geo}")
 
         # Android / JDK environment
         try:
@@ -148,5 +164,26 @@ class EnvInfoTool:
         try:
             import importlib.metadata
             return importlib.metadata.version(package_name)
+        except Exception:
+            return None
+
+    def _get_geo(self):
+        """Get approximate geolocation from IP using ip-api.com."""
+        try:
+            req = urllib.request.Request(
+                "http://ip-api.com/json/?fields=status,country,regionName,city,lat,lon,query",
+                headers={"User-Agent": "uhu-env-info/1.0"}
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            if data.get("status") == "success":
+                city = data.get("city", "?")
+                region = data.get("regionName", "")
+                country = data.get("country", "?")
+                lat = data.get("lat", "?")
+                lon = data.get("lon", "?")
+                ip = data.get("query", "?")
+                return f"{city}, {region}, {country} ({lat}, {lon}) [IP: {ip}]"
+            return None
         except Exception:
             return None
