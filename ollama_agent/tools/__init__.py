@@ -18,6 +18,7 @@ from .git import GitTool
 from .browser import BrowserTool
 from .android_build import AndroidBuildTool
 from .weather import WeatherTool
+from .token_count import TokenCountTool
 
 
 # ── Tool base class ─────────────────────────────────────────────────────
@@ -117,4 +118,5 @@ register(GitTool())
 register(BrowserTool())
 register(AndroidBuildTool())
 register(WeatherTool())
+register(TokenCountTool())
 register(ModelTestTool())

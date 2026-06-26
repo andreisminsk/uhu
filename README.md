@@ -417,8 +417,30 @@ Available when running with tools enabled (default):
 | `image_analysis`  | No           | Analyze images via Ollama vision model                                                                                 |
 | `google_calendar` | No           | Manage Google Calendar events                                                                                          |
 | `weather`         | Yes          | Weather forecast via wttr.in (no API key)                                                                             |
+| `token_count`     | Yes          | Estimate token count for text or a file (chars/4, words×1.3, tiktoken)                                               |
 | `llm_query`       | No           | Send prompts to a secondary LLM                                                                                        |
 | `browser`         | No           | Playwright browser automation with stealth support (navigate, extract, screenshot, PDF, click, fill, scroll, evaluate) |
+
+### Token Counting
+
+The `token_count` tool estimates how many tokens a text or file will consume — useful for checking if content fits within a model's context window.
+
+It provides three estimation methods:
+
+| Method | How it works | Accuracy | Dependency |
+|--------|-------------|----------|------------|
+| `chars/4` | Characters ÷ 4 | Rough (~80%) | None |
+| `words×1.3` | Word count × 1.3 | Rough (~85%) | None |
+| `tiktoken` | OpenAI's BPE tokenizer | Exact | `pip install tiktoken` |
+
+**tiktoken** is OpenAI's open-source tokenizer. It converts text into the actual tokens that LLMs process — the same algorithm used by GPT-4, GPT-3.5, and other models. Different models use different encodings:
+
+- `cl100k_base` — GPT-4, GPT-3.5-turbo (default)
+- `p50k_base` — Codex models
+- `r50k_base` — GPT-3 (davinci)
+- `o200k_base` — GPT-4o, GPT-4o-mini
+
+The `chars/4` and `words×1.3` estimates work without any dependencies. For exact counts, install tiktoken: `pip install tiktoken`.
 
 ## MCP (Model Context Protocol)
 
