@@ -8,6 +8,7 @@ from .base import Skill
 class DocGenSkill(Skill):
     name = "doc-gen"
     description = "Generate documentation for source code"
+    triggers = ["generate docs", "write documentation", "document this", "docstrings", "readme"]
     system_prompt = (
         "## doc-gen\n"
         "Generate documentation for source code.\n"

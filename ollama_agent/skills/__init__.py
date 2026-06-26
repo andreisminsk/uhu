@@ -24,6 +24,7 @@ from .problem_solving import ProblemSolvingSkill
 from .architect import ArchitectSkill
 from .medicine import MedicineSkill
 from .business_coach import BusinessCoachSkill
+from .pro_bidder import ProBidderSkill
 
 
 # ── Registry ───────────────────────────────────────────────────────────
@@ -715,3 +716,4 @@ register(ProblemSolvingSkill())
 register(ArchitectSkill())
 register(MedicineSkill())
 register(BusinessCoachSkill())
+register(ProBidderSkill())

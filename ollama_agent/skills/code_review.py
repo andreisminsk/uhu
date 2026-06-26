@@ -8,6 +8,7 @@ from .base import Skill
 class CodeReviewSkill(Skill):
     name = "code-review"
     description = "Review code for bugs, style issues, and improvement suggestions"
+    triggers = ["review code", "code review", "check my code", "find bugs in", "code quality"]
     system_prompt = (
         "## code-review\n"
         "Review code for bugs, issues, and improvement suggestions.\n"

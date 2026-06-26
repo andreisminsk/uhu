@@ -8,6 +8,7 @@ from .base import Skill
 class TestGenSkill(Skill):
     name = "test-gen"
     description = "Generate test cases for source code"
+    triggers = ["generate tests", "write tests", "test cases", "unit tests", "test coverage"]
     system_prompt = (
         "## test-gen\n"
         "Generate test cases for source code.\n"

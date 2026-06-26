@@ -6,6 +6,7 @@ from .base import Skill
 class RootCauseSkill(Skill):
     name = "root-cause"
     description = "Trace an observed problem to its root causes — one-shot analysis or guided interview"
+    triggers = ["root cause", "why is this happening", "why does this keep happening", "what's causing", "root cause analysis"]
     system_prompt = (
         "## root-cause\n"
         "Trace an observed problem to its underlying causes.\n"

@@ -266,6 +266,7 @@ def md_to_pdf(md_path, pdf_path=None):
 class Md2PdfSkill(Skill):
     name = "md2pdf"
     description = "Convert Markdown files with linked images to self-contained PDFs"
+    triggers = ["convert to pdf", "markdown to pdf", "md to pdf", "pdf from markdown", "export as pdf"]
     system_prompt = (
         "## md2pdf\n"
         "Convert a Markdown file to a polished PDF, embedding all locally-linked\n"

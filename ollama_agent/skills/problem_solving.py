@@ -6,6 +6,7 @@ from .base import Skill
 class ProblemSolvingSkill(Skill):
     name = "problem-solving"
     description = "Find solutions to a problem — brainstorm, evaluate, and recommend approaches"
+    triggers = ["how do I solve", "how to fix", "solve this problem", "problem solving", "need a solution"]
     system_prompt = (
         "## problem-solving\n"
         "Find solutions to a problem through structured analysis or collaborative interview.\n"

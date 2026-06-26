@@ -6,6 +6,7 @@ from .base import Skill
 class ArchitectSkill(Skill):
     name = "architect"
     description = "Design or evaluate system architecture — component breakdown, trade-offs, risks, and technology choices"
+    triggers = ["architecture", "design the system", "system design", "architectural", "review the architecture"]
     system_prompt = (
         "## architect\n"
         "Design or evaluate system architecture.\n"

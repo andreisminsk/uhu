@@ -8,6 +8,7 @@ from .base import Skill
 class PlanSkill(Skill):
     name = "plan"
     description = "Create a structured development plan for a feature or project"
+    triggers = ["make a plan", "development plan", "plan this feature", "project plan", "implementation plan"]
     system_prompt = (
         "## plan\n"
         "Create a structured development plan for a feature or project.\n"

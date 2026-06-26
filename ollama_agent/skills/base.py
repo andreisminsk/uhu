@@ -28,6 +28,7 @@ class Skill:
     parameters = {}
     scripts = {}
     references = []
+    triggers = []
     skill_dir = None
 
     def execute(self, params, workdir=None, session=None):
