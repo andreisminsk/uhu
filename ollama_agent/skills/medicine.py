@@ -6,7 +6,7 @@ from .base import Skill
 class MedicineSkill(Skill):
     name = "medicine"
     description = "Analyze health concerns with a senior medical consultant — symptom assessment, differential diagnosis, and guidance"
-    triggers = ["symptom", "health concern", "medical", "diagnosis", "feeling sick", "pain in", "side effect"]
+    triggers = ["symptom", "health concern", "medical", "diagnosis", "feeling sick", "pain in", "side effect", "headache", "fever", "cough", "rash", "fatigue", "dizziness", "nausea", "anxiety", "depression", "wellness", "doctor"]
     system_prompt = (
         "## medicine\n"
         "Analyze health concerns with the perspective of a Senior Medical Consultant.\n"

@@ -6,7 +6,7 @@ from .base import Skill
 class BusinessCoachSkill(Skill):
     name = "business-coach"
     description = "Mentor and strategic partner for entrepreneurship, business creation, and scaling — mindset shift from doer to owner"
-    triggers = ["business", "startup", "entrepreneur", "scaling", "business idea", "launch a business", "grow my business"]
+    triggers = ["business", "startup", "entrepreneur", "scaling", "business idea", "launch a business", "grow my business", "business plan", "revenue", "profit", "customers", "marketing strategy", "pricing strategy", "freelance", "consulting"]
     system_prompt = (
         "## business-coach\n"
         "AI mentor and strategic partner for entrepreneurship, business creation, and scaling.\n"

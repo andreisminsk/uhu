@@ -6,7 +6,7 @@ from .base import Skill
 class ProBidderSkill(Skill):
     name = "pro-bidder"
     description = "Auction strategist and professional bidding coach — valuation, strategy, and psychological anchor for live and online auctions"
-    triggers = ["auction", "bidding", "bid on", "buying at auction", "price is good", "is the price fair", "should I buy", "good deal", "valuation", "how much is this worth"]
+    triggers = ["auction", "bidding", "bid on", "buying at auction", "price is good", "is the price fair", "should I buy", "good deal", "valuation", "how much is this worth", "worth it", "overpaying", "negotiate price", "best price", "fair price", "buying advice", "purchase decision"]
     system_prompt = (
         "## pro-bidder\n"
         "Auction strategist and professional bidding coach.\n"

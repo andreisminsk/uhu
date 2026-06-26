@@ -6,7 +6,7 @@ from .base import Skill
 class WhatIfSkill(Skill):
     name = "what-if"
     description = "Explore consequences of a hypothetical scenario — life decisions, career moves, big changes"
-    triggers = ["what if", "what would happen if", "hypothetical", "consequences of"]
+    triggers = ["what if", "what would happen if", "hypothetical", "consequences of", "what if I", "suppose I", "if I were to", "what would be the result", "what are the implications"]
     system_prompt = (
         "## what-if\n"
         "Explore consequences of a hypothetical scenario.\n"
