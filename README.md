@@ -425,6 +425,7 @@ Available when running with tools enabled (default):
 | `google_calendar` | No           | Manage Google Calendar events                                                                                          |
 | `weather`         | Yes          | Weather forecast via wttr.in (no API key)                                                                             |
 | `token_count`     | Yes          | Estimate token count for text or a file (chars/4, words×1.3, tiktoken)                                               |
+| `calculator`      | Yes          | Safely evaluate mathematical expressions (arithmetic, trig, log, constants)                                          |
 | `llm_query`       | No           | Send prompts to a secondary LLM                                                                                        |
 | `browser`         | No           | Playwright browser automation with stealth support (navigate, extract, screenshot, PDF, click, fill, scroll, evaluate) |
 
@@ -449,7 +450,27 @@ It provides three estimation methods:
 
 The `chars/4` and `words×1.3` estimates work without any dependencies. For exact counts, install tiktoken: `pip install tiktoken`.
 
-## MCP (Model Context Protocol)
+### Calculator
+
+The `calculator` tool safely evaluates mathematical expressions using Python's AST parser (no `eval()`). Use it whenever you need precise computation — don't rely on mental math for anything beyond trivial arithmetic.
+
+**Supported operations:**
+
+| Category | Examples |
+|----------|----------|
+| Arithmetic | `+`, `-`, `*`, `/`, `//`, `%`, `**` |
+| Trig | `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2` |
+| Hyperbolic | `sinh`, `cosh`, `tanh` |
+| Log/Exp | `log`, `log2`, `log10`, `ln`, `exp`, `pow` |
+| Rounding | `ceil`, `floor`, `round`, `abs` |
+| Other | `sqrt`, `cbrt`, `factorial`, `gcd`, `hypot`, `dist`, `min`, `max`, `degrees`, `radians` |
+| Constants | `pi`, `e`, `tau`, `inf`, `nan` |
+
+**Parameters:**
+- `expression` (required) — The math expression to evaluate
+- `precision` (optional) — Round result to N decimal places
+
+**Example invocations:**
 
 Enable MCP server tools with `--mcp`. MCP servers are configured in `.ollama_agent.json` under `mcpServers`:
 

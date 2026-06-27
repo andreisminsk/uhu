@@ -19,6 +19,7 @@ from .browser import BrowserTool
 from .android_build import AndroidBuildTool
 from .weather import WeatherTool
 from .token_count import TokenCountTool
+from .calculator import CalculatorTool
 
 
 # ── Tool base class ─────────────────────────────────────────────────────
@@ -119,4 +120,5 @@ register(BrowserTool())
 register(AndroidBuildTool())
 register(WeatherTool())
 register(TokenCountTool())
+register(CalculatorTool())
 register(ModelTestTool())
