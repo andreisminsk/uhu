@@ -5,6 +5,7 @@ from .web_fetch import WebFetchTool
 from .web_search import WebSearchTool
 from .image_analysis import ImageAnalysisTool
 from .google_calendar import GoogleCalendarTool
+from .google_search import GoogleSearchTool
 from .llm_query import LlmQueryTool
 from .fs import ReadFileTool, SearchInFilesTool, ListFilesTool, FindFileTool, PeekFileTool
 from .fs import WriteFileTool, ReplaceInFileTool, CopyFileTool, MoveFileTool, MkdirTool
@@ -57,9 +58,16 @@ def all_tools():
     return list(_registry.values())
 
 
-def tools_system_prompt(enabled_names=None):
-    """Build the system prompt section for enabled tools."""
+def tools_system_prompt(enabled_names=None, workdir=None):
+    """Build the system prompt section for enabled tools.
+    Filters out tools that have 'enabled: false' in their config.
+    """
+    from ._config import load_config
+    config = load_config(workdir)
+    tools_config = config.get("tools", {})
     tools = all_tools() if enabled_names is None else [t for t in all_tools() if t.name in enabled_names]
+    # Filter out tools explicitly disabled in config
+    tools = [t for t in tools if tools_config.get(t.name, {}).get("enabled", True)]
     if not tools:
         return ""
     parts = [
@@ -98,6 +106,7 @@ register(WebFetchTool())
 register(WebSearchTool())
 register(ImageAnalysisTool())
 register(GoogleCalendarTool())
+register(GoogleSearchTool())
 register(LlmQueryTool())
 register(ReadFileTool())
 register(SearchInFilesTool())

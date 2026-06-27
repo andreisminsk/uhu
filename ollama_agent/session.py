@@ -93,7 +93,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
 
         if self.tools:
             from .tools import tools_system_prompt
-            tool_prompt = tools_system_prompt()
+            tool_prompt = tools_system_prompt(workdir=self.workdir)
             if self.history and self.history[0]["role"] == "system":
                 self.history[0]["content"] += "\n\n" + tool_prompt
             else:

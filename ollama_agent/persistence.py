@@ -109,7 +109,7 @@ class PersistenceMixin:
                 system_prompt = ""
             if self.tools:
                 from .tools import tools_system_prompt
-                tool_prompt = tools_system_prompt()
+                tool_prompt = tools_system_prompt(workdir=self.workdir)
                 system_prompt += "\n\n" + tool_prompt if system_prompt else tool_prompt
             if self.skills:
                 from .skills import skills_system_prompt

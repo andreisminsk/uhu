@@ -78,7 +78,36 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
    ```
 
-8. **Optional — Markdown to PDF conversion (md2pdf skill)**
+8. **Optional — Google Search integration** (⚠️ Deprecated)
+
+   > **Note:** Google has closed the Custom Search JSON API to new customers. If your GCP project was created recently, this API will return 403 errors regardless of configuration. For web search, use `web_search` with the `ddgs` package instead (see step 6).
+
+   If you have an older GCP project with access to the Custom Search JSON API, you can configure `google_search`:
+
+   ```
+   pip install google-api-python-client google-auth
+   ```
+
+   **Configuration:**
+
+   1. Enable the **Custom Search API** in your GCP project.
+
+   2. Create an **API key** in [GCP Console → Credentials](https://console.cloud.google.com/apis/credentials) and restrict it to Custom Search API.
+
+   3. Create a [Programmable Search Engine](https://programmablesearchengine.google.com/) and add sites to search. Copy the **Search engine ID** (`cx`).
+
+   4. Add to `.ollama_agent.json` under `tools`:
+      ```json
+      "google_search": {
+          "enabled": true,
+          "api_key": "AIzaSy...your-api-key...",
+          "cx": "a1b2c3...your-search-engine-id..."
+      }
+      ```
+
+   **Free tier:** 100 queries/day. Paid: $5 per 1,000 queries.
+
+9. **Optional — Markdown to PDF conversion (md2pdf skill)**
    
    ```
    pip install markdown pymdown-extensions xhtml2pdf
@@ -418,7 +447,8 @@ Available when running with tools enabled (default):
 | `move_file`       | No           | Move/rename files or directories                                                                                       |
 | `run_command`     | No           | Execute shell commands with structured output                                                                          |
 | `git`             | Yes          | Read-only git operations (status, diff, log)                                                                           |
-| `web_search`      | No           | Search the web via DuckDuckGo                                                                                          |
+| `web_search`      | No           | Search the web via DuckDuckGo (requires `ddgs` package for reliable results)                                            |
+| `google_search`   | Yes          | Search the web via Google Custom Search API (⚠️ deprecated for new projects; requires API key + CX in config, `enabled: false` by default) |
 | `web_fetch`       | No           | Fetch and extract web page content                                                                                     |
 | `http_request`    | No           | Make HTTP requests (GET, POST, etc.)                                                                                   |
 | `image_analysis`  | No           | Analyze images via Ollama vision model                                                                                 |

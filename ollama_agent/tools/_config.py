@@ -27,6 +27,11 @@ DEFAULT_CONFIG = {
             "calendar_id": "primary",
             "timezone": "UTC"
         },
+        "google_search": {
+            "enabled": False,
+            "api_key": "",
+            "cx": ""
+        },
         "browser": {
             "headless": True,
             "slow_mo": 50,

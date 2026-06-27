@@ -4,6 +4,15 @@ import re
 import urllib.parse
 import urllib.request
 
+# Try to import the ddgs package (pip install ddgs) for reliable search.
+# Falls back to urllib-based scraping if ddgs is not available,
+# but DDG frequently blocks direct requests with CAPTCHAs.
+try:
+    from ddgs import DDGS as _DDGS
+    _HAS_DDGS = True
+except ImportError:
+    _HAS_DDGS = False
+
 
 class WebSearchTool:
     name = "web_search"
@@ -21,6 +30,31 @@ class WebSearchTool:
         if not query:
             return "[Error: 'query' parameter is required]"
         num_results = min(params.get("num_results", 5), 10)
+
+        if _HAS_DDGS:
+            return self._search_ddgs(query, num_results)
+        else:
+            return self._search_urllib(query, num_results)
+
+    def _search_ddgs(self, query, num_results):
+        """Search using the ddgs package (reliable, handles bot detection)."""
+        try:
+            with _DDGS() as ddgs:
+                results = list(ddgs.text(query, max_results=num_results))
+            if not results:
+                return f"[No results found for: {query}]"
+            parts = [f"Search results for: {query}\n"]
+            for i, r in enumerate(results, 1):
+                title = r.get("title", "")
+                url = r.get("href", "")
+                snippet = r.get("body", "")
+                parts.append(f"{i}. {title}\n   URL: {url}\n   {snippet}\n")
+            return "\n".join(parts)
+        except Exception as e:
+            return f"[Search error: {e}]"
+
+    def _search_urllib(self, query, num_results):
+        """Fallback: search by scraping DDG Lite HTML (often blocked by CAPTCHA)."""
         try:
             url = "https://lite.duckduckgo.com/lite/?" + urllib.parse.urlencode({"q": query})
             req = urllib.request.Request(url, headers={
@@ -28,6 +62,14 @@ class WebSearchTool:
             })
             with urllib.request.urlopen(req, timeout=15) as resp:
                 html = resp.read().decode("utf-8", errors="replace")
+
+            # Detect CAPTCHA/bot challenge page
+            if "anomaly-modal" in html or "bots use DuckDuckGo" in html:
+                return (
+                    f"[Search blocked by DuckDuckGo CAPTCHA for: {query}. "
+                    "Install the 'ddgs' package for reliable search: pip install ddgs]"
+                )
+
             results = _parse_ddg_lite(html, num_results)
             if not results:
                 return f"[No results found for: {query}]"
@@ -55,14 +97,9 @@ def _parse_ddg_lite(html, max_results):
     for i, match in enumerate(link_pattern.finditer(html)):
         if i >= max_results:
             break
-        # Group layout depends on which alternative matched
-        # Alt1: class before href -> group(1)=title, no href captured
-        # Alt2: href before class -> group(2)=url, group(3)=title
-        # Since DDG Lite puts href before class, alt2 is the common case
         title_html = match.group(3) or match.group(1) or ""
         url_raw = match.group(2) or ""
 
-        # If url_raw is empty (alt1), extract href from the full tag
         if not url_raw:
             href_match = re.search(r"href=['\"]([^'\"]*)['\"]", match.group(0))
             url_raw = href_match.group(1) if href_match else ""

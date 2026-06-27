@@ -42,6 +42,11 @@
       "credentials_path": "gs-cred.json",
       "calendar_id": "yourcalendarid_email",
       "timezone": "Asia/Tbilisi"
-    }
+    },
+	"google_search": {
+	  "enabled":false,
+	  "api_key": "... your-api-key...",
+      "cx": "your-search-engine-id..."
+	}
   }
 }
