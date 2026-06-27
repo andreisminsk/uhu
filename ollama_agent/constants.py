@@ -202,6 +202,11 @@ MIME_TYPES = {
     '.rar': 'application/vnd.rar',
 }
 
+IMAGE_MIME_TYPES = {
+    'image/jpeg', 'image/png', 'image/gif', 'image/bmp',
+    'image/webp', 'image/tiff', 'image/x-icon',
+}
+
 # ── Context conservation limits ───────────────────────────────────────
 # The LLM context window is a finite, expensive resource. Large dumps of
 # raw data (HTML, verbose tool output, skill reference content) can easily

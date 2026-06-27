@@ -48,7 +48,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
 
         self.history = []
         self.pending_content = []
-        self.pending_binaries = []
+        self.pending_embeds = []
         self.auto_all = False
         self.auto_writes = set()
         self.auto_run_prefixes = set()
@@ -353,10 +353,17 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     def _build_message(self, user_input):
         parts = self.pending_content[:]
         self.pending_content.clear()
-        self.pending_binaries.clear()
+        images = [e["base64"] for e in self.pending_embeds]
+        embed_count = len(self.pending_embeds)
+        self.pending_embeds.clear()
         if user_input:
             parts.append(user_input)
-        return "\n\n".join(parts)
+        if embed_count and not user_input.strip():
+            parts.append("Describe this image.")
+        if embed_count:
+            parts.append(f"[{embed_count} image{'s' if embed_count > 1 else ''} attached — you can see and analyze it directly, no need to use image-analysis tool]")
+        text = "\n\n".join(parts)
+        return text, images if images else None
     # Phrases that suggest the model intends to act but didn't produce action blocks
     _INTENT_PHRASES = (
         "let me ", "i'll ", "i will ", "i should ", "first, i", "first i",
@@ -650,9 +657,12 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.history.append({"role": "assistant", "content": "Noted."})
         agent_print(f"⚠  Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
 
-    def _send(self, message, max_rounds=MAX_FEEDBACK_ROUNDS):
+    def _send(self, message, images=None, max_rounds=MAX_FEEDBACK_ROUNDS):
         self._log("user", message)
-        self.history.append({"role": "user", "content": message})
+        msg = {"role": "user", "content": message}
+        if images:
+            msg["images"] = images
+        self.history.append(msg)
         history_len_before = len(self.history)
         # When skills mode is active, auto-approve all actions — the user has
         # opted into the skill's workflow by enabling --skills
@@ -673,9 +683,18 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             while len(self.history) > history_len_before:
                 self.history.pop()
         except Exception as e:
-            self._log("system", f"[Error: {e}]")
-            logger.exception("Error in _send: %s", e)
-            agent_print(f"\n[Error: {e}]\n")
+            err_msg = str(e)
+            # Detect models that don't support images
+            if "400" in err_msg and self.history and "images" in self.history[-1]:
+                agent_print("\n[Error: This model does not support images. "
+                            "Use a vision-capable model or /attach-bin with --tools instead.]\n")
+                # Remove the failed message with images from history
+                self.history.pop()
+                self._log("system", f"[Model rejected image: {e}]")
+            else:
+                self._log("system", f"[Error: {e}]")
+                logger.exception("Error in _send: %s", e)
+                agent_print(f"\n[Error: {e}]\n")
             while len(self.history) > history_len_before:
                 self.history.pop()
         finally:
@@ -733,7 +752,10 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     continue
                 if not user_input:
                     if self.pending_content:
-                        self._send(self._build_message(""))
+                        text, images = self._build_message("")
+                        self._send(text, images=images)
+                    elif self.pending_embeds:
+                        agent_print("[Image(s) embedded — type your question and press Enter to send]\n")
                     continue
                 if user_input.count("\n") >= 1 and _iu._last_input_was_paste:
                     line_count = user_input.count("\n") + 1
@@ -807,7 +829,11 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 if user_input.lower() in ("/m", "/multiline"):
                     ml_text = self.do_multiline()
                     if ml_text:
-                        self._send(self._build_message(ml_text))
+                        text, images = self._build_message(ml_text)
+                        self._send(text, images=images)
+                    continue
+                if user_input.lower().startswith("/embed-bin"):
+                    self.do_embed_bin(user_input[10:])
                     continue
                 if user_input.lower().startswith("/attach-bin"):
                     self.do_attach_bin(user_input[11:])
@@ -844,7 +870,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 if len(user_input.strip()) > 2:
                     self._skill_auto_approve = False
                     self._active_skill = None
-                self._send(self._build_message(user_input))
+                text, images = self._build_message(user_input)
+                self._send(text, images=images)
         finally:
             if self.log_file:
                 self.log_file.close()

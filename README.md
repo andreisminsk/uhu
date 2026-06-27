@@ -286,7 +286,8 @@ uhu --no-autosave --no-cache
 | `/diff`                            | Toggle auto-diff for edits                                                                                                                                   |
 | `/m` or `/multiline`               | Enter multiline mode                                                                                                                                         |
 | `/attach <path>`                   | Attach file(s) to next message                                                                                                                               |
-| `/attach-bin <path>`               | Attach binary file reference                                                                                                                                 |
+| `/attach-bin <path>`               | Attach binary file reference (for tool-based analysis)                                                                                                       |
+| `/embed-bin <path>`               | Embed image directly into message (for vision models, works with `--no-tools`)                                                                              |
 | `/search <pattern> <glob>`         | Search across files                                                                                                                                          |
 | `/peek <path>`                     | Show head+tail of a file                                                                                                                                     |
 | `/ls [path]`                       | List directory contents                                                                                                                                      |

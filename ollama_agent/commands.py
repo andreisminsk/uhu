@@ -4,7 +4,7 @@ import os
 import re
 import sys
 
-from .constants import MIME_TYPES, SKIP_EXT, MODEL_TEMPERATURE
+from .constants import MIME_TYPES, IMAGE_MIME_TYPES, SKIP_EXT, MODEL_TEMPERATURE
 from .actions import agent_print
 
 
@@ -87,6 +87,7 @@ class CommandMixin:
             "  /attach <path|glob|dir> [L<start>-<end>]\n"
             "                               Attach file(s) to next message\n"
             "  /attach-bin <path>           Attach binary file reference (image, audio, PDF, etc.)\n"
+            "  /embed-bin <path>            Embed image directly into next message (for vision models)\n"
             "  /search <pattern> <glob>     Grep for pattern across files\n"
             "  /peek <path>                 Show head+tail of a file\n"
             "  /ls [path]                   List directory contents\n"
@@ -577,8 +578,52 @@ class CommandMixin:
             f"  Extension: {ext}"
         )
         self.pending_content.append(ref)
-        self.pending_binaries.append({"path": path, "rel": rel, "mime": mime, "size": size})
         agent_print(f"[Binary reference attached: {rel} ({mime}, {size_str})]\n")
+
+    def do_embed_bin(self, args_str):
+        """Embed an image file directly into the next message for vision models."""
+        import base64
+        raw = args_str.strip()
+        if (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'")):
+            raw = raw[1:-1]
+        if not raw:
+            agent_print("[Usage: /embed-bin <path>]\n")
+            return
+        path = os.path.expanduser(raw)
+        if not os.path.isabs(path):
+            path = os.path.join(self.workdir, path)
+        path = os.path.normpath(path)
+        if not os.path.isfile(path):
+            agent_print(f"[File not found: {path}]\n")
+            return
+        ext = os.path.splitext(path)[1].lower()
+        mime = MIME_TYPES.get(ext)
+        if not mime:
+            agent_print(f"[Unknown binary type: {ext} — supported: {', '.join(sorted(set(MIME_TYPES.keys())))}]\n")
+            return
+        if mime not in IMAGE_MIME_TYPES:
+            agent_print(f"[Not an image type: {mime} — /embed-bin only supports image types for vision models]\n")
+            return
+        size = os.path.getsize(path)
+        max_size = 20 * 1024 * 1024  # 20 MB
+        if size > max_size:
+            agent_print(f"[Image too large: {size / (1024*1024):.1f} MB — maximum is 20 MB]\n")
+            return
+        if size < 1024:
+            size_str = f"{size} B"
+        elif size < 1024 * 1024:
+            size_str = f"{size / 1024:.1f} KB"
+        else:
+            size_str = f"{size / (1024 * 1024):.1f} MB"
+        try:
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode("utf-8")
+        except Exception as e:
+            agent_print(f"[Error reading file: {e}]\n")
+            return
+        filename = os.path.basename(path)
+        self.pending_embeds.append({"filename": filename, "mime": mime, "size": size, "base64": b64})
+        agent_print(f"[Image embedded: {filename} ({mime}, {size_str}) — type your message or press Enter to send as-is]\n")
 
     def do_memorize(self, args_str):
         """Add an entry to permanent memory."""
