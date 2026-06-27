@@ -11,7 +11,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 
 - **Agent mode** (`--agent`): Parse and execute WRITE/EDIT/RUN/FILE blocks from model output
 - **Tools mode** (on by default, `--no-tools` to disable): 20 structured tool calls for filesystem, git, HTTP, browser automation, and more
-- **Skills mode** (`--skills` - off by default): Invoke development skills (code-review, test-gen, doc-gen, plan, md2pdf, docx2md, what-if, root-cause, problem-solving, architect, medicine, business-coach, pro-bidder) and custom skills
+- **Skills mode** (`--skills` - off by default): Invoke development skills (code-review, test-gen, doc-gen, plan, md2pdf, docx2md, what-if, root-cause, problem-solving, architect, medicine, business-coach, pro-bidder, text-writer) and custom skills
 - **Streaming support** (`--stream`): Token-by-token output
 - **Session persistence**: Save/restore conversations with `/save` and `/restore`
 - **Auto-compaction**: `/compact` summarizes history to free context

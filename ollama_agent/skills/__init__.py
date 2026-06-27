@@ -26,6 +26,7 @@ from .medicine import MedicineSkill
 from .business_coach import BusinessCoachSkill
 from .pro_bidder import ProBidderSkill
 from .docx2md import Docx2MdSkill
+from .text_writer import TextWriterSkill
 
 
 # ── Registry ───────────────────────────────────────────────────────────
@@ -157,6 +158,7 @@ def skills_system_prompt(enabled_names=None):
         "  If they ask about software/system design or architecture → use architect.\n"
         "  If they ask about business, startups, or entrepreneurship → use business-coach.\n"
         "  If they mention a .docx file or want to convert a Word document → use docx2md.\n"
+        "  If they want to write, edit, or polish text → use text-writer.\n"
         "- Use tools (file I/O, git, web search, etc.) only when NO skill matches the user's intent.",
         "",
         "Available skills:",
@@ -726,3 +728,4 @@ register(MedicineSkill())
 register(BusinessCoachSkill())
 register(ProBidderSkill())
 register(Docx2MdSkill())
+register(TextWriterSkill())
