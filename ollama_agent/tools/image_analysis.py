@@ -14,6 +14,7 @@ IMAGE_MIME_TYPES = {
 
 class ImageAnalysisTool:
     name = "image-analysis"
+    do_not_truncate_observations = True
     description = (
         "Analyze an image file using a vision-capable model. "
         "Params: {\"path\": \"<file_path>\", \"prompt\": \"<optional question>\"}"

@@ -30,6 +30,8 @@ class Tool:
     name = ""
     description = ""
     system_prompt = ""
+    do_not_truncate_observations = False
+    """If True, observations from this tool are never truncated in context."""
 
     def execute(self, params, workdir=None):
         raise NotImplementedError

@@ -52,8 +52,9 @@ AGENT_SYSTEM_PROMPT = (
     "- Use **TOOL:**`read_file`/`search_in_files`/`list_files`/`find_file`/`peek_file` instead of **RUN:** for file operations — they work identically on all platforms and avoid shell quoting issues.\n"
     "- Use **TOOL:**`py_compile` instead of **RUN:** `python -c '...'` for syntax checks, import tests, and quick Python expressions — it is auto-approvable and cross-platform.\n"
     "- NEVER use **RUN:** `python -c '...'` for syntax checks or import tests — use **TOOL:**`py_compile` instead.\n"
-    "- Use **RUN:** only when you intend to execute a command.\n"
-    "- Plain ```bash blocks without **RUN:** are treated as documentation, not commands.\n"
+"- Use **RUN:** only when you intend to execute a command.\n"
+"- Plain ```bash blocks without **RUN:** are treated as documentation, not commands.\n"
+"- When you issue a **TOOL:** or **SKILL:** call, STOP your response after the call. Do NOT write analysis or conclusions that depend on the tool/skill result — you don't have it yet. Wait for the result in the next turn.\n"
     "- NEVER omit **WRITE:**, **EDIT:**, or **EOF:** markers. Both are required.\n"
     "- NEVER omit **FILE:** or **EOF:** markers. Both are required.\n"
     "- If a file is accidentally overwritten, previous versions are saved in `.uhu/.cache/` with numeric suffixes (e.g. `README.1.md`).\n"
@@ -225,11 +226,16 @@ MAX_OBSERVATION_CHARS = 4000
 # but the model must receive the full content to do its job effectively.
 MAX_READ_OBSERVATION_CHARS = 70000
 
-# Maximum characters for skill and tool observations in context.
-# These are intermediate/automated outputs, not directly requested by the user,
-# so they get much more aggressive truncation. The full output is still printed
-# to the terminal for the user to see — only the context copy is shortened.
+# Maximum characters for skill observations in context.
+# Skills are intermediate/automated workflows; their output is printed to the
+# terminal in full, so the context copy can be aggressively shortened.
 MAX_SKILL_OBSERVATION_CHARS = 1500
+
+# Maximum characters for tool observations in context.
+# Tools like image-analysis produce detailed output that the model needs in
+# full to reason accurately. Unlike skills, there is no way to re-fetch a tool
+# result, so truncating too aggressively loses critical information.
+MAX_TOOL_OBSERVATION_CHARS = 8000
 
 # Maximum characters for web_fetch results (web pages tend to be very large).
 # This is the default max_length parameter for the web_fetch tool.

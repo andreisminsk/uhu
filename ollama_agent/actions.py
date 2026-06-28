@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .constants import SAFE_SHELL_COMMANDS, SAFE_TOOLS, BLOCKED_COMMANDS, WARNING_COMMANDS
 from .constants import SKIP_EXT
-from .constants import MAX_OBSERVATION_CHARS, MAX_READ_OBSERVATION_CHARS, MAX_SKILL_OBSERVATION_CHARS, MAX_TOTAL_OBSERVATION_CHARS, MAX_CONSOLE_DISPLAY_CHARS, MAX_BATCH_WRITES
+from .constants import MAX_OBSERVATION_CHARS, MAX_READ_OBSERVATION_CHARS, MAX_SKILL_OBSERVATION_CHARS, MAX_TOOL_OBSERVATION_CHARS, MAX_TOTAL_OBSERVATION_CHARS, MAX_CONSOLE_DISPLAY_CHARS, MAX_BATCH_WRITES
 from .constants import ANSI_AGENT, ANSI_RESET, ANSI_TOOL
 from .edit_utils import make_edit_summary, make_unified_diff
 from .input_utils import read_full_input
@@ -1138,16 +1138,30 @@ class ActionMixin:
         truncated = []
         for obs in observations:
             # Skill/tool observations: aggressive truncation (intermediate output)
-            is_skill_or_tool = obs.startswith(("⚡ [SKILL", "[SKILL", "[TOOL"))
+            is_skill = obs.startswith(("⚡ [SKILL", "[SKILL"))
+            is_tool = obs.startswith("[TOOL")
             # Read observations: generous limit (agent needs full source code)
             is_read = obs.startswith("[File:")
-            if is_skill_or_tool:
+            # Check if this tool's observations should never be truncated
+            no_truncate = False
+            if is_tool:
+                from .tools import get as get_tool
+                _m = __import__("re").match(r"^\[TOOL\s+(\S+)\]", obs)
+                if _m:
+                    _t = get_tool(_m.group(1))
+                    if _t and getattr(_t, "do_not_truncate_observations", False):
+                        no_truncate = True
+            if no_truncate:
+                limit = None
+            elif is_skill:
                 limit = MAX_SKILL_OBSERVATION_CHARS
+            elif is_tool:
+                limit = MAX_TOOL_OBSERVATION_CHARS
             elif is_read:
                 limit = MAX_READ_OBSERVATION_CHARS
             else:
                 limit = MAX_OBSERVATION_CHARS
-            if len(obs) > limit:
+            if limit is not None and len(obs) > limit:
                 trunc_note = f"\n[... truncated, {len(obs)} chars total — use FILE: or TOOL: for full content]"
                 truncated.append(obs[:limit] + trunc_note)
             else:
