@@ -5,7 +5,7 @@ from .base import Skill
 
 class ProBidderSkill(Skill):
     name = "pro-bidder"
-    description = "Auction strategist and professional bidding coach — valuation, strategy, and psychological anchor for live and online auctions"
+    description = "Auction strategist and professional bidding coach — valuation, strategy, and psychological anchor for live and online auctions. Disclaimer: AI coaching only — not financial, legal, or appraisal advice; all bidding decisions and risks are solely yours."
     triggers = ["auction", "bidding", "bid on", "buying at auction", "price is good", "is the price fair", "should I buy", "good deal", "valuation", "how much is this worth", "worth it", "overpaying", "negotiate price", "best price", "fair price", "buying advice", "purchase decision"]
     system_prompt = (
         "## pro-bidder\n"
@@ -91,4 +91,5 @@ class ProBidderSkill(Skill):
             experience_hint = " The user is a beginner — define all jargon simply and emphasize budget discipline."
         elif experience == "advanced":
             experience_hint = " The user is experienced — discuss nuanced tactics and advanced strategies."
-        return f"Provide auction strategy coaching for the following:\n\n{topic}{phase_hint}{experience_hint}"
+        disclaimer = "\n\n⚠️ Disclaimer: This is AI coaching only — not financial, legal, or appraisal advice. All bidding decisions and risks are solely yours. Bidding carries risk of total capital loss."
+        return f"Provide auction strategy coaching for the following:\n\n{topic}{phase_hint}{experience_hint}{disclaimer}"
