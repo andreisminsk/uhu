@@ -49,20 +49,15 @@ AGENT_SYSTEM_PROMPT = (
     "- Use **EDIT:** to modify existing files (preferred over WRITE for changes).\n"
     "- Use **WRITE:** only for new files or complete rewrites.\n"
     "- Use **FILE:** to read a file into context. Always close with **EOF:**.\n"
-    "- Use **TOOL:**`read_file`/`search_in_files`/`list_files`/`find_file`/`peek_file` instead of **RUN:** for file operations — they work identically on all platforms and avoid shell quoting issues.\n"
-    "- Use **TOOL:**`py_compile` instead of **RUN:** `python -c '...'` for syntax checks, import tests, and quick Python expressions — it is auto-approvable and cross-platform.\n"
-    "- NEVER use **RUN:** `python -c '...'` for syntax checks or import tests — use **TOOL:**`py_compile` instead.\n"
-"- Use **RUN:** only when you intend to execute a command.\n"
-"- Plain ```bash blocks without **RUN:** are treated as documentation, not commands.\n"
-"- When you issue a **TOOL:** or **SKILL:** call, STOP your response after the call. Do NOT write analysis or conclusions that depend on the tool/skill result — you don't have it yet. Wait for the result in the next turn.\n"
+    "- Use **RUN:** only when you intend to execute a command.\n"
+    "- Plain ```bash blocks without **RUN:** are treated as documentation, not commands.\n"
     "- NEVER omit **WRITE:**, **EDIT:**, or **EOF:** markers. Both are required.\n"
     "- NEVER omit **FILE:** or **EOF:** markers. Both are required.\n"
     "- If a file is accidentally overwritten, previous versions are saved in `.uhu/.cache/` with numeric suffixes (e.g. `README.1.md`).\n"
     "- The path in **WRITE:**/**EDIT:** and **EOF:** must match exactly.\n"
     "- The path in **FILE:** and **EOF:** must match exactly.\n"
-    "- For **TOOL:** blocks, the EOF path is the tool name (e.g. **EOF:`read_file`**), NOT the file path in the params.\n"
     "- ALWAYS include the path in **EOF:** — never write bare **EOF:** without the path.\n"
-    "- Use the full relative path (e.g. src/app.py, not just app.py). If unsure of the path, use find_file or search_in_files first.\n"
+    "- Use the full relative path (e.g. src/app.py, not just app.py).\n"
     "- Parent directories are created automatically — just use paths like src/app.py in WRITE.\n"
     "- To read a file, use **FILE:**`path` with **EOF:**`path`, or ask the user to /attach or /search it.\n"
     "- You may explain your changes briefly before or after the write/edit/run block.\n\n"
@@ -78,6 +73,26 @@ AGENT_SYSTEM_PROMPT = (
     "- If the user is interested, use list_files or find_file to discover available guide files in the project, then read and summarize them.\n"
     "- Keep the initial offer to 2-3 sentences. Do not repeat it in later messages.\n"
     "- If the user declines or jumps straight to a task, proceed without mentioning guides again."
+)
+
+# Rules appended to the system prompt when tools are enabled.
+# These reference TOOL: blocks and specific tool names, so they must
+# only be included when the tools system prompt is also present.
+AGENT_TOOLS_RULES = (
+    "\n\nTOOL RULES:\n"
+    "- Use **TOOL:**`read_file`/`search_in_files`/`list_files`/`find_file`/`peek_file` instead of **RUN:** for file operations — they work identically on all platforms and avoid shell quoting issues.\n"
+    "- Use **TOOL:**`py_compile` instead of **RUN:** `python -c '...'` for syntax checks, import tests, and quick Python expressions — it is auto-approvable and cross-platform.\n"
+    "- NEVER use **RUN:** `python -c '...'` for syntax checks or import tests — use **TOOL:**`py_compile` instead.\n"
+    "- For **TOOL:** blocks, the EOF path is the tool name (e.g. **EOF:`read_file`**), NOT the file path being operated on.\n"
+    "- If unsure of a file path, use find_file or search_in_files first.\n"
+)
+
+# Rule appended when either tools or skills are enabled — both use
+# the TOOL:/SKILL: call-and-wait pattern.
+AGENT_CALL_RULE = (
+    "\n\nCALL RULES:\n"
+    "- When you issue a **TOOL:** or **SKILL:** call, STOP your response after the call. "
+    "Do NOT write analysis or conclusions that depend on the tool/skill result — you don't have it yet. Wait for the result in the next turn.\n"
 )
 
 SKIP_EXT = {
@@ -312,11 +327,13 @@ def get_platform_info():
 
 def get_platform_shell_guidance():
     """Return platform-specific shell and command guidance for the system prompt."""
+    from datetime import date
     info = get_platform_info()
+    today = date.today().isoformat()
     if sys.platform == 'win32':
         return (
             "\n\n"
-            f"Platform: {info['platform_label']} | Shell: {info['shell_label']} | OS: {info['platform_label']}\n\n"
+f"Platform: {info['platform_label']} | Shell: {info['shell_label']} | OS: {info['platform_label']} | Current date: {today}\n\n"
             "SHELL AND COMMAND GUIDELINES FOR WINDOWS:\n"
             "- You are running on Windows. Use Windows-native commands in RUN blocks.\n"
             "- Use `dir` instead of `ls`\n"
@@ -334,7 +351,7 @@ def get_platform_shell_guidance():
     else:
         return (
             "\n\n"
-            f"Platform: {info['platform_label']} | Shell: {info['shell_label']} | OS: {info['platform_label']}\n\n"
+f"Platform: {info['platform_label']} | Shell: {info['shell_label']} | OS: {info['platform_label']} | Current date: {today}\n\n"
             "SHELL AND COMMAND GUIDELINES FOR UNIX:\n"
             "- You are running on a Unix-like system. Use standard Unix commands in RUN blocks.\n"
             "- Use `bash` or `sh` as the RUN fence language\n"

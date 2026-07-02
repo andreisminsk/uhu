@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 from ollama import Client
 
-from .constants import AGENT_SYSTEM_PROMPT, MODEL_TEMPERATURE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
+from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, MODEL_TEMPERATURE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
 from .actions import agent_print, tool_print
 from .parser import parse_actions
 from .input_utils import read_full_input, _reconfigure_stdout
@@ -71,10 +71,17 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             self.autosave_name = f"{project_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
         if self.agent:
-            system_prompt = AGENT_SYSTEM_PROMPT
+            from datetime import date
+            system_prompt = f"Current date: {date.today().isoformat()}\n\n" + AGENT_SYSTEM_PROMPT
             # Replace {shell_lang} placeholder with platform-appropriate shell
             info = get_platform_info()
             system_prompt = system_prompt.replace("{shell_lang}", info["shell_lang"])
+            # Append tool-specific rules only when tools are enabled
+            if self.tools:
+                system_prompt += AGENT_TOOLS_RULES
+            # Append call-and-wait rule when tools or skills are enabled
+            if self.tools or self.skills:
+                system_prompt += AGENT_CALL_RULE
             self.history.append({"role": "system", "content": system_prompt + get_platform_shell_guidance()})
 
         # Connect MCP servers and register their tools BEFORE building tools prompt
