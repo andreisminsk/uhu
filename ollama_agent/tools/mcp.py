@@ -89,6 +89,37 @@ class MCPTool:
             }
         return params
 
+    # Threshold: if text output exceeds this, save to file instead of inlining
+    _LARGE_OUTPUT_THRESHOLD = 6000  # chars — well under MAX_TOOL_OBSERVATION_CHARS
+
+    @staticmethod
+    def _detect_extension(text, mime_type=""):
+        """Guess file extension from content and MIME type."""
+        if mime_type:
+            mime_map = {
+                "image/svg+xml": ".svg",
+                "text/html": ".html",
+                "text/xml": ".xml",
+                "application/json": ".json",
+                "text/csv": ".csv",
+                "text/markdown": ".md",
+                "text/plain": ".txt",
+            }
+            ext = mime_map.get(mime_type)
+            if ext:
+                return ext
+        # Fallback: sniff content
+        stripped = text.lstrip()
+        if stripped.startswith("<svg") or stripped.startswith("<?xml") and "<svg" in stripped[:200]:
+            return ".svg"
+        if stripped.startswith("<!DOCTYPE html") or stripped.startswith("<html"):
+            return ".html"
+        if stripped.startswith("{") or stripped.startswith("["):
+            return ".json"
+        if stripped.startswith("#") or stripped.startswith("graph ") or stripped.startswith("sequenceDiagram"):
+            return ".md"
+        return ".txt"
+
     def execute(self, params, workdir=None):
         """Invoke the MCP tool and return the result."""
         try:
@@ -121,9 +152,40 @@ class MCPTool:
                             else:
                                 text = item.get("text", "")
                                 if text:
-                                    parts.append(text)
+                                    # Save large text output to file to avoid truncation
+                                    if len(text) > self._LARGE_OUTPUT_THRESHOLD and workdir:
+                                        ext = self._detect_extension(text, mime_type)
+                                        filename = f"{self.name}_output{ext}"
+                                        filepath = os.path.join(workdir, filename)
+                                        try:
+                                            with open(filepath, "w", encoding="utf-8") as f:
+                                                f.write(text)
+                                            parts.append(
+                                                f"Output saved to: {filepath} ({len(text)} chars). "
+                                                f"Use FILE: to read the full content."
+                                            )
+                                        except Exception as e:
+                                            parts.append(f"[Failed to save output to {filepath}: {e}]")
+                                            parts.append(text)
+                                    else:
+                                        parts.append(text)
                         elif isinstance(item, str):
-                            parts.append(item)
+                            if len(item) > self._LARGE_OUTPUT_THRESHOLD and workdir:
+                                ext = self._detect_extension(item)
+                                filename = f"{self.name}_output{ext}"
+                                filepath = os.path.join(workdir, filename)
+                                try:
+                                    with open(filepath, "w", encoding="utf-8") as f:
+                                        f.write(item)
+                                    parts.append(
+                                        f"Output saved to: {filepath} ({len(item)} chars). "
+                                        f"Use FILE: to read the full content."
+                                    )
+                                except Exception as e:
+                                    parts.append(f"[Failed to save output to {filepath}: {e}]")
+                                    parts.append(item)
+                            else:
+                                parts.append(item)
                     return "\n".join(parts) if parts else json.dumps(result, indent=2)
                 return json.dumps(result, indent=2)
             return str(result)
