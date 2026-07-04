@@ -1,6 +1,7 @@
 {
   "mcpServers": {
     "github": {
+      "enabled": true,
       "url": "https://api.githubcopilot.com/mcp/",
       "timeout": 120,
       "headers": {
@@ -8,15 +9,18 @@
       }
     },
     "mcp-imagineer": {
+      "enabled": false,
       "url": "http://localhost:18080/sse",
       "timeout": 120
     },
     "huggingface": {
+      "enabled": true,
       "url": "https://huggingface.co/mcp",
       "timeout": 120,
       "auto_approve": true
     },
     "canva": {
+      "enabled": false,
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.canva.com/mcp"],
       "timeout": 120

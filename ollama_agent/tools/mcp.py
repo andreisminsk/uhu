@@ -554,6 +554,10 @@ class MCPManager:
 
         threads = []
         for server_name, server_config in mcp_servers.items():
+            if server_config.get("enabled", True) is False:
+                if not self.quiet:
+                    agent_print(f"[MCP] Skipping {server_name} (disabled)")
+                continue
             if not self.quiet:
                 agent_print(f"[MCP] Connecting to {server_name}...")
             t = threading.Thread(target=_connect_server, args=(server_name, server_config))
