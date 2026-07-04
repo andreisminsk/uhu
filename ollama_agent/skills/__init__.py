@@ -28,6 +28,7 @@ from .pro_bidder import ProBidderSkill
 from .docx2md import Docx2MdSkill
 from .text_writer import TextWriterSkill
 from .graph_ai import GraphAiSkill
+from .svg2png import Svg2PngSkill
 
 
 # ── Registry ───────────────────────────────────────────────────────────
@@ -732,3 +733,4 @@ register(ProBidderSkill())
 register(Docx2MdSkill())
 register(TextWriterSkill())
 register(GraphAiSkill())
+register(Svg2PngSkill())
