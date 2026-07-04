@@ -27,6 +27,7 @@ from .business_coach import BusinessCoachSkill
 from .pro_bidder import ProBidderSkill
 from .docx2md import Docx2MdSkill
 from .text_writer import TextWriterSkill
+from .graph_ai import GraphAiSkill
 
 
 # ── Registry ───────────────────────────────────────────────────────────
@@ -159,6 +160,7 @@ def skills_system_prompt(enabled_names=None):
         "  If they ask about business, startups, or entrepreneurship → use business-coach.\n"
         "  If they mention a .docx file or want to convert a Word document → use docx2md.\n"
         "  If they want to write, edit, or polish text → use text-writer.\n"
+        "  If they want a diagram, dependency graph, ancestry, fishbone, timeline, or roadmap → use graph-ai.\n"
         "- Use tools (file I/O, git, web search, etc.) only when NO skill matches the user's intent.",
         "",
         "Available skills:",
@@ -729,3 +731,4 @@ register(BusinessCoachSkill())
 register(ProBidderSkill())
 register(Docx2MdSkill())
 register(TextWriterSkill())
+register(GraphAiSkill())

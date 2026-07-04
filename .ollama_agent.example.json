@@ -37,6 +37,14 @@
     "llm_summarize": true,
     "max_chars": 3000
   },
+  "skills": {
+    "graph-ai": {
+      "model": "glm-5.1:cloud",
+      "base_url": "http://localhost:11434",
+      "api_key": "ollama-local",
+      "max_tokens": 131072
+    }
+  },
   "tools": {
     "image_analysis": {
       "base_url": "http://localhost:11434/",

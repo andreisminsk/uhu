@@ -45,6 +45,14 @@ DEFAULT_CONFIG = {
     "memory": {
         "max_lines": 50,
         "warn_threshold": 40
+    },
+    "skills": {
+        "graph-ai": {
+            "model": "glm-5.1:cloud",
+            "base_url": "http://localhost:11434",
+            "api_key": "ollama-local",
+            "max_tokens": 131072
+        }
     }
 }
 
