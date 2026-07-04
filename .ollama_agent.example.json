@@ -24,6 +24,12 @@
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.canva.com/mcp"],
       "timeout": 120
+    },
+	"mcp-mermaid": {
+      "enabled": true,
+	  "command": "cmd",
+      "args": ["/c", "mcp-mermaid"],
+	  "timeout": 120
     }
   },
   "llm_query": {
