@@ -183,6 +183,7 @@ SAFE_TOOLS = {
     'git',              # Read-only git operations (status, diff, log) — no writes
     'calculator',       # Pure math evaluation — no I/O, no side effects
     'token_count',      # Counts tokens in text/files — read-only, no side effects
+    'py_compile',       # Check Python syntax, import modules, or run Python expressions 
 }
 
 # ANSI terminal color codes
