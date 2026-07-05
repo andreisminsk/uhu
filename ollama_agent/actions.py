@@ -843,7 +843,8 @@ class ActionMixin:
                     return None
 
         # Auto-approve safe tools (read-only, no side effects)
-        if tool_name in SAFE_TOOLS:
+        # py_compile is auto-safe only for syntax/import actions (not 'run', which executes code)
+        if tool_name in SAFE_TOOLS or (tool_name == "py_compile" and params.get("action") in ("syntax", "import")):
             agent_print(f"[auto-safe: {tool_name}] [TOOL] {tool_name}({params_preview})")
         else:
             params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"

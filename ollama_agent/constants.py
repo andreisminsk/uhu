@@ -181,6 +181,8 @@ SAFE_TOOLS = {
     'time_now',         # Returns current date/time/timezone — read-only, no side effects
     'mkdir',            # Creates directories — low risk, easily reversible
     'git',              # Read-only git operations (status, diff, log) — no writes
+    'calculator',       # Pure math evaluation — no I/O, no side effects
+    'token_count',      # Counts tokens in text/files — read-only, no side effects
 }
 
 # ANSI terminal color codes
