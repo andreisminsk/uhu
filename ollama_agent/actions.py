@@ -823,28 +823,35 @@ class ActionMixin:
         if len(params_preview) > 60:
             params_preview = params_preview[:57] + "..."
         # Safety check for run_command tool — block/warn on dangerous commands
+        safety_confirmed = False
         if tool_name == "run_command":
             cmd = params.get("command", "")
             safety_level, safety_msg = self._check_command_safety(cmd)
             if safety_level == 'blocked':
                 agent_print(f"⛔ {safety_msg}\n")
                 return None
+            safety_confirmed = False
             if safety_level == 'warning':
                 agent_print(f"{safety_msg}")
                 params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"
                 if not self._confirm_or_auto(f"[CONFIRM DESTRUCTIVE] {tool_name}({params_preview})", cmd=cmd, diff_text=params_details, force_confirm=True):
                     agent_print("[Skipped]\n")
                     return None
+                safety_confirmed = True
             elif safety_level == 'chain':
                 agent_print(f"{safety_msg}")
                 params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"
                 if not self._confirm_or_auto(f"[TOOL] {tool_name}({params_preview})", cmd=cmd, diff_text=params_details):
                     agent_print("[Skipped]\n")
                     return None
+                safety_confirmed = True
 
         # Auto-approve safe tools (read-only, no side effects)
         # py_compile is auto-safe only for syntax/import actions (not 'run', which executes code)
-        if tool_name in SAFE_TOOLS or (tool_name == "py_compile" and params.get("action") in ("syntax", "import")):
+        # Skip general confirmation if already confirmed by safety check above
+        if safety_confirmed:
+            pass
+        elif tool_name in SAFE_TOOLS or (tool_name == "py_compile" and params.get("action") in ("syntax", "import")):
             agent_print(f"[auto-safe: {tool_name}] [TOOL] {tool_name}({params_preview})")
         else:
             params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"
