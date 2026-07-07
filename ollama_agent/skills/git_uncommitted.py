@@ -23,6 +23,7 @@ class GitUncommittedSkill(Skill):
         '- depth (integer, optional, default 0): Max subdirectory depth to recurse (0 = unlimited)\n'
         '- show_unpushed (boolean, optional, default true): Include repos with unpushed commits\n'
         '- show_clean (boolean, optional, default false): Also list clean git repos\n'
+        '- save_to (string, optional): If set, write the full report to this file path (avoids output truncation)\n'
         'When this skill is invoked, it walks the directory tree looking for .git folders, '
         'then runs `git status --porcelain` and `git log --branches --not --remotes --oneline` '
         'in each repo to detect uncommitted changes and unpushed commits.\n'
@@ -33,6 +34,7 @@ class GitUncommittedSkill(Skill):
         "depth": {"type": "integer", "required": False, "description": "Max depth to recurse (0 = unlimited)"},
         "show_unpushed": {"type": "boolean", "required": False, "description": "Include repos with unpushed commits (default: true)"},
         "show_clean": {"type": "boolean", "required": False, "description": "Also list clean git repos (default: false)"},
+        "save_to": {"type": "string", "required": False, "description": "If set, write the full report to this file path (avoids output truncation)"},
     }
 
     def execute(self, params, workdir=None, session=None):
@@ -48,14 +50,30 @@ class GitUncommittedSkill(Skill):
         depth = params.get("depth", 0)
         show_unpushed = params.get("show_unpushed", True)
         show_clean = params.get("show_clean", False)
+        save_to = params.get("save_to", "")
 
         uncommitted = []
         clean = []
         errors = []
 
+        # Directories that are never git repos and are expensive to traverse.
+        # Pruning these prevents timeouts when scanning from a high-level path
+        # (e.g. C:\Users\andre) where AppData/node_modules/.cache dominate.
+        SKIP_DIRS = {
+            ".git", "node_modules", "__pycache__", ".cache", ".venv", "venv",
+            "env", ".tox", ".mypy_cache", ".pytest_cache", ".next", ".nuxt",
+            ".gradle", ".idea", ".vscode", "dist", "build", "target",
+            "site-packages", ".npm", ".cargo", ".rustup", ".terraform",
+            ".terraform", ".serverless", ".serverless_nextjs",
+            # Windows-specific heavy dirs
+            "AppData", "Application Data", "Local Settings",
+            "Documents and Settings", "System Volume Information",
+            "$Recycle.Bin", "WindowsApps", "Packages",
+        }
+
         for root, dirs, files in os.walk(path):
-            # Skip inside .git directories
-            dirs[:] = [d for d in dirs if d != ".git"]
+            # Skip inside .git and prune heavy directories
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
 
             # Depth limit
             if depth > 0:
@@ -66,6 +84,11 @@ class GitUncommittedSkill(Skill):
 
             if ".git" not in os.listdir(root):
                 continue
+
+            # Found a git repo — stop descending. Git repos don't contain
+            # other git repos (submodules are managed separately via .git/modules),
+            # so there's no point scanning deeper.
+            dirs.clear()
 
             rel_path = os.path.relpath(root, path)
 
@@ -138,4 +161,20 @@ class GitUncommittedSkill(Skill):
             for name, err in errors:
                 lines.append(f"  {name}: {err}")
 
-        return "\n".join(lines)
+        report = "\n".join(lines)
+
+        # If save_to is specified, write the full report to that file.
+        # This avoids truncation when the harness feeds the observation back
+        # to the model — the file always contains the complete output.
+        if save_to:
+            if not os.path.isabs(save_to):
+                save_to = os.path.join(workdir or ".", save_to)
+            try:
+                os.makedirs(os.path.dirname(save_to) or ".", exist_ok=True)
+                with open(save_to, "w", encoding="utf-8") as f:
+                    f.write(report)
+                return f"[Skill git-uncompleted: full report saved to {save_to} ({len(report)} chars, {len(uncommitted)} repos with changes)]"
+            except Exception as e:
+                return f"[Skill error: Failed to write report to {save_to}: {e}]\n\n{report}"
+
+        return report

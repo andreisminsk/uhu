@@ -247,7 +247,7 @@ MAX_READ_OBSERVATION_CHARS = 70000
 # Maximum characters for skill observations in context.
 # Skills are intermediate/automated workflows; their output is printed to the
 # terminal in full, so the context copy can be aggressively shortened.
-MAX_SKILL_OBSERVATION_CHARS = 1500
+MAX_SKILL_OBSERVATION_CHARS = 8000
 
 # Maximum characters for tool observations in context.
 # Tools like image-analysis produce detailed output that the model needs in

@@ -127,21 +127,24 @@ class PyCompileTool:
         import contextlib
 
         output = io.StringIO()
-        result_var = {}
+        # Use a shared namespace so that exec'd code and comprehensions
+        # (which create their own scope) can both see the same variables.
+        # Without this, `x = 1; [x for _ in range(3)]` raises NameError: 'x'.
+        namespace = {"__name__": "__main__", "__builtins__": __builtins__}
 
         try:
             with contextlib.redirect_stdout(output):
                 # Try eval first (expressions), then exec (statements)
                 try:
-                    result_var["value"] = eval(code)
-                    if result_var["value"] is not None:
+                    result_var = eval(code, namespace)
+                    if result_var is not None:
                         out = output.getvalue()
                         if out:
                             return out.rstrip()
-                        return str(result_var["value"])
+                        return str(result_var)
                     return output.getvalue().rstrip() or "[OK] (no output)"
                 except SyntaxError:
-                    exec(code)
+                    exec(code, namespace)
                     return output.getvalue().rstrip() or "[OK] (no output)"
         except Exception:
             tb = traceback.format_exc()
