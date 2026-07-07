@@ -129,7 +129,18 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             else:
                 self.history.insert(0, {"role": "system", "content": skill_prompt})
 
-    # Load permanent memory (project + agent) — all modes
+        # Inject user name from config
+        from .tools._config import load_config as _load_cfg
+        _cfg = _load_cfg(self.workdir)
+        _user_name = _cfg.get("user_name", "")
+        if _user_name:
+            _name_prompt = f"The user's name is '{_user_name}'. Address them by name when appropriate."
+            if self.history and self.history[0]["role"] == "system":
+                self.history[0]["content"] += "\n\n" + _name_prompt
+            else:
+                self.history.insert(0, {"role": "system", "content": _name_prompt})
+
+        # Load permanent memory (project + agent) — all modes
         from .memory import build_memory_prompt
         mem_prompt, mem_warnings = build_memory_prompt(self.workdir)
         if mem_prompt:

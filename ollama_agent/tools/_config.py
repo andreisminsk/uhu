@@ -6,6 +6,9 @@ import os
 # ── Configuration ────────────────────────────────────────────────────────
 
 DEFAULT_CONFIG = {
+    # User's name — the model will address them by name when appropriate.
+    # Example: "user_name": "Andrei"
+    "user_name": "",
     "llm_query": {
         "api_url": "http://localhost:11434",
         "model": "kimi-k2.5:cloud",

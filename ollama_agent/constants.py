@@ -5,6 +5,7 @@ import sys
 MODEL_TEMPERATURE = 0.0
 
 AGENT_SYSTEM_PROMPT = (
+    "Your name is 'uhu'.\n\n"
     "You are a concise coding assistant with file access.\n\n"
     "To WRITE a new file (or completely rewrite one), use this format:\n\n"
     "**WRITE:`hello.py`**\n"
