@@ -11,6 +11,23 @@ from .actions import agent_print
 class CommandMixin:
     """Slash-command handlers: /help, /attach, /search, /peek, /ls, /md, /auto, /compact, /multiline."""
 
+    def do_jobs(self, *args):
+        """List all jobs."""
+        if not hasattr(self, '_job_manager') or not self._job_manager:
+            agent_print("[No job manager]\n")
+            return
+        jobs = self._job_manager.list_jobs()
+        if not jobs:
+            agent_print("[No jobs]\n")
+            return
+        agent_print(f"Jobs ({len(jobs)}):")
+        for j in jobs:
+            status = j["status"]
+            progress = f" ({j['progress']:.0%})" if j.get("progress", 0) > 0 else ""
+            elapsed = j.get("elapsed", "")
+            agent_print(f"  {j['id']}: {status}{progress} — {j['name']} {elapsed}")
+        agent_print()
+
     def do_skills(self):
         """List available skills."""
         from .skills import all_skills
@@ -94,6 +111,7 @@ class CommandMixin:
             "  /md <path>                   Create a directory\n"
             "\n"
             "  /skills                      List available skills\n"
+            "  /jobs                        List all background jobs\n"
             "  /diff                        Toggle auto-diff for edits\n"
             "\n"
             "  /save [name]                 Save session\n"

@@ -185,6 +185,9 @@ SAFE_TOOLS = {
     'calculator',       # Pure math evaluation — no I/O, no side effects
     'token_count',      # Counts tokens in text/files — read-only, no side effects
     'py_compile',       # Check Python syntax, import modules, or run Python expressions 
+    'job_list',         # Lists jobs — read-only, no side effects
+    'job_result',       # Gets job result — read-only, no side effects
+    'job_log',          # Gets job log — read-only, no side effects
 }
 
 # ANSI terminal color codes
@@ -226,6 +229,11 @@ IMAGE_MIME_TYPES = {
     'image/jpeg', 'image/png', 'image/gif', 'image/bmp',
     'image/webp', 'image/tiff', 'image/x-icon',
 }
+
+# ── Job system constants ──────────────────────────────────────────────
+MAX_CONCURRENT_JOBS = 3
+MAX_JOB_LOG_LINES = 1000
+JOB_NOTIFICATION_PREFIX = "[JOB"
 
 # ── Context conservation limits ───────────────────────────────────────
 # The LLM context window is a finite, expensive resource. Large dumps of

@@ -63,6 +63,13 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
 
         os.makedirs(self.sessions_dir, exist_ok=True)
 
+        # Job manager for background tasks
+        from .jobs import JobManager
+        from .tools.jobs import set_active_manager
+        self._job_manager = JobManager(workdir=self.workdir)
+        self._job_manager.load_state()
+        set_active_manager(self._job_manager)
+
         # Load persistent auto-approval settings from project config
         self._load_coder_config()
 
@@ -465,6 +472,11 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             name = action.get("name", "").strip()
             if not name:
                 return None
+            # Hash job_submit by type + params to detect identical job submissions
+            if name == "job_submit":
+                params = action.get("params", {})
+                job_type = params.get("type", params.get("command", ""))
+                return (atype, name, job_type)
             return (atype, name)
         return None
 
@@ -488,6 +500,38 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             logger.warning("Context at %d%% — consider /compact", int(pct))
             agent_print(f"\n[\u26a0 Context at {pct:.0f}% \u2014 consider /compact to free up space]\n")
         return True
+
+    def _format_job_notifications(self):
+        """Drain job notifications and format them as a system message.
+
+        Returns the formatted string, or None if there are no notifications.
+        """
+        if not hasattr(self, '_job_manager') or not self._job_manager:
+            return None
+        notifications = self._job_manager.drain_notifications()
+        if not notifications:
+            return None
+        from .constants import JOB_NOTIFICATION_PREFIX
+        lines = []
+        for n in notifications:
+            etype = n.get("event_type", "")
+            jid = n.get("job_id", "")
+            msg = n.get("message", "")
+            if etype == "completed":
+                lines.append(
+                    f"{JOB_NOTIFICATION_PREFIX} COMPLETED] {jid} — {msg}. "
+                    f"Use TOOL job_result to retrieve output."
+                )
+            elif etype == "failed":
+                lines.append(
+                    f"{JOB_NOTIFICATION_PREFIX} FAILED] {jid} — {msg}. "
+                    f"Use TOOL job_log to see error details."
+                )
+            elif etype == "cancelled":
+                lines.append(
+                    f"{JOB_NOTIFICATION_PREFIX} CANCELLED] {jid} — {msg}."
+                )
+        return "\n".join(lines) if lines else None
 
     def _feedback_loop(self, max_rounds=3):
         """Iteratively process actions and call the model for feedback.
@@ -523,6 +567,13 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         for round_num in range(max_rounds):
             assistant_msg = self.history[-1]["content"]
             round_label = f"Round {round_num + 1}/{max_rounds}"
+
+            # Drain job notifications and inject as system message
+            notif_text = self._format_job_notifications()
+            if notif_text:
+                self.history.append({"role": "system", "content": notif_text})
+                self._log("system", notif_text)
+                agent_print(notif_text + "\n")
 
             # Pre-parse actions to detect loops before executing them
             pre_actions = parse_actions(assistant_msg)
@@ -685,6 +736,12 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         # When skills mode is active, auto-approve all actions — the user has
         # opted into the skill's workflow by enabling --skills
         try:
+            # Drain job notifications before calling the model
+            notif_text = self._format_job_notifications()
+            if notif_text:
+                self.history.append({"role": "system", "content": notif_text})
+                self._log("system", notif_text)
+                agent_print(notif_text + "\n")
             agent_print()
             assistant_msg, prompt_eval_count = self._call_model()
             self._log("assistant", assistant_msg)
@@ -883,6 +940,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 if user_input.lower() == "/skills":
                     self.do_skills()
                     continue
+                if user_input.lower() == "/jobs":
+                    self.do_jobs()
+                    continue
                 # Reset skill auto-approve for new substantive user messages.
                 # Short continuations like "?" after max feedback rounds keep the flag.
                 if len(user_input.strip()) > 2:
@@ -891,6 +951,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 text, images = self._build_message(user_input)
                 self._send(text, images=images)
         finally:
+            if hasattr(self, '_job_manager') and self._job_manager:
+                self._job_manager.shutdown()
+                self._job_manager.save_state()
             if self.log_file:
                 self.log_file.close()
             logger.info("Session ended")

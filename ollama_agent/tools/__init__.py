@@ -132,4 +132,11 @@ register(AndroidBuildTool())
 register(WeatherTool())
 register(TokenCountTool())
 register(CalculatorTool())
+from .jobs import JobSubmitTool, JobListTool, JobResultTool, JobCancelTool, JobLogTool
+
 register(ModelTestTool())
+register(JobSubmitTool())
+register(JobListTool())
+register(JobResultTool())
+register(JobCancelTool())
+register(JobLogTool())
