@@ -41,8 +41,23 @@ class FileLinkTool:
         if not os.path.isfile(full_path):
             return f"Error: File not found: {path}"
 
-        # Convert to file:// URL using pathlib, which correctly handles:
-        # - URL encoding of spaces, #, ?, %, non-ASCII characters
-        # - UNC paths on Windows (\\server\share → file://server/share)
-        # - Platform-appropriate format (file:///C:/... on Windows, file:///... on Unix)
+        # Convert to file:// URL.
+        # On Windows, use the raw Unicode path (not percent-encoded) because
+        # Windows terminals (cmd.exe, conhost, older Windows Terminal) do NOT
+        # decode percent-encoding when opening file:// links — they pass the
+        # raw string to the shell, so %D1%80... would look for a literal file
+        # with that name, which doesn't exist. Windows file systems accept
+        # Unicode natively, so the unencoded form works when clicked.
+        # On Unix, use pathlib's as_uri() which percent-encodes per RFC 8089.
+        if os.name == 'nt':
+            # Build file:// URL manually, only encoding characters that are
+            # truly unsafe in a URL (space, #, ?, %) but leaving Unicode as-is
+            url_path = full_path.replace('\\', '/')
+            # Prefix with / for drive letters (C:/ -> /C:/)
+            if len(url_path) >= 2 and url_path[1] == ':':
+                url_path = '/' + url_path
+            # Encode only the minimal unsafe chars, keep Unicode intact
+            for char, enc in [(' ', '%20'), ('#', '%23'), ('?', '%3F'), ('%', '%25')]:
+                url_path = url_path.replace(char, enc)
+            return 'file://' + url_path
         return Path(full_path).as_uri()
