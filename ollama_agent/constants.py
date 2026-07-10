@@ -58,6 +58,7 @@ AGENT_SYSTEM_PROMPT = (
     "- The path in **WRITE:**/**EDIT:** and **EOF:** must match exactly.\n"
     "- The path in **FILE:** and **EOF:** must match exactly.\n"
     "- ALWAYS include the path in **EOF:** — never write bare **EOF:** without the path.\n"
+    "- ALWAYS start **WRITE:**, **EDIT:**, **FILE:**, **RUN:**, **TOOL:**, **SKILL:**, and **EOF:** markers on a NEW LINE. Never place them inline after other text on the same line — they will be missed by the parser.\n"
     "- Use the full relative path (e.g. src/app.py, not just app.py).\n"
     "- Parent directories are created automatically — just use paths like src/app.py in WRITE.\n"
     "- To read a file, use **FILE:**`path` with **EOF:**`path`, or ask the user to /attach or /search it.\n"
