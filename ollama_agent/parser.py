@@ -194,6 +194,12 @@ def _extract_blocks(text):
                         code_lines = []
                         fence_depth = 0
                         is_markdown = False
+                        # Check if another signal marker follows on the same line
+                        # (e.g., "**EOF:`path`** **TOOL:`name`**" — the TOOL was
+                        # placed inline after EOF and would be lost without this)
+                        remainder = stripped[em.end():]
+                        if _PATH_SIGNAL.search(remainder) or _RUN_SIGNAL_LINE.search(remainder):
+                            lines.insert(i, remainder + "\n")
                         continue
 
             if stripped.startswith("```"):
