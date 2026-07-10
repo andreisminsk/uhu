@@ -180,9 +180,12 @@ def _extract_blocks(text):
                         eof_path = pending_path
                     # Exact match always closes; for TOOL/SKILL blocks,
                     # also accept any EOF when block has content (models
-                    # often write the file path instead of the tool name)
+                    # often write the file path instead of the tool name).
+                    # For all block types, also accept basename match
+                    # (models often write just the filename, not the full path).
                     eof_matches = (eof_path == pending_path or
-                                   (pending_type in ("tool", "skill") and code_lines))
+                                   (pending_type in ("tool", "skill") and code_lines) or
+                                   (code_lines and os.path.basename(eof_path) == os.path.basename(pending_path)))
                     if eof_matches:
                         pos += len(line)
                         i += 1
@@ -214,18 +217,20 @@ def _extract_blocks(text):
                     if i < len(lines):
                         next_stripped = lines[i].strip()
                         em = _EOF_SIGNAL_LINE.search(next_stripped)
-                        if em and _extract_path(em) == pending_path:
-                            pos += len(lines[i])
-                            i += 1
-                            raw_code = "".join(code_lines)
-                            code = _strip_surrounding_fences(raw_code)
-                            yield (block_start, pos, pending_path, "", code, True, pending_type)
-                            pending_path = None
-                            pending_type = None
-                            code_lines = []
-                            fence_depth = 0
-                            is_markdown = False
-                            continue
+                        if em:
+                            next_eof_path = _extract_path(em)
+                            if next_eof_path == pending_path or (code_lines and os.path.basename(next_eof_path) == os.path.basename(pending_path)):
+                                pos += len(lines[i])
+                                i += 1
+                                raw_code = "".join(code_lines)
+                                code = _strip_surrounding_fences(raw_code)
+                                yield (block_start, pos, pending_path, "", code, True, pending_type)
+                                pending_path = None
+                                pending_type = None
+                                code_lines = []
+                                fence_depth = 0
+                                is_markdown = False
+                                continue
                     raw_code = "".join(code_lines)
                     code = _strip_surrounding_fences(raw_code)
                     yield (block_start, pos, pending_path, "", code, False, pending_type)
