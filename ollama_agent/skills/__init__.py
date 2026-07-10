@@ -174,12 +174,9 @@ def skills_system_prompt(enabled_names=None):
         if hasattr(s, 'triggers') and s.triggers:
             trigger_line = f"\nTriggers: {', '.join(s.triggers)}"
         parts.append(f"**{s.name}** — {s.description}{trigger_line}")
-        # Only include full instructions for built-in skills (code_review, test_gen, etc.)
-        # Custom skills (MarkdownSkill) get their instructions when invoked,
-        # not in the system prompt — this prevents the model from shortcutting
-        # and using tools directly instead of invoking the skill.
-        if not isinstance(s, MarkdownSkill):
-            parts.append(s.system_prompt)
+        # All skills (built-in and custom) use lazy loading — only name,
+        # description, and triggers go in the system prompt. Full instructions
+        # are returned as an observation when the skill is invoked.
         parts.append("")
 
     return "\n".join(parts)

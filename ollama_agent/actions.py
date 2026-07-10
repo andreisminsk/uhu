@@ -20,7 +20,7 @@ from .input_utils import read_full_input
 from .matching import find_match_in_content
 from .parser import parse_actions, _PATH_SIGNAL, _BASH_BLOCK
 from .process import kill_proc_tree
-from .skills.base import PromptOnlySkill
+from .skills.base import PromptOnlySkill, MarkdownSkill
 
 
 def agent_print(*args, **kwargs):
@@ -941,6 +941,12 @@ class ActionMixin:
         agent_print(f"{'='*60}\n")
         try:
             result = skill.execute(params, workdir=self.workdir, session=self)
+            # For built-in (non-Markdown) skills, prepend the system_prompt
+            # since it's no longer in the system prompt (lazy loading).
+            # MarkdownSkill already includes its instructions in execute().
+            if not isinstance(skill, PromptOnlySkill) and not isinstance(skill, MarkdownSkill):
+                if hasattr(skill, 'system_prompt') and skill.system_prompt:
+                    result = f"{skill.system_prompt}\n\n---\n\n{result}"
             agent_print(f"\n{'─'*60}")
             agent_print(f"⚡ SKILL RESULT: {skill_name} ({skill_type})")
             tool_print(self._truncate_for_console(result))
