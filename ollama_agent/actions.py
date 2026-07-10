@@ -64,12 +64,17 @@ class ActionMixin:
 
     # Shell operators that allow chaining multiple commands.
     # If any of these appear, the command is NOT auto-approved as safe.
-    _SHELL_OPERATORS = re.compile(r'&&|\|\||[|;&]')
+    # Includes command substitution ($(...), backticks), process substitution
+    # (<(...), >(...)), and newlines — all can hide destructive commands
+    # inside an otherwise "safe" base command (e.g., echo $(rm -rf /)).
+    _SHELL_OPERATORS = re.compile(r'&&|\|\||[|;&]|\$\(|`|\n|\r|<\(|>\(')
 
     # Patterns that are ALWAYS blocked — never executed.
     _BLOCKED_PATTERNS = [
         re.compile(r'\brm\s+-[rR].*\s+/\s*$', re.IGNORECASE),  # rm -rf /
         re.compile(r'\brm\s+-[rR].*\s+/\*', re.IGNORECASE),  # rm -rf /*
+        re.compile(r'\brm\s+-[rRf]*\s+/', re.IGNORECASE),  # rm -rf / anywhere (incl. inside $())
+        re.compile(r'\brm\s+--recursive.*\s+/', re.IGNORECASE),  # rm --recursive /
         re.compile(r'\bdd\s+if=', re.IGNORECASE),  # dd if=...
         re.compile(r'\bmkfs\b', re.IGNORECASE),  # mkfs
         re.compile(r'\bshutdown\b', re.IGNORECASE),  # shutdown
