@@ -24,16 +24,20 @@ The model explains concepts, gives examples, and evaluates exercises interactive
 
 ## Workflow
 
-1. **Assess level**: Check existing progress or ask about experience:
+1. **Assess level**: Check existing progress:
    ```
    python scripts/python_tutor.py progress --json
    ```
    If no progress exists, ask: "Have you programmed before? In what language(s)? What's your goal with Python?"
+   
+   **⚠️ STOP HERE.** Do NOT start teaching until the user answers. Wait for their response before choosing a starting point. End your message after the question.
 
-2. **Determine starting point**: Based on progress or assessment:
+2. **Determine starting point**: Based on the user's answer or progress:
    - Complete beginner → start at Module 1
-   - Some experience → suggest a module and confirm
+   - Some experience → suggest a module and **ask for confirmation** before proceeding
    - Returning learner → check progress, resume where they left off
+   
+   **⚠️ Always wait for user confirmation before starting a lesson.** Never assume and jump into teaching.
 
 3. **Teach a concept**: For each lesson:
    - Explain the concept clearly with **real-world analogies**
@@ -47,10 +51,11 @@ The model explains concepts, gives examples, and evaluates exercises interactive
    - Wait for the user's code response
 
 5. **Evaluate the exercise**:
-   - Run the user's code using the script:
+   - Write the user's code to a temp file first (e.g., `lessons/exercise.py`), then run it:
      ```
-     python scripts/python_tutor.py run --code "<user_code>" --lesson <lesson_id>
+     python scripts/python_tutor.py run --code-file lessons/exercise.py --lesson <lesson_id>
      ```
+   - **NEVER use `--code` with inline code** — shell quoting on Windows corrupts multiline code with quotes. Always use `--code-file`.
    - If the code has errors, explain them clearly and suggest fixes
    - If correct, celebrate and move on
    - If the user is stuck after 2 attempts, show the solution with explanation
@@ -169,4 +174,4 @@ or
 - Suggest the user save their exercise code in files (e.g., `lessons/lesson_01.py`) for later review
 - For complex topics, break into multiple mini-lessons rather than one long explanation
 - If the user wants to skip ahead, let them — but warn if prerequisites are missing
-- Use `python scripts/python_tutor.py run --code "..." --lesson <id>` to test user code safely
+- **Always use `--code-file`** to run user code — write the code to a file first, then pass `--code-file <path>`. Never use `--code` with inline strings (shell quoting breaks multiline code with quotes).

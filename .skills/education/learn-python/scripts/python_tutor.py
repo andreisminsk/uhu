@@ -188,10 +188,17 @@ def cmd_record(lesson_id, score=None, completed=False):
     print(f"Recorded lesson {lesson_id}: {status}{score_str}")
 
 
-def cmd_run(code, lesson_id=None):
+def cmd_run(code=None, code_file=None, lesson_id=None):
     """Run user's Python code safely and report results."""
-    if not code.strip():
-        print("No code provided.")
+    if code_file:
+        # Read code from a file (avoids shell quoting issues)
+        if not os.path.isfile(code_file):
+            print(f"Code file not found: {code_file}")
+            return
+        with open(code_file, "r", encoding="utf-8") as f:
+            code = f.read()
+    elif not code or not code.strip():
+        print("No code provided. Use --code or --code-file.")
         return
 
     # Write code to a temp file and execute
@@ -287,7 +294,8 @@ def main():
 
     # run
     p_run = sub.add_parser("run", help="Run Python code")
-    p_run.add_argument("--code", required=True, help="Python code to run")
+    p_run.add_argument("--code", help="Python code to run (use --code-file for multiline)")
+    p_run.add_argument("--code-file", help="Read Python code from a file (avoids shell quoting issues)")
     p_run.add_argument("--lesson", help="Lesson ID for context")
 
     # lessons
@@ -303,7 +311,7 @@ def main():
     elif args.command == "record":
         cmd_record(args.lesson, args.score, args.completed)
     elif args.command == "run":
-        cmd_run(args.code, args.lesson)
+        cmd_run(args.code, args.code_file, args.lesson)
     elif args.command == "lessons":
         cmd_lessons()
     elif args.command == "next":
