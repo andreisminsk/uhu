@@ -540,6 +540,17 @@ class ActionMixin:
 
     def execute_run(self, action):
         cmd = action["code"]
+        run_lang = action.get("lang", "")
+
+        # Route PowerShell fence blocks through powershell.exe instead of cmd.exe
+        if run_lang in ("powershell", "ps1", "pwsh"):
+            if sys.platform == "win32":
+                # -NoProfile avoids loading the user profile (faster, no side effects)
+                cmd = f'powershell -NoProfile -Command "{cmd}"'
+            else:
+                # PowerShell not available on Unix — skip with a clear warning
+                agent_print("⚠ PowerShell fence block used on non-Windows platform — skipping.\n")
+                return None
 
         # Rewrite short script paths to their full workdir-relative paths.
         # The LLM may generate "python scripts/fetch_news.py" instead of

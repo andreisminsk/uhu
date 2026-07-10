@@ -443,5 +443,5 @@ def parse_actions(text):
             actions.append(action)
         elif lang in ("bash", "sh", "shell", "cmd", "bat", "powershell", "ps1", "pwsh") and code:
             if not any(s[0] <= start < s[1] for s in write_spans):
-                actions.append({"type": "run", "code": code, "span": (start, end)})
+                actions.append({"type": "run", "code": code, "lang": lang, "span": (start, end)})
     return actions
