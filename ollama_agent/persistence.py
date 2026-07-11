@@ -112,27 +112,14 @@ class PersistenceMixin:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self.history.clear()
-            if self.agent:
-                system_prompt = AGENT_SYSTEM_PROMPT + get_platform_shell_guidance()
-            else:
-                system_prompt = ""
-            if self.tools:
-                from .tools import tools_system_prompt
-                tool_prompt = tools_system_prompt(workdir=self.workdir)
-                system_prompt += "\n\n" + tool_prompt if system_prompt else tool_prompt
-            if self.skills:
-                from .skills import skills_system_prompt
-                skill_prompt = skills_system_prompt()
-                system_prompt += "\n\n" + skill_prompt if system_prompt else skill_prompt
-            # Re-inject permanent memory (project + agent)
-            from .memory import build_memory_prompt
-            mem_prompt, mem_warnings = build_memory_prompt(self.workdir)
-            if mem_prompt:
-                system_prompt += "\n\n" + mem_prompt if system_prompt else mem_prompt
-                for w in mem_warnings:
-                    agent_print(f"[⚠ {w}]")
+            from .system_prompt import build_system_prompt, get_memory_warnings
+            system_prompt = build_system_prompt(
+                self.workdir, agent=self.agent, tools=self.tools, skills=self.skills
+            )
             if system_prompt:
                 self.history.append({"role": "system", "content": system_prompt})
+            for w in get_memory_warnings(self.workdir):
+                agent_print(f"[⚠ {w}]")
             loaded = [m for m in data["history"] if m["role"] != "system"]
             # Only load messages that fit within 80% of context, keeping most recent
             # Token estimate: tokens ≈ len(content) / 4

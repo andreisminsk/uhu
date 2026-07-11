@@ -3,10 +3,7 @@
 import hashlib
 import logging
 import os
-import queue as _queue
 import sys
-import threading
-import time
 from collections import Counter
 from datetime import datetime
 
@@ -14,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 from ollama import Client
 
-from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, MODEL_TEMPERATURE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
+from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
 from .actions import agent_print, tool_print
+from .llm_client import LLMClient
 from .parser import parse_actions
 from .input_utils import read_full_input, _reconfigure_stdout
 from . import input_utils as _iu
-from .spinner import Spinner
 from .commands import CommandMixin
 from .actions import ActionMixin
 from .persistence import PersistenceMixin
@@ -77,21 +74,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             project_name = os.path.basename(self.workdir) or "session"
             self.autosave_name = f"{project_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
 
-        if self.agent:
-            from datetime import date
-            system_prompt = f"Current date: {date.today().isoformat()}\n\n" + AGENT_SYSTEM_PROMPT
-            # Replace {shell_lang} placeholder with platform-appropriate shell
-            info = get_platform_info()
-            system_prompt = system_prompt.replace("{shell_lang}", info["shell_lang"])
-            # Append tool-specific rules only when tools are enabled
-            if self.tools:
-                system_prompt += AGENT_TOOLS_RULES
-            # Append call-and-wait rule when tools or skills are enabled
-            if self.tools or self.skills:
-                system_prompt += AGENT_CALL_RULE
-            self.history.append({"role": "system", "content": system_prompt + get_platform_shell_guidance()})
-
-        # Connect MCP servers and register their tools BEFORE building tools prompt
+        # Connect MCP servers and register their tools BEFORE building system prompt
         if self.mcp:
             from .tools.mcp import MCPManager
             self._mcp_manager = MCPManager(workdir=self.workdir, quiet=self.quiet)
@@ -100,22 +83,13 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 from .tools import register
                 for tool in mcp_tools:
                     register(tool)
-                    # Auto-approve MCP tools only if server is marked auto_approve
                     if getattr(tool, 'auto_approve', False):
                         self.always_runs.add(tool.name)
             agent_print(f"[MCP] {len(mcp_tools)} tool(s) registered from {len(self._mcp_manager.transports)} server(s)")
 
-        if self.tools:
-            from .tools import tools_system_prompt
-            tool_prompt = tools_system_prompt(workdir=self.workdir)
-            if self.history and self.history[0]["role"] == "system":
-                self.history[0]["content"] += "\n\n" + tool_prompt
-            else:
-                self.history.insert(0, {"role": "system", "content": tool_prompt})
-
+        # Load custom skills from skills_dir BEFORE building system prompt
         if self.skills:
-            from .skills import skills_system_prompt, load_skills_from_dir
-            # Load user-defined skills from skills_dir
+            from .skills import load_skills_from_dir
             skills_dir_abs = os.path.join(self.workdir, self.skills_dir) if not os.path.isabs(self.skills_dir) else self.skills_dir
             if os.path.isdir(skills_dir_abs):
                 loaded, errors = load_skills_from_dir(skills_dir_abs, workdir=self.workdir)
@@ -130,33 +104,16 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 elif loaded:
                     if not self.quiet:
                         agent_print()
-            skill_prompt = skills_system_prompt()
-            if self.history and self.history[0]["role"] == "system":
-                self.history[0]["content"] += "\n\n" + skill_prompt
-            else:
-                self.history.insert(0, {"role": "system", "content": skill_prompt})
 
-        # Inject user name from config
-        from .tools._config import load_config as _load_cfg
-        _cfg = _load_cfg(self.workdir)
-        _user_name = _cfg.get("user_name", "")
-        if _user_name:
-            _name_prompt = f"The user's name is '{_user_name}'. Address them by name when appropriate."
-            if self.history and self.history[0]["role"] == "system":
-                self.history[0]["content"] += "\n\n" + _name_prompt
-            else:
-                self.history.insert(0, {"role": "system", "content": _name_prompt})
-
-        # Load permanent memory (project + agent) — all modes
-        from .memory import build_memory_prompt
-        mem_prompt, mem_warnings = build_memory_prompt(self.workdir)
-        if mem_prompt:
-            if self.history and self.history[0]["role"] == "system":
-                self.history[0]["content"] += "\n\n" + mem_prompt
-            else:
-                self.history.insert(0, {"role": "system", "content": mem_prompt})
+        # Build system prompt via centralized builder
+        from .system_prompt import build_system_prompt, get_memory_warnings
+        system_prompt = build_system_prompt(
+            self.workdir, agent=self.agent, tools=self.tools, skills=self.skills
+        )
+        if system_prompt:
+            self.history.append({"role": "system", "content": system_prompt})
         if not self.quiet:
-            for w in mem_warnings:
+            for w in get_memory_warnings(self.workdir):
                 agent_print(f"[⚠ {w}]")
 
         # Auto-create parent directory for log file
@@ -189,191 +146,21 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     # stuck in a repetitive loop.
     # ── Model interaction ──────────────────────────────────────────────
 
+    def _get_llm_client(self):
+        """Get or create the LLMClient for this session."""
+        if not hasattr(self, '_llm_client') or self._llm_client is None:
+            self._llm_client = LLMClient(
+                client=self.client,
+                model=self.model,
+                ctx_size=self.ctx_size,
+                thinking=self.thinking,
+                log_fn=self._log,
+            )
+        return self._llm_client
+
     def _call_model(self):
-        spinner = Spinner(prefix="AI: ")
-        spinner.start()
-        try:
-            if self.stream:
-                msg = ""
-                eval_count = None
-                first = True
-                chunk_queue = _queue.Queue()
-                stream_error = [None]
-                # Holds the httpx response object so the main thread can call
-                # response.close() on Ctrl+C, which immediately unblocks
-                # iter_lines() in the reader thread. A threading.Event won't
-                # work because the reader is blocked inside a C-level socket
-                # read between yields — it never gets a chance to check a flag.
-                active_response = [None]
-
-                def _stream_reader():
-                    try:
-                        # Bypass the high-level client.chat() iterator so we can
-                        # hold a reference to the raw httpx response for cancellation.
-                        with self.client._client.stream(
-                            "POST",
-                            "/api/chat",
-                            json={
-                                "model": self.model,
-                                "messages": self.history,
-                                "stream": True,
-                                "options": {"num_ctx": self.ctx_size, "temperature": MODEL_TEMPERATURE},
-                            },
-                        ) as response:
-                            active_response[0] = response
-                            response.raise_for_status()
-                            import json as _json
-                            for line in response.iter_lines():
-                                if not line:
-                                    continue
-                                part = _json.loads(line)
-                                logger.debug("Response chunk: %s", part)
-                                if err := part.get("error"):
-                                    from ollama import ResponseError
-                                    raise ResponseError(err)
-                                chunk_queue.put(part)
-                    except Exception as e:
-                        stream_error[0] = e
-                    finally:
-                        active_response[0] = None
-                        chunk_queue.put(None)  # sentinel
-
-                reader_thread = threading.Thread(target=_stream_reader, daemon=True)
-                reader_thread.start()
-
-                last_chunk_time = time.time()
-                chunk_timeout = 180  # seconds with no chunks before giving up
-
-                try:
-                    while True:
-                        try:
-                            # Use get_nowait() + time.sleep() instead of get(timeout=...).
-                            # On Windows, queue.get(timeout=N) calls Condition.wait() which
-                            # uses WaitForSingleObjectEx -- a Win32 blocking wait that does
-                            # NOT wake up for SIGINT. time.sleep() on Windows IS interruptible
-                            # by SIGINT, so polling with get_nowait() + sleep is the correct
-                            # Windows-compatible pattern.
-                            chunk = chunk_queue.get_nowait()
-                        except _queue.Empty:
-                            if stream_error[0]:
-                                spinner.stop()
-                                raise stream_error[0]
-                            if time.time() - last_chunk_time > chunk_timeout:
-                                spinner.stop()
-                                self._log("system", f"[Model streaming timeout — no response for {chunk_timeout}s]")
-                                logger.warning("Model streaming timeout — no response for %ds", chunk_timeout)
-                                agent_print(f"\n[Model streaming timeout — no response for {chunk_timeout}s]\n")
-                                break
-                            time.sleep(0.05)  # interruptible on Windows; yields for Ctrl+C
-                            continue
-
-                        if chunk is None:
-                            if stream_error[0]:
-                                spinner.stop()
-                                raise stream_error[0]
-                            break
-
-                        last_chunk_time = time.time()
-                        # Extract thinking content separately from regular content.
-                        # Thinking tokens must NOT be mixed into the response content.
-                        thinking_token = chunk.get("message", {}).get("thinking", "")
-                        token = chunk.get("message", {}).get("content", "")
-                        if thinking_token:
-                            if self.thinking and spinner.is_running:
-                                spinner.append_thinking(thinking_token)
-                            logger.debug("Thinking token (%d chars)", len(thinking_token))
-                            # Don't set first=False on thinking — content still needs "AI: " prefix
-                        if token:
-                            if first:
-                                spinner.stop()
-                                sys.stdout.write("AI: ")
-                                sys.stdout.flush()
-                                first = False
-                            print(token, end="", flush=True)
-                        msg += token
-                        if chunk.get("done"):
-                            eval_count = chunk.get("prompt_eval_count")
-                except KeyboardInterrupt:
-                    logger.debug("Streaming interrupted by user (Ctrl+C)")
-                    # Close the HTTP response — this is the only reliable way to
-                    # unblock iter_lines() in the reader thread immediately.
-                    resp = active_response[0]
-                    if resp is not None:
-                        try:
-                            resp.close()
-                        except Exception:
-                            pass
-                    spinner.stop()
-                    raise
-
-                if first:
-                    spinner.stop()
-                    sys.stdout.write("AI: ")
-                    sys.stdout.flush()
-                print("\n")
-                return msg, eval_count
-            else:
-                result_holder = [None]
-                error_holder = [None]
-                # Timeout for non-streaming model calls (seconds).
-                # Prevents hanging forever if the model never responds.
-                model_timeout = 600  # 10 minutes
-                # Use an Event instead of thread.join() so Ctrl+C works on Windows.
-                # thread.join(timeout) is NOT reliably interruptible by
-                # KeyboardInterrupt on Windows, but Event.wait(timeout) is.
-                done_event = threading.Event()
-
-                def _blocking_call():
-                    try:
-                        result_holder[0] = self.client.chat(
-                            model=self.model, messages=self.history,
-                            options={"num_ctx": self.ctx_size, "temperature": MODEL_TEMPERATURE}
-                        )
-                    except Exception as e:
-                        error_holder[0] = e
-                    finally:
-                        done_event.set()
-
-                call_thread = threading.Thread(target=_blocking_call, daemon=True)
-                call_thread.start()
-                start_time = time.time()
-
-                try:
-                    while not done_event.wait(timeout=0.5):
-                        if time.time() - start_time > model_timeout:
-                            spinner.stop()
-                            raise TimeoutError(
-                                f"Model call timed out after {model_timeout}s — "
-                                f"no response received. Try /compact to reduce context, "
-                                f"or restart the session."
-                            )
-                except KeyboardInterrupt:
-                    spinner.stop()
-                    raise
-
-                if error_holder[0]:
-                    spinner.stop()
-                    raise error_holder[0]
-
-                response = result_holder[0]
-                spinner.stop()
-                # Extract thinking content separately from regular content.
-                # Thinking must NOT be mixed into the response content.
-                thinking_content = response["message"].get("thinking", "")
-                msg = response["message"]["content"]
-                if thinking_content:
-                    # Placeholder: skip thinking content for now
-                    logger.debug("Thinking content skipped (%d chars)", len(thinking_content))
-                eval_count = response.get("prompt_eval_count")
-                logger.debug("Non-streaming response received | eval_count=%s | len=%d", eval_count, len(msg))
-                sys.stdout.write("AI: ")
-                sys.stdout.flush()
-                print(f"{msg}\n")
-                return msg, eval_count
-        except Exception:
-            spinner.stop()
-            logger.exception("Model call failed")
-            raise
+        """Call the model. Delegates to LLMClient."""
+        return self._get_llm_client().call(self.history, stream=self.stream)
 
     def _build_message(self, user_input):
         parts = self.pending_content[:]

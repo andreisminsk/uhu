@@ -583,6 +583,49 @@ The Canva MCP server provides design creation and editing tools via OAuth (brows
 
 Requires Node.js (`npx`) installed. On first connect, a browser window opens for OAuth login. After authentication, Canva tools like `create_design`, `get_asset`, and `search_brand` become available.
 
+## Architecture
+
+The codebase is organized into focused modules with clear separation of concerns:
+
+```
+ollama_agent/
+  cli.py              Entry point and CLI argument parsing
+  session.py           ChatSession — interactive loop, feedback loop, slash commands
+  llm_client.py        LLM communication (streaming, non-streaming, timeout, Ctrl+C)
+  system_prompt.py     System prompt assembly (deduplicated for init + restore)
+  actions.py           Action orchestration (process_actions, execute_tool, execute_skill)
+  safety.py            Command safety gate, get_base_command, resolve_tool_name
+  command_runner.py    Subprocess execution with streaming, timeout, encoding fallback
+  approval.py          Confirmation flow, auto-approval state, config persistence
+  file_executor.py     WRITE/EDIT/READ operations, FileCache, RollbackManager
+  observation.py        Observation truncation to prevent context bloat
+  display.py           Colored output helpers (agent_print, tool_print, show_diff)
+  parser.py            Block extraction from LLM output (WRITE/EDIT/FILE/RUN/TOOL/SKILL)
+  constants.py         Shared constants, prompts, safety sets, limits
+  memory.py            Permanent memory (PROJ-MEMORY.md, AGENT-MEMORY.md)
+  persistence.py       Session save/restore
+  jobs.py              Background job system (JobManager, JobStore, thread workers)
+  commands.py          Slash command handlers (CommandMixin)
+  edit_utils.py        Edit summary and diff generation
+  matching.py          Fuzzy/exact line matching for EDIT operations
+  input_utils.py       Multiline input, paste detection, stdout reconfiguration
+  spinner.py           Terminal spinner for model calls
+  process.py           Process tree killing (cross-platform)
+  utils.py             Misc utilities
+  skills/              Skill registry + 20 built-in skills
+  tools/               Tool registry + 30 built-in tools, MCP client
+```
+
+### Test Coverage
+
+Tests are in `tests/` and run with `python -m pytest tests/ -v`:
+
+| File | Tests | Coverage |
+|---|---|---|
+| `test_actions.py` | 100 | Command safety, file ops, shell execution, tool/skill dispatch, approval flow, config, caching, rollback, orchestration |
+| `test_session.py` | 69 | Session init, system prompt, logging, slash commands, feedback loop, run_once, persistence, context pressure, job notifications |
+| `test_parser.py` | 28 | Block extraction, parameter parsing, edit content parsing |
+
 ## Project Configuration
 
 ### CODERGUIDE.md

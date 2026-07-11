@@ -11,50 +11,17 @@ import threading
 import time
 from pathlib import Path
 
-from .constants import SAFE_SHELL_COMMANDS, SAFE_TOOLS, BLOCKED_COMMANDS, WARNING_COMMANDS
-from .constants import SKIP_EXT
-from .constants import MAX_OBSERVATION_CHARS, MAX_READ_OBSERVATION_CHARS, MAX_SKILL_OBSERVATION_CHARS, MAX_TOOL_OBSERVATION_CHARS, MAX_TOTAL_OBSERVATION_CHARS, MAX_CONSOLE_DISPLAY_CHARS, MAX_BATCH_WRITES
-from .constants import ANSI_AGENT, ANSI_RESET, ANSI_TOOL
-from .edit_utils import make_edit_summary, make_unified_diff
-from .input_utils import read_full_input
-from .matching import find_match_in_content
+from .constants import SAFE_TOOLS, SKIP_EXT
+from .constants import MAX_CONSOLE_DISPLAY_CHARS, MAX_BATCH_WRITES
+from .constants import ANSI_AGENT
+from .approval import ApprovalGate
+from .command_runner import CommandRunner, _fix_win_backslash_quote
+from .display import agent_print, tool_print, show_diff_colored
+from .file_executor import FileExecutor, FileCache, RollbackManager
+from .observation import truncate_observations
 from .parser import parse_actions, _PATH_SIGNAL, _BASH_BLOCK
-from .process import kill_proc_tree
+from .safety import CommandSafetyGate, get_base_command, resolve_tool_name
 from .skills.base import PromptOnlySkill, MarkdownSkill
-
-
-def agent_print(*args, **kwargs):
-    """Print with agent color (bright yellow) when stdout is a TTY."""
-    if sys.stdout.isatty():
-        print(ANSI_AGENT, end="", flush=True)
-        print(*args, **kwargs)
-        print(ANSI_RESET, end="", flush=True)
-    else:
-        print(*args, **kwargs)
-
-
-def tool_print(*args, **kwargs):
-    """Print with tool color (dim bright white italic) when stdout is a TTY."""
-    if sys.stdout.isatty():
-        print(ANSI_TOOL, end="", flush=True)
-        print(*args, **kwargs)
-        print(ANSI_RESET, end="", flush=True)
-    else:
-        print(*args, **kwargs)
-
-
-def _fix_win_backslash_quote(m):
-    """Fix odd number of backslashes before a closing quote on Windows.
-
-    In cmd.exe, \" is an escaped quote, so "C:\\path\\" is parsed as C:\\path"
-    (invalid path). Remove one backslash from odd-length runs so the quote
-    properly terminates the argument.
-    """
-    backslashes = m.group(1)
-    if len(backslashes) % 2 == 1:
-        return backslashes[:-1] + '"'
-    return m.group(0)
-
 
 class ActionMixin:
     """Action execution methods for ChatSession: WRITE, EDIT, RUN, FILE, TOOL."""
@@ -62,725 +29,138 @@ class ActionMixin:
     # Names that are obviously placeholders, not real file paths or tool/skill names
     _PLACEHOLDER_NAMES = {"path", "name", "filepath", "filename", "file_path", "file_name", "skill", "skill_name"}
 
-    # Shell operators that allow chaining multiple commands.
-    # If any of these appear, the command is NOT auto-approved as safe.
-    # Includes command substitution ($(...), backticks), process substitution
-    # (<(...), >(...)), and newlines — all can hide destructive commands
-    # inside an otherwise "safe" base command (e.g., echo $(rm -rf /)).
-    _SHELL_OPERATORS = re.compile(r'&&|\|\||[|;&]|\$\(|`|\n|\r|<\(|>\(')
+    # Safety gate — extracted to safety.py for testability
+    _safety = CommandSafetyGate()
 
-    # Patterns that are ALWAYS blocked — never executed.
-    _BLOCKED_PATTERNS = [
-        re.compile(r'\brm\s+-[rR].*\s+/\s*$', re.IGNORECASE),  # rm -rf /
-        re.compile(r'\brm\s+-[rR].*\s+/\*', re.IGNORECASE),  # rm -rf /*
-        re.compile(r'\brm\s+-[rRf]*\s+/', re.IGNORECASE),  # rm -rf / anywhere (incl. inside $())
-        re.compile(r'\brm\s+--recursive.*\s+/', re.IGNORECASE),  # rm --recursive /
-        re.compile(r'\bdd\s+if=', re.IGNORECASE),  # dd if=...
-        re.compile(r'\bmkfs\b', re.IGNORECASE),  # mkfs
-        re.compile(r'\bshutdown\b', re.IGNORECASE),  # shutdown
-        re.compile(r'\breboot\b', re.IGNORECASE),  # reboot
-        re.compile(r'\bpoweroff\b', re.IGNORECASE),  # poweroff
-        re.compile(r'\bhalt\b', re.IGNORECASE),  # halt
-        re.compile(r'\bformat\s+[A-Za-z]:', re.IGNORECASE),  # format C:
-        re.compile(r'\bdel\s+/s\s+/q\s+[cC]:', re.IGNORECASE),  # del /s /q C:
-        re.compile(r'\brmdir\s+/s\s+/q\s+[cC]:', re.IGNORECASE),  # rmdir /s /q C:
-    ]
-
-    # Base commands that always require explicit confirmation.
-    _WARNING_BASE_COMMANDS_UNIX = {
-        'rm', 'rmdir', 'chmod', 'chown', 'kill', 'killall',
-        'apt', 'apt-get', 'yum', 'dnf', 'brew',
-        'systemctl', 'service',
-    }
-    _WARNING_BASE_COMMANDS_WINDOWS = {
-        'del', 'rmdir', 'taskkill', 'sc', 'net', 'netsh',
-    }
-    _WARNING_BASE_COMMANDS = _WARNING_BASE_COMMANDS_WINDOWS if sys.platform == 'win32' else _WARNING_BASE_COMMANDS_UNIX
-    # Substrings that indicate destructive package/git operations
-    _WARNING_SUBSTRINGS = {
-        'pip uninstall', 'npm uninstall',
-        'git push', 'git reset --hard', 'git clean',
-    }
+    # Approval gate — extracted to approval.py for testability
+    _approval = None  # lazily initialized per-instance
 
     def _check_command_safety(self, cmd):
-        """Check a command for safety. Returns (level, message).
-        level: 'blocked' — never execute
-               'warning' — requires explicit confirmation even with auto-approve
-               'chain'   — shell chaining detected, warn but allow with confirmation
-               'safe'    — no issues
-        """
-        # Check blocked patterns
-        for pat in self._BLOCKED_PATTERNS:
-            if pat.search(cmd):
-                return ('blocked', f"Command blocked for safety: {cmd[:80]}")
-
-        # Check blocked commands (exact matches from constants)
-        base = self._get_base_command(cmd)
-        if base in BLOCKED_COMMANDS:
-            return ('blocked', f"Command blocked for safety: {cmd[:80]}")
-
-        # Check warning commands
-        if base in WARNING_COMMANDS or base in self._WARNING_BASE_COMMANDS:
-            return ('warning', f"⚠ Destructive command requires confirmation: {cmd[:80]}")
-        for substr in self._WARNING_SUBSTRINGS:
-            if substr in cmd.lower():
-                return ('warning', f"⚠ Destructive command requires confirmation: {cmd[:80]}")
-
-        # Check shell chaining operators
-        if self._SHELL_OPERATORS.search(cmd):
-            return ('chain', f"⚠ Shell chaining detected in: {cmd[:80]}")
-
-        return ('safe', '')
+        """Check a command for safety. Delegates to CommandSafetyGate."""
+        return self._safety.check(cmd)
 
     @staticmethod
     def _get_base_command(cmd):
         """Extract the base command name from a shell command string."""
-        cmd = cmd.strip()
-        if not cmd:
-            return ""
-        # Handle quoted executables: "C:\path\app.exe" args
-        if cmd[0] == '"':
-            end = cmd.find('"', 1)
-            if end > 0:
-                base = cmd[1:end]
-            else:
-                base = cmd[1:].split(None, 1)[0] if len(cmd) > 1 else ""
-        else:
-            base = cmd.split(None, 1)[0]
-        # Get just the executable name without path
-        base = os.path.basename(base).lower()
-        # Remove common executable extensions
-        for ext in ('.exe', '.cmd', '.bat', '.com'):
-            if base.endswith(ext):
-                base = base[:-len(ext)]
-                break
-        return base
+        return get_base_command(cmd)
 
     def _is_safe_command(self, cmd):
-        """Check if a command is considered safe/read-only (no confirmation needed).
-
-        Commands containing shell operators (&&, ||, |, &, ;) are never
-        auto-approved, since a safe prefix like 'dir' could chain into a
-        dangerous command like 'del /s *'.
-        """
-        if self._SHELL_OPERATORS.search(cmd):
-            return False
-        base = self._get_base_command(cmd)
-        return base in SAFE_SHELL_COMMANDS
+        """Check if a command is considered safe/read-only (no confirmation needed)."""
+        return self._safety.is_safe(cmd)
 
     def _show_diff_colored(self, diff_text):
-        """Display a diff or detail text with color coding (green=+, red=-, cyan=hunks)."""
-        if not diff_text or diff_text == "(no changes)":
-            print("[No changes]\n")
-            return
-        # Enable ANSI escape codes on Windows
-        if sys.platform == "win32":
-            try:
-                import ctypes
-                kernel32 = ctypes.windll.kernel32
-                handle = kernel32.GetStdHandle(-11)
-                mode = ctypes.c_ulong()
-                kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-                kernel32.SetConsoleMode(handle, mode.value | 0x0004)
-            except Exception:
-                pass
-        use_color = sys.stdout.isatty()
-        for line in diff_text.splitlines():
-            if use_color:
-                if line.startswith('+') and not line.startswith('+++'):
-                    print(f"\033[32m{line}\033[0m")
-                elif line.startswith('-') and not line.startswith('---'):
-                    print(f"\033[31m{line}\033[0m")
-                elif line.startswith('@@'):
-                    print(f"\033[36m{line}\033[0m")
-                elif line.startswith('+++') or line.startswith('---'):
-                    print(f"\033[1m{line}\033[0m")
-                else:
-                    print(line)
-            else:
-                print(line)
-        print()
+        """Display a diff or detail text with color coding."""
+        show_diff_colored(diff_text)
 
     @staticmethod
     def _truncate_for_console(text, limit=MAX_CONSOLE_DISPLAY_CHARS):
-        """Truncate text for console display, adding a note if truncated.
-
-        The full text still goes into the observation (and gets truncated
-        for context by MAX_OBSERVATION_CHARS / MAX_SKILL_OBSERVATION_CHARS),
-        but only `limit` chars are shown on the terminal to prevent flooding.
-        """
+        """Truncate text for console display, adding a note if truncated."""
         if len(text) <= limit:
             return text
         return text[:limit] + f"\n[... {len(text)} chars total, truncated for display]"
 
+    def _get_approval(self):
+        """Get or create the ApprovalGate for this instance."""
+        if self._approval is None:
+            self._approval = ApprovalGate(self.workdir, quiet=getattr(self, 'quiet', False))
+            # Sync state from legacy attributes if they exist
+            if hasattr(self, 'auto_all'):
+                self._approval.auto_all = self.auto_all
+            if hasattr(self, 'auto_writes'):
+                self._approval.auto_writes = self.auto_writes
+            if hasattr(self, 'always_writes'):
+                self._approval.always_writes = self.always_writes
+            if hasattr(self, 'auto_run_prefixes'):
+                self._approval.auto_run_prefixes = self.auto_run_prefixes
+            if hasattr(self, 'always_runs'):
+                self._approval.always_runs = self.always_runs
+            if hasattr(self, '_skill_auto_approve'):
+                self._approval._skill_auto_approve = self._skill_auto_approve
+        return self._approval
+
     def _confirm_or_auto(self, prompt, path=None, cmd=None, diff_text=None, force_confirm=False):
-        """Confirm an action with y/N/auto/all/d options.
-
-        Press 'd' to see a diff or details before confirming.
-        The prompt loops back after showing the diff.
-
-        If force_confirm=True, skip auto-approve mechanisms (auto_all, skill, etc.)
-        and require explicit user confirmation. Used for destructive commands.
-        """
-        while True:
-            if not force_confirm and self.auto_all:
-                agent_print(f"[auto-all] {prompt}")
-                return True
-            if not force_confirm and self._skill_auto_approve:
-                # Detect if this RUN is executing a skill script
-                skill_hint = ""
-                if cmd and ".skills/" in cmd:
-                    # Extract skill name from path like .skills/category/skill-name/scripts/...
-                    import re as _re
-                    m = _re.search(r'\.skills/(?:[^/]+/)?([^/]+)/', cmd)
-                    if m:
-                        skill_hint = f" (skill: {m.group(1)})"
-                agent_print(f"[auto-skill{skill_hint}] {prompt}")
-                return True
-            if path and (path in self.auto_writes or path in self.always_writes):
-                source = "always" if path in self.always_writes else "auto"
-                agent_print(f"[{source}-write: {path}] {prompt}")
-                return True
-            if cmd:
-                for prefix in self.auto_run_prefixes | self.always_runs:
-                    if cmd.strip() == prefix or cmd.strip().startswith(prefix + " "):
-                        source = "always" if prefix in self.always_runs else "auto"
-                        agent_print(f"[{source}-run: {prefix}] {prompt}")
-                        return True
-            try:
-                ans = read_full_input(f"{prompt} (y/N/auto/all/always/d): ", color=ANSI_AGENT).strip().lower()
-            except (KeyboardInterrupt, EOFError):
-                return False
-            if ans in ("y", "yes"):
-                return True
-            elif ans in ("n", "no"):
-                return False
-            elif ans == "auto":
-                if path:
-                    self.auto_writes.add(path)
-                    agent_print(f"[Auto-write: {path} — auto-approved this session]\n")
-                elif cmd:
-                    self.auto_run_prefixes.add(cmd.strip())
-                    agent_print(f"[Auto-run: {cmd.strip()} — auto-approved this session]\n")
-                return True
-            elif ans == "always":
-                if path:
-                    self.always_writes.add(path)
-                    self.auto_writes.add(path)
-                    self._save_coder_config()
-                    agent_print(f"[Always-write: {path} — auto-approved in all future sessions]\n")
-                elif cmd:
-                    self.always_runs.add(cmd.strip())
-                    self.auto_run_prefixes.add(cmd.strip())
-                    self._save_coder_config()
-                    agent_print(f"[Always-run: {cmd.strip()} — auto-approved in all future sessions]\n")
-                return True
-            elif ans == "all":
-                self.auto_all = True
-                agent_print("[Auto-all enabled — all actions auto-approved this session]\n")
-                return True
-            elif ans in ("d", "diff"):
-                if diff_text:
-                    self._show_diff_colored(diff_text)
-                else:
-                    agent_print("[No details available for this action]\n")
-                continue
-            return False
-
-    # ── Persistent config ────────────────────────────────────────────────
+        """Confirm an action. Delegates to ApprovalGate."""
+        gate = self._get_approval()
+        result = gate.confirm(prompt, path=path, cmd=cmd, diff_text=diff_text, force_confirm=force_confirm)
+        # Sync state back to legacy attributes
+        self.auto_all = gate.auto_all
+        self.auto_writes = gate.auto_writes
+        self.always_writes = gate.always_writes
+        self.auto_run_prefixes = gate.auto_run_prefixes
+        self.always_runs = gate.always_runs
+        self._skill_auto_approve = gate._skill_auto_approve
+        return result
 
     def _coder_config_path(self):
         """Return the path to the project's persistent auto-approval config."""
-        return os.path.join(self.workdir, ".uhu", "coderconfig.json")
+        return self._get_approval().config_path()
 
     def _load_coder_config(self):
-        """Load persistent auto-approval settings from .uhu/coderconfig.json.
-
-        Settings stored here survive across sessions, so the user doesn't
-        have to re-approve the same files/commands every time.
-        """
-        config_path = self._coder_config_path()
-        if not os.path.isfile(config_path):
-            return
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-            for path in config.get("always_writes", []):
-                self.always_writes.add(path)
-            for prefix in config.get("always_runs", []):
-                self.always_runs.add(prefix)
-            n_writes = len(self.always_writes)
-            n_runs = len(self.always_runs)
-            if n_writes or n_runs:
-                parts = []
-                if n_writes:
-                    parts.append(f"{n_writes} always-write path(s)")
-                if n_runs:
-                    parts.append(f"{n_runs} always-run command(s)")
-                if not getattr(self, 'quiet', False):
-                    agent_print(f"[Loaded {config_path}: {', '.join(parts)}]")
-        except Exception:
-            pass
+        """Load persistent auto-approval settings. Delegates to ApprovalGate."""
+        gate = self._get_approval()
+        gate.load_config()
+        # Sync state back to legacy attributes
+        self.always_writes = gate.always_writes
+        self.always_runs = gate.always_runs
 
     def _save_coder_config(self):
-        """Save persistent auto-approval settings to .uhu/coderconfig.json."""
-        config_path = self._coder_config_path()
-        try:
-            os.makedirs(os.path.dirname(config_path), exist_ok=True)
-            config = {
-                "always_writes": sorted(self.always_writes),
-                "always_runs": sorted(self.always_runs),
-            }
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2, ensure_ascii=False)
-        except Exception:
-            pass
+        """Save persistent auto-approval settings. Delegates to ApprovalGate."""
+        gate = self._get_approval()
+        gate.always_writes = self.always_writes
+        gate.always_runs = self.always_runs
+        gate.save_config()
 
-    # ── File caching ────────────────────────────────────────────────────
+    # ── File executor delegation ────────────────────────────────────────
+
+    _file_executor = None  # lazily initialized per-instance
+
+    def _get_file_executor(self):
+        """Get or create the FileExecutor for this instance."""
+        if self._file_executor is None:
+            self._file_executor = FileExecutor(
+                workdir=self.workdir,
+                ctx_size=self.ctx_size,
+                cache=FileCache(self.workdir, enabled=self.cache_files),
+                rollback=RollbackManager(self.workdir),
+                confirm_fn=self._confirm_or_auto,
+                show_diff=self.show_diff,
+                log_fn=self._log,
+            )
+        return self._file_executor
 
     def _cache_file(self, path, content):
-        """Save a copy of file content to .uhu/.cache/ and return a file:: URL.
-
-        Creates the .uhu/.cache/ directory mirroring the project structure.
-        Each cache write gets an incrementing numeric suffix before the extension
-        (e.g. README.1.md, README.2.md) so multiple versions are preserved.
-        Returns the file:// URL, or None if caching is disabled or fails (non-critical).
-        """
-        if not self.cache_files:
-            return None
-        cache_dir = os.path.join(self.workdir, ".uhu", ".cache")
-        if os.path.isabs(path):
-            try:
-                rel_path = os.path.relpath(path, self.workdir)
-            except ValueError:
-                rel_path = os.path.basename(path)
-        else:
-            rel_path = path
-        # Find next available numeric suffix: name.1.ext, name.2.ext, ...
-        base, ext = os.path.splitext(rel_path)
-        n = 1
-        while True:
-            suffixed_rel = f"{base}.{n}{ext}" if ext else f"{rel_path}.{n}"
-            cache_path = os.path.join(cache_dir, suffixed_rel)
-            if not os.path.exists(cache_path):
-                break
-            n += 1
-        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-        try:
-            with open(cache_path, "w", encoding="utf-8") as f:
-                f.write(content)
-        except Exception:
-            return None
-        # Use pathlib for correct URL encoding (spaces, #, non-ASCII),
-        # UNC path handling, and platform-appropriate format
-        return Path(cache_path).resolve().as_uri()
-
-    # ── Pre-edit tracking and rollback ──────────────────────────────────
+        """Delegate to FileCache."""
+        return self._get_file_executor().cache.cache(path, content)
 
     def _save_pre_edit(self, path, pre_edit_content):
-        """Save file content before modification for potential rollback.
-
-        Stores the original content in memory keyed by path.
-        Only saves the first version (before any edits in this batch).
-        """
-        if not hasattr(self, '_pre_edit_snapshots'):
-            self._pre_edit_snapshots = {}
-        if path not in self._pre_edit_snapshots:
-            self._pre_edit_snapshots[path] = pre_edit_content
+        """Delegate to RollbackManager."""
+        self._get_file_executor().rollback.save(path, pre_edit_content)
 
     def _rollback_edits(self, modified, created):
-        """Restore files to their pre-edit state and remove newly created files.
-
-        Uses in-memory snapshots saved by _save_pre_edit() before modifications.
-        """
-        for path in modified:
-            if path in self._pre_edit_snapshots:
-                full_path = os.path.join(self.workdir, path) if not os.path.isabs(path) else path
-                os.makedirs(os.path.dirname(full_path) or ".", exist_ok=True)
-                with open(full_path, "w", encoding="utf-8") as f:
-                    f.write(self._pre_edit_snapshots[path])
-        for path in created:
-            full_path = os.path.join(self.workdir, path) if not os.path.isabs(path) else path
-            if os.path.isfile(full_path):
-                try:
-                    os.remove(full_path)
-                except OSError:
-                    pass
-
-
-    # ── Action execution ──────────────────────────────────────────────
+        """Delegate to RollbackManager."""
+        self._get_file_executor().rollback.rollback(modified, created)
 
     def execute_write(self, action):
-        path = action["path"]
-        lines = action["code"].count("\n") + 1
-        full_path = os.path.join(self.workdir, path) if not os.path.isabs(path) else path
-        # Compute diff for on-demand review (d at prompt)
-        diff_text = None
-        new_content = action["code"]
-        if not new_content.endswith("\n"):
-            new_content += "\n"
-        if os.path.isfile(full_path):
-            try:
-                with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                    old_content = f.read()
-                diff_text = make_unified_diff(path, old_content, new_content)
-            except Exception:
-                pass
-        else:
-            diff_text = make_unified_diff(path, "", new_content)
-        if not self._confirm_or_auto(f"[WRITE] {path} ({lines} lines)", path=path, diff_text=diff_text):
-            agent_print("[Skipped]\n")
-            return None
-        try:
-            os.makedirs(os.path.dirname(full_path) or ".", exist_ok=True)
-            with open(full_path, "w", encoding="utf-8") as f:
-                f.write(new_content)
-            file_url = self._cache_file(path, new_content)
-            obs = f"[Wrote: {path} ({lines} lines)]"
-            display_msg = obs
-            if file_url:
-                display_msg += f" (cached: {file_url})"
-            agent_print(display_msg + "\n")
-            return obs
-        except Exception as e:
-            msg = f"[Write failed: {e}]"
-            agent_print(msg + "\n")
-            return 
+        """Execute a WRITE action. Delegates to FileExecutor."""
+        return self._get_file_executor().execute_write(action)
 
     def execute_edit(self, action):
-        path = action["path"]
-        edits = action["edits"]
-        full_path = os.path.join(self.workdir, path) if not os.path.isabs(path) else path
-
-        if not os.path.isfile(full_path):
-            # Try to find the file by basename in the project
-            basename = os.path.basename(path)
-            suggestion = ""
-            for root, dirs, files in os.walk(self.workdir):
-                dirs[:] = [d for d in dirs if d not in {'.git', '__pycache__', 'node_modules', '.cache', '.uhu', 'build', '.gradle'}]
-                if basename in files:
-                    found = os.path.relpath(os.path.join(root, basename), self.workdir)
-                    suggestion = f" Did you mean {found!r}?"
-                    break
-            msg = f"[EDIT FAILED: {path} does not exist. Use WRITE for new files.{suggestion}]"
-            agent_print(msg + "\n")
-            return msg
-
-        try:
-            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                original_content = f.read()
-        except Exception as e:
-            msg = f"[EDIT FAILED: cannot read {path}: {e}]"
-            agent_print(msg + "\n")
-            return msg
-
-        if not edits:
-            msg = f"[EDIT FAILED: {path} — no valid search/replace blocks found]"
-            agent_print(msg + "\n")
-            return msg
-
-        current_content = original_content
-        edits_applied = []
-        failures = []
-
-        for search_text, replace_text in edits:
-            match = find_match_in_content(current_content, search_text)
-            if match is None:
-                failures.append(search_text)
-                continue
-            start, end, quality = match
-            file_lines = current_content.split('\n')
-            new_lines = file_lines[:start] + replace_text.split('\n') + file_lines[end:]
-            current_content = '\n'.join(new_lines)
-            edits_applied.append((start, end, quality, search_text, replace_text))
-
-        if not edits_applied:
-            snippet_lines = original_content.split('\n')[:20]
-            snippet = '\n'.join(snippet_lines)
-            if len(snippet_lines) < len(original_content.split('\n')):
-                snippet += f"\n... ({len(original_content.split(chr(10)))} lines total)"
-            msg = f"[EDIT FAILED: {path} — search text not found]\nFile content:\n{snippet}"
-            agent_print(msg + "\n")
-            return msg
-
-        if failures:
-            failed_snippets = []
-            for i, f_text in enumerate(failures):
-                preview = f_text[:80].replace('\n', '\\n')
-                failed_snippets.append(f"  {i+1}. ...{preview}...")
-            msg = (
-                f"[EDIT FAILED: {path} — {len(failures)} of {len(edits)} search block(s) not found. "
-                f"File left unchanged.]\n"
-                f"Missing search blocks:\n" + '\n'.join(failed_snippets)
-            )
-            agent_print(msg + "\n")
-            return msg
-
-        summary = make_edit_summary(path, edits_applied)
-        agent_print(summary)
-
-        diff_text = make_unified_diff(path, original_content, current_content)
-        if self.show_diff:
-            self._show_diff_colored(diff_text)
-
-        if not self._confirm_or_auto(f"Apply {len(edits_applied)} edit(s) to {path}?", path=path, diff_text=diff_text):
-            agent_print("[Skipped]\n")
-            return None
-
-        try:
-            os.makedirs(os.path.dirname(full_path) or ".", exist_ok=True)
-            with open(full_path, "w", encoding="utf-8") as f:
-                f.write(current_content)
-            total_lines = current_content.count('\n') + 1
-            obs = f"[Edited: {path} ({len(edits_applied)} change(s) applied, {total_lines} lines)]"
-            if failures:
-                warning = f"\n[WARNING: {len(failures)} search block(s) not found]"
-                obs += warning
-            agent_print(obs + "\n")
-            return obs
-        except Exception as e:
-            msg = f"[Edit failed: {e}]"
-            agent_print(msg + "\n")
-            return msg
-
-    def execute_run(self, action):
-        cmd = action["code"]
-        run_lang = action.get("lang", "")
-
-        # Route PowerShell fence blocks through powershell.exe instead of cmd.exe
-        if run_lang in ("powershell", "ps1", "pwsh"):
-            if sys.platform == "win32":
-                # -NoProfile avoids loading the user profile (faster, no side effects)
-                cmd = f'powershell -NoProfile -Command "{cmd}"'
-            else:
-                # PowerShell not available on Unix — skip with a clear warning
-                agent_print("⚠ PowerShell fence block used on non-Windows platform — skipping.\n")
-                return None
-
-        # Rewrite short script paths to their full workdir-relative paths.
-        # The LLM may generate "python scripts/fetch_news.py" instead of
-        # "python .skills/media/newsfeed/scripts/fetch_news.py".
-        # This now uses a global registry lookup so it works even when
-        # _active_skill is not set (e.g., across continuation rounds).
-        from .skills import find_script_in_cmd
-        script_replacements = find_script_in_cmd(cmd, workdir=self.workdir)
-        for matched_text, resolved_path in script_replacements:
-            # Only replace if the resolved path is different (avoid double-replacing)
-            if matched_text != resolved_path:
-                cmd = cmd.replace(matched_text, resolved_path)
-
-        # On Windows cmd.exe, a backslash before a closing quote escapes the quote:
-        #   dir "C:\path\"  →  path parsed as C:\path"  →  WinError 267
-        # When an odd number of \ precedes ", the last \ escapes the quote.
-        # Fix by removing one \ so the quote properly closes the argument:
-        #   "C:\path\"  →  "C:\path"  (same directory, valid syntax)
-        if sys.platform == "win32":
-            cmd = re.sub(r'(\\+)"', _fix_win_backslash_quote, cmd)
-        cmd_details = f"[Command details]\n  cwd: {self.workdir}\n  cmd: {cmd}"
-        ell = '…' if len(cmd) > 80 else ''
-
-        # Safety checks
-        safety_level, safety_msg = self._check_command_safety(cmd)
-        if safety_level == 'blocked':
-            agent_print(f"⛔ {safety_msg}\n")
-            return None
-        if safety_level == 'warning':
-            # Destructive command — always require explicit confirmation, bypass auto-approve
-            agent_print(f"{safety_msg}")
-            if not self._confirm_or_auto(f"[CONFIRM DESTRUCTIVE] {cmd[:80]}{ell}", cmd=cmd, diff_text=cmd_details, force_confirm=True):
-                agent_print("[Skipped]\n")
-                return None
-        elif safety_level == 'chain':
-            # Shell chaining detected — warn but allow with confirmation
-            agent_print(f"{safety_msg}")
-            if not self._confirm_or_auto(f"[RUN] {cmd[:80]}{ell}", cmd=cmd, diff_text=cmd_details):
-                agent_print("[Skipped]\n")
-                return None
-        elif self._is_safe_command(cmd):
-            base = self._get_base_command(cmd)
-            agent_print(f"[auto-safe: {base}] [RUN] {cmd[:80]}{ell}")
-        elif not self._confirm_or_auto(f"[RUN] {cmd[:80]}{ell}", cmd=cmd, diff_text=cmd_details):
-            agent_print("[Skipped]\n")
-            return None
-        proc = None
-        killed = False
-
-        # Determine fallback encoding for Windows subprocess output.
-        # On non-English Windows (e.g. Russian cp866), programs like
-        # PowerShell and cmd.exe output text in the OEM codepage, not
-        # UTF-8. Decoding as UTF-8 produces garbled text. We try UTF-8
-        # first (most modern programs), and fall back to the OEM codepage
-        # if UTF-8 produces too many replacement characters.
-        _fallback_encoding = None
-        if sys.platform == "win32":
-            try:
-                import ctypes as _ctypes
-                _oem_cp = _ctypes.windll.kernel32.GetOEMCP()
-                _fallback_encoding = f'cp{_oem_cp}'
-            except Exception:
-                pass
-
-        def _decode_line(raw_line):
-            """Decode subprocess output.
-
-            Try strict UTF-8 first — if it decodes cleanly, the output is UTF-8.
-            If it fails (as OEM-encoded bytes will), fall back to the OEM codepage
-            (e.g. cp866 on Russian Windows). This avoids garbling OEM output by
-            silently replacing high bytes with U+FFFD instead of raising an error.
-            """
-            try:
-                return raw_line.decode('utf-8')
-            except UnicodeDecodeError:
-                pass
-            if _fallback_encoding:
-                try:
-                    return raw_line.decode(_fallback_encoding, errors='replace')
-                except Exception:
-                    pass
-            return raw_line.decode('utf-8', errors='replace')
-
-        try:
-            # Read in binary mode and decode manually — this avoids
-            # UnicodeDecodeError from TextIOWrapper on invalid bytes (e.g. 0xAD
-            # from Windows-1252 output).  bytes.decode(errors='replace') never
-            # raises, unlike TextIOWrapper iteration which can.
-            kwargs = dict(shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          cwd=self.workdir)
-            if sys.platform == "win32":
-                kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-            else:
-                kwargs["start_new_session"] = True
-            agent_print("[Running — Ctrl+C to kill]\n")
-            proc = subprocess.Popen(cmd, **kwargs)
-
-            line_queue = _queue.Queue()
-
-            def _reader():
-                for raw_line in proc.stdout:
-                    line = _decode_line(raw_line)
-                    line_queue.put(line)
-                line_queue.put(None)  # sentinel
-
-            t = threading.Thread(target=_reader, daemon=True)
-            t.start()
-
-            output_lines = []
-            last_output = time.time()
-            interrupted = False
-            try:
-                while True:
-                    try:
-                        # Use get_nowait() + time.sleep() instead of get(timeout=...).
-                        # On Windows, queue.get(timeout=N) blocks inside WaitForSingleObjectEx
-                        # which does not wake up for SIGINT, swallowing Ctrl+C silently.
-                        # time.sleep() IS interruptible on Windows.
-                        line = line_queue.get_nowait()
-                    except _queue.Empty:
-                        if proc.poll() is not None:
-                            break
-                        if time.time() - last_output > 30:
-                            killed = True
-                            agent_print("\n[Run timed out (30s idle) — killing]\n")
-                            kill_proc_tree(proc)
-                            proc.wait(timeout=5)
-                            break
-                        time.sleep(0.05)  # interruptible on Windows
-                        continue
-                    if line is None:
-                        break
-                    output_lines.append(line)
-                    agent_print(line, end='')
-                    sys.stdout.flush()
-                    last_output = time.time()
-            except KeyboardInterrupt:
-                interrupted = True
-                killed = True
-                agent_print("\n[Killing process...]\n")
-                kill_proc_tree(proc)
-                proc.wait(timeout=5)
-
-            t.join(timeout=2)
-            # Drain any remaining lines
-            while True:
-                try:
-                    line = line_queue.get_nowait()
-                except _queue.Empty:
-                    break
-                if line is not None:
-                    output_lines.append(line)
-
-            # Re-raise KeyboardInterrupt AFTER the process is dead and output
-            # is drained. Without this, Ctrl+C only kills the subprocess but
-            # execution continues into _feedback_loop, silently swallowing the
-            # interrupt and starting another model call.
-            if interrupted:
-                raise KeyboardInterrupt
-
-            combined = "".join(output_lines).strip()
-            lines = combined.splitlines()
-            if len(lines) > 60:
-                combined = "\n".join(lines[-60:]) + f"\n[... trimmed, showing last 60 of {len(lines)} lines]"
-            if killed:
-                obs = f"[Run killed]\n{combined}" if combined else "[Run killed, no output]"
-                agent_print("[Run killed]\n")
-            else:
-                rc = proc.returncode
-                obs = f"[Run rc={rc}]\n{combined}" if combined else f"[Run rc={rc}, no output]"
-                agent_print(f"[Run rc={rc}]\n")
-            return obs
-        except Exception as e:
-            if proc and proc.poll() is None:
-                kill_proc_tree(proc)
-            msg = f"[Run failed: {e}]"
-            agent_print(msg + "\n")
-            return msg
+        """Execute an EDIT action. Delegates to FileExecutor."""
+        return self._get_file_executor().execute_edit(action)
 
     def execute_read(self, action):
-        """Read a file and return its content as an observation for the model."""
-        path = action["path"]
-        full_path = os.path.join(self.workdir, path) if not os.path.isabs(path) else path
-        if not os.path.isfile(full_path):
-            msg = f"[READ FAILED: {path} does not exist]"
-            agent_print(msg + "\n")
-            return msg
-        ext = os.path.splitext(path)[1].lower()
-        if ext in SKIP_EXT:
-            msg = f"[READ FAILED: {path} — binary/skipped extension ({ext})]"
-            agent_print(msg + "\n")
-            return msg
-        try:
-            with open(full_path, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
-        except Exception as e:
-            msg = f"[READ FAILED: {path}: {e}]"
-            agent_print(msg + "\n")
-            return msg
-        lines_count = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
-        # Cache the full content before truncation so file:// URL points to complete file
-        file_url = self._cache_file(path, content)
-        # Truncate if very large — cap per-file to half the context window (leaves room for conversation)
-        max_chars = min(self.ctx_size // 2, 200000)
-        truncated = ""
-        if len(content) > max_chars:
-            content = content[:max_chars]
-            truncated = " (truncated)"
-        url_info = f", cached: {file_url}" if file_url else ""
-        agent_print(f"[Read: {path} ({lines_count} lines{truncated}{url_info})]")
-        # Print file content to terminal so the user can see it
-        max_display_lines = 200
-        content_lines = content.split('\n')
-        if len(content_lines) > max_display_lines:
-            for line in content_lines[:max_display_lines]:
-                tool_print(line)
-            tool_print(f"... ({len(content_lines) - max_display_lines} more lines)")
-        else:
-            tool_print(content)
-        tool_print()
-        # Observation sent to model: only the relative path, no cache URL
-        # (cache URLs confuse the model about the working directory)
-        obs = f"[File: {path}]\n{content}"
-        self._log("system", f"[Read: {path} ({lines_count} lines{truncated}{url_info})]")
-        return obs
+        """Execute a FILE: read action. Delegates to FileExecutor."""
+        return self._get_file_executor().execute_read(action)
+
+    def execute_run(self, action):
+        """Execute a shell command. Delegates to CommandRunner."""
+        runner = CommandRunner(self.workdir, safety=self._safety)
+        return runner.run(
+            cmd=action["code"],
+            run_lang=action.get("lang", ""),
+            workdir=self.workdir,
+            confirm_fn=self._confirm_or_auto,
+        )
 
     def execute_tool(self, action):
         """Execute a tool invocation action."""
@@ -796,45 +176,14 @@ class ActionMixin:
             )
             agent_print(msg + "\n")
             return msg
-        tool = get_tool(tool_name)
+        all_tool_names = [t.name for t in all_tools()]
+        tool, corrected_name, error_msg = resolve_tool_name(tool_name, all_tool_names, get_tool, self.workdir)
         if not tool:
-            # Fuzzy match: try to find a similar tool name
-            all_tool_names = [t.name for t in all_tools()]
-            close_match = None
-            # 1. Exact match after singular/plural (e.g. list_file → list_files)
-            for candidate_name in all_tool_names:
-                if tool_name + "s" == candidate_name or tool_name.rstrip("s") == candidate_name.rstrip("s"):
-                    close_match = candidate_name
-                    break
-            # 2. Underscore vs hyphen (e.g. web-search → web_search)
-            if not close_match:
-                normalized = tool_name.replace("-", "_")
-                for candidate_name in all_tool_names:
-                    if normalized == candidate_name.replace("-", "_"):
-                        close_match = candidate_name
-                        break
-            if close_match:
-                tool = get_tool(close_match)
-                agent_print(f"[Auto-corrected tool name: '{tool_name}' → '{close_match}']")
-                tool_name = close_match
-            else:
-                # Common confusion: model emits **TOOL:`some-file.py`** thinking
-                # it reads a file. If the name looks like a file (has an extension)
-                # and actually exists in workdir, return a friendly hint instead of
-                # a generic "Unknown tool" error.
-                if "." in tool_name and not tool_name.endswith("()"):
-                    candidate = os.path.join(self.workdir, tool_name) if not os.path.isabs(tool_name) else tool_name
-                    if os.path.isfile(candidate):
-                        msg = (
-                            f"[TOOL FAILED: Unknown tool '{tool_name}' — this looks like a file path, not a tool name. "
-                            f"To read a file's contents into context, use **FILE:`{tool_name}`** "
-                            f"(closed by **EOF:`{tool_name}`**) instead of **TOOL:`{tool_name}`**.]"
-                       )
-                        agent_print(msg + "\n")
-                        return msg
-                msg = f"[TOOL FAILED: Unknown tool '{tool_name}']"
-                agent_print(msg + "\n")
-                return msg
+            agent_print(error_msg + "\n")
+            return error_msg
+        if corrected_name != tool_name:
+            agent_print(f"[Auto-corrected tool name: '{tool_name}' → '{corrected_name}']")
+            tool_name = corrected_name
         params_preview = json.dumps(params, ensure_ascii=False)
         if len(params_preview) > 60:
             params_preview = params_preview[:57] + "..."
@@ -1158,47 +507,5 @@ class ActionMixin:
             for w in placeholder_warnings:
                 agent_print(w + "\n")
             observations.extend(placeholder_warnings)
-        # Truncate large observations to prevent context bloat.
-        # Context is precious — raw HTML, verbose tool output, and skill reference
-        # content can easily consume the entire context window.
-        # Skill and tool observations get much more aggressive truncation since
-        # they are intermediate/automated output, not directly requested by the user.
-        # The full output is already printed to the terminal — only the context
-        # copy is shortened.
-        truncated = []
-        for obs in observations:
-            # Skill/tool observations: aggressive truncation (intermediate output)
-            is_skill = obs.startswith(("⚡ [SKILL", "[SKILL"))
-            is_tool = obs.startswith("[TOOL")
-            # Read observations: generous limit (agent needs full source code)
-            is_read = obs.startswith("[File:")
-            # Check if this tool's observations should never be truncated
-            no_truncate = False
-            if is_tool:
-                from .tools import get as get_tool
-                _m = __import__("re").match(r"^\[TOOL\s+(\S+)\]", obs)
-                if _m:
-                    _t = get_tool(_m.group(1))
-                    if _t and getattr(_t, "do_not_truncate_observations", False):
-                        no_truncate = True
-            if no_truncate:
-                limit = None
-            elif is_skill:
-                limit = MAX_SKILL_OBSERVATION_CHARS
-            elif is_tool:
-                limit = MAX_TOOL_OBSERVATION_CHARS
-            elif is_read:
-                limit = MAX_READ_OBSERVATION_CHARS
-            else:
-                limit = MAX_OBSERVATION_CHARS
-            if limit is not None and len(obs) > limit:
-                trunc_note = f"\n[... truncated, {len(obs)} chars total — use FILE: or TOOL: for full content]"
-                truncated.append(obs[:limit] + trunc_note)
-            else:
-                truncated.append(obs)
-        result = "\n".join(truncated) if truncated else None
-        if result and len(result) > MAX_TOTAL_OBSERVATION_CHARS:
-            trunc_note = f"\n[... total truncated, {len(result)} chars — use FILE: or TOOL: for full content]"
-            result = result[:MAX_TOTAL_OBSERVATION_CHARS] + trunc_note
-            agent_print(f"[Observations truncated to conserve context ({MAX_TOTAL_OBSERVATION_CHARS} char limit)]")
+        result = truncate_observations(observations)
         return (result, user_cancelled_run, has_executed_non_read, has_executed_skill)
