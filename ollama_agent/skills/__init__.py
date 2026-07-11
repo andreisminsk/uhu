@@ -162,7 +162,9 @@ def skills_system_prompt(enabled_names=None):
         "  If they ask about business, startups, or entrepreneurship → use business-coach.\n"
         "  If they mention a .docx file or want to convert a Word document → use docx2md.\n"
         "  If they want to write, edit, or polish text → use text-writer.\n"
-        "  If they want a diagram, dependency graph, ancestry, fishbone, timeline, or roadmap → use graph-ai.\n  If they ask about uncommitted changes, dirty repos, or git status across projects → use git-uncommitted.\n"
+        "  If they want a diagram, dependency graph, ancestry, fishbone, timeline, roadmap, or mindmap → use graph-ai.\n  If they ask about uncommitted changes, dirty repos, or git status across projects → use git-uncommitted.\n"
+        "- When the user provides a file path AND a skill matches the task (e.g. 'render .mm file', 'review code in app.py', 'generate tests for utils.py'), invoke the SKILL with the file path as a parameter — do NOT read the file first with read_file. The skill will read the file itself.\n"
+        "- File extensions that map to skills: .dsl/.mm → graph-ai, .docx → docx2md. When you see these extensions, invoke the matching skill directly with the path.\n"
         "- Use tools (file I/O, git, web search, etc.) only when NO skill matches the user's intent.",
         "",
         "Available skills:",

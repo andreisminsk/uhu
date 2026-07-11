@@ -91,6 +91,38 @@ THEMES = {
         'star_color': '#7ec8e3',
         'grid_type': 'blueprint',
     },
+    'mindmap': {
+        'bg': '#1e1e2e',
+        'grid_minor': '#252540',
+        'grid_major': '#2a2a50',
+        'margin_line': None,
+        'node_fill': '#2a2a3c',
+        'node_border': '#45475a',
+        'node_border_w': 2,
+        'node_shadow': 'rgba(137,180,250,0.10)',
+        'node_shadow_hover': 'rgba(137,180,250,0.25)',
+        'focus_fill': '#3a3a52',
+        'focus_border': '#89b8fa',
+        'focus_border_w': 3,
+        'focus_text': '#89b8fa',
+        'text': '#cdd6f4',
+        'arrow': '#585878',
+        'free_arrow': '#a6e3a1',
+        'title': '#585870',
+        'title_text': 'mindmap',
+        'font': "'Inter', 'Segoe UI', 'Helvetica Neue', sans-serif",
+        'font_size': 14,
+        'border_radius': 16,
+        'star_color': '#f9e2af',
+        'grid_type': 'blueprint',
+        'root_font_size': 16,
+        'root_fill': '#313244',
+        'root_border': '#585870',
+        'root_border_w': 2,
+        'root_text': '#cdd6f4',
+        'edge_color': 'rgba(88,88,120,0.5)',
+        'edge_focus_color': 'rgba(137,180,250,0.6)',
+    },
     'timeline': {
         'bg': '#f8f9fa',
         'grid_minor': None,
@@ -296,7 +328,143 @@ def _roadmap_layout(nodes, tree_edges, h_gap=60, node_widths=None, bh=42):
     return positions, order, W, H, timeline_y, roots, root_positions
 
 
-def _fishbone_layout(nodes, tree_edges, h_gap=60, node_widths=None, bh=42):
+def _mindmap_layout(nodes, tree_edges, node_widths=None, bh=42, h_gap=60, v_gap=12, sides=None):
+    """Horizontal mindmap layout: root centered, children split left/right."""
+    if node_widths is None:
+        node_widths = compute_node_widths(nodes, min_w=140, char_w=8, pad=36)
+    if sides is None:
+        sides = {}
+
+    # Build tree structure
+    children_of = {n: [] for n in nodes}
+    has_parent = set()
+    parent_of = {}
+    for f, t in tree_edges:
+        if f in nodes and t in nodes:
+            children_of[f].append(t)
+            has_parent.add(t)
+            parent_of[t] = f
+
+    roots = [n for n in nodes if n not in has_parent]
+    if not roots:
+        roots = list(nodes.keys())[:1]
+    root = roots[0]
+
+    # Compute subtree heights
+    subtree_h = {}
+    def get_subtree_h(nid):
+        ch = children_of.get(nid, [])
+        if not ch:
+            subtree_h[nid] = bh
+            return bh
+        total = sum(get_subtree_h(c) for c in ch) + v_gap * (len(ch) - 1)
+        h = max(bh, total)
+        subtree_h[nid] = h
+        return h
+    for nid in nodes:
+        if nid not in subtree_h:
+            get_subtree_h(nid)
+
+    # Split root children: use [Left]/[Right] sides, or alternate
+    right_children = []
+    left_children = []
+    next_right = True
+    for child in children_of.get(root, []):
+        side = sides.get(child)
+        if side == 'Right':
+            right_children.append(child)
+        elif side == 'Left':
+            left_children.append(child)
+        else:
+            if next_right:
+                right_children.append(child)
+            else:
+                left_children.append(child)
+            next_right = not next_right
+
+    # Root at center
+    positions = {}
+    order = [root]
+    root_w = node_widths[root]
+    root_x = 0.0
+    root_y = 0.0
+    positions[root] = (root_x, root_y)
+
+    def layout_side(children, direction):
+        """direction: +1 for right, -1 for left."""
+        if not children:
+            return
+        total_h = sum(subtree_h[c] for c in children) + v_gap * (len(children) - 1)
+        y = root_y - total_h / 2
+        for child in children:
+            sh = subtree_h[child]
+            cy = y + sh / 2
+            if direction > 0:
+                cx = root_x + root_w / 2 + h_gap + node_widths[child] / 2
+            else:
+                cx = root_x - root_w / 2 - h_gap - node_widths[child] / 2
+            positions[child] = (cx, cy)
+            order.append(child)
+            # Recurse into grandchildren
+            layout_subtree(child, cx, cy, direction)
+            y += sh + v_gap
+
+    def layout_subtree(parent_id, parent_x, parent_y, direction):
+        ch = children_of.get(parent_id, [])
+        if not ch:
+            return
+        total_h = sum(subtree_h[c] for c in ch) + v_gap * (len(ch) - 1)
+        y = parent_y - total_h / 2
+        for child in ch:
+            sh = subtree_h[child]
+            cy = y + sh / 2
+            if direction > 0:
+                cx = parent_x + node_widths[parent_id] / 2 + h_gap + node_widths[child] / 2
+            else:
+                cx = parent_x - node_widths[parent_id] / 2 - h_gap - node_widths[child] / 2
+            positions[child] = (cx, cy)
+            order.append(child)
+            layout_subtree(child, cx, cy, direction)
+            y += sh + v_gap
+
+    layout_side(right_children, +1)
+    layout_side(left_children, -1)
+
+    # Any remaining nodes not connected to root tree
+    for nid in nodes:
+        if nid not in positions:
+            positions[nid] = (root_x + 300, root_y + len(positions) * (bh + v_gap))
+            order.append(nid)
+
+    # Compute canvas bounds accounting for node widths/heights
+    if positions:
+        all_x = []
+        all_y = []
+        for nid, (x, y) in positions.items():
+            nw = node_widths.get(nid, 140)
+            all_x.extend([x - nw / 2, x + nw / 2])
+            all_y.extend([y - bh / 2, y + bh / 2])
+        min_x = min(all_x) - 40
+        max_x = max(all_x) + 40
+        min_y = min(all_y) - 40
+        max_y = max(all_y) + 40
+    else:
+        min_x, max_x, min_y, max_y = -200, 200, -100, 100
+
+    W = max_x - min_x + 80
+    H = max_y - min_y + 80
+
+    # Shift all positions so they're positive and centered
+    offset_x = -min_x + 40
+    offset_y = -min_y + 40
+    shifted = {}
+    for nid, (x, y) in positions.items():
+        shifted[nid] = (x + offset_x, y + offset_y)
+
+    return shifted, order, W, H, root, right_children, left_children
+
+
+def _fishbone_layout(nodes, tree_edges, node_widths=None, bh=42):
     """Fishbone (Ishikawa) layout: spine with diagonal bones, fish head at right."""
     if node_widths is None:
         node_widths = compute_node_widths(nodes, min_w=140, char_w=8, pad=36)
@@ -569,6 +737,7 @@ def _html_template(theme, W, H, svg_elements, nodes_html, connections, title_tex
           line.style.opacity = '0.15';
         }} else {{
           line.style.strokeWidth = '3';
+          line.style.stroke = '{theme.get("edge_focus_color", theme.get("arrow", "#89b8fa"))}';
         }}
       }});
     }});
@@ -579,6 +748,7 @@ def _html_template(theme, W, H, svg_elements, nodes_html, connections, title_tex
       document.querySelectorAll('.arrow-line').forEach(line => {{
         line.style.strokeWidth = line.dataset.width;
         line.style.opacity = '1';
+        line.style.stroke = '';
       }});
     }});
   }});
@@ -950,6 +1120,177 @@ def generate_roadmap_html(nodes, tree_edges, free_edges, output_path, focus=None
     return output_path
 
 
+def generate_mindmap_html(nodes, tree_edges, free_edges, output_path, focus=None, style='mindmap', title=None, annotations=None, sides=None):
+    theme = THEMES.get('mindmap', THEMES['mindmap'])
+    node_widths = compute_node_widths(nodes, min_w=140, char_w=8, pad=36)
+    bh = 42
+    hh = bh / 2
+
+    positions, order, W, H, root, right_children, left_children = _mindmap_layout(
+        nodes, tree_edges, node_widths=node_widths, bh=bh, sides=sides
+    )
+
+    # Build parent map and connections
+    parent_of = {}
+    children_of = {n: [] for n in nodes}
+    for f, t in tree_edges:
+        if f in positions and t in positions:
+            parent_of[t] = f
+            children_of[f].append(t)
+
+    connections = {nid: [] for nid in nodes}
+    for f, t in tree_edges:
+        connections.setdefault(f, []).append(t)
+        connections.setdefault(t, []).append(f)
+    for f, t in free_edges:
+        connections.setdefault(f, []).append(t)
+        connections.setdefault(t, []).append(f)
+    for nid in connections:
+        connections[nid] = list(set(connections[nid]))
+
+    svg_elements = []
+    edge_color = theme.get('edge_color', 'rgba(88,88,120,0.5)')
+    edge_focus_color = theme.get('edge_focus_color', 'rgba(137,180,250,0.8)')
+    arrow_color = theme.get('arrow', '#585878')
+    free_arrow_color = theme.get('free_arrow', '#a6e3a1')
+
+    # Draw edges (Bezier curves from parent to child)
+    for nid in order:
+        if nid not in positions:
+            continue
+        for child_id in children_of.get(nid, []):
+            if child_id not in positions:
+                continue
+            px, py = positions[nid]
+            cx, cy = positions[child_id]
+            pw = node_widths[nid]
+            cw = node_widths[child_id]
+
+            # Determine direction: child is right or left of parent
+            is_right = cx > px
+            if is_right:
+                sx = px + pw / 2 + 2
+                sy = py
+                ex = cx - cw / 2 - 2
+                ey = cy
+            else:
+                sx = px - pw / 2 - 2
+                sy = py
+                ex = cx + cw / 2 + 2
+                ey = cy
+
+            dx = abs(ex - sx)
+            cp1x = sx + dx * 0.4 * (1 if is_right else -1)
+            cp2x = ex - dx * 0.4 * (1 if is_right else -1)
+
+            # Mindmap: all edges uniform — no focus path highlighting
+            svg_elements.append(
+                f'<path class="arrow-line" data-from="{nid}" data-to="{child_id}" '
+                f'data-width="2" '
+                f'd="M{sx:.1f},{sy:.1f} C{cp1x:.1f},{sy:.1f} {cp2x:.1f},{ey:.1f} {ex:.1f},{ey:.1f}" '
+                f'stroke="{edge_color}" stroke-width="2" fill="none" />'
+            )
+
+    # Draw free connectors (dashed Bezier curves)
+    for f, t in free_edges:
+        if f not in positions or t not in positions:
+            continue
+        fx, fy = positions[f]
+        tx, ty = positions[t]
+        fw = node_widths[f]
+        tw = node_widths[t]
+
+        is_right = tx > fx
+        if abs(fx - tx) < 30:
+            # Near-vertical: connect top/bottom
+            if ty > fy:
+                sx, sy = fx, fy + hh + 2
+                ex, ey = tx, ty - hh - 2
+            else:
+                sx, sy = fx, fy - hh - 2
+                ex, ey = tx, ty + hh + 2
+        else:
+            if is_right:
+                sx = fx + fw / 2 + 2
+                ex = tx - tw / 2 - 2
+            else:
+                sx = fx - fw / 2 - 2
+                ex = tx + tw / 2 + 2
+            sy = fy
+            ey = ty
+
+        dx = abs(ex - sx) if abs(ex - sx) > 30 else 30
+        dy = abs(ey - sy)
+        if abs(ex - sx) < 30:
+            cp1x = sx
+            cp2x = ex
+            cp1y = sy + dy * 0.3 * (1 if ey > sy else -1)
+            cp2y = ey - dy * 0.3 * (1 if ey > sy else -1)
+        else:
+            cp1x = sx + dx * 0.4 * (1 if is_right else -1)
+            cp2x = ex - dx * 0.4 * (1 if is_right else -1)
+            cp1y = sy
+            cp2y = ey
+
+        svg_elements.append(
+            f'<path class="arrow-line" data-from="{f}" data-to="{t}" '
+            f'data-width="2" '
+            f'd="M{sx:.1f},{sy:.1f} C{cp1x:.1f},{cp1y:.1f} {cp2x:.1f},{cp2y:.1f} {ex:.1f},{ey:.1f}" '
+            f'stroke="{free_arrow_color}" stroke-width="2" fill="none" '
+            f'stroke-dasharray="6,4" marker-end="url(#free-arrowhead)" />'
+        )
+
+    # Build nodes HTML
+    root_bh = int(bh * 1.4)
+    nodes_html = []
+    for nid in order:
+        if nid not in positions:
+            continue
+        x, y = positions[nid]
+        nw = node_widths[nid]
+        is_root = (nid == root)
+        node_h = root_bh if is_root else bh
+        node_hh = node_h / 2
+        left = x - nw / 2
+        top = y - node_hh
+        # Mindmap: no focus highlighting — * is just a selection marker, not visual emphasis
+        cls = 'node'
+        if is_root:
+            cls += ' root'
+        label_esc = nodes[nid].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+        ann = annotations.get(nid, '') if annotations else ''
+        title_attr = f' title="{ann}"' if ann else ''
+
+        # Root node gets special styling
+        style_extra = ''
+        if is_root:
+            root_fs = theme.get('root_font_size', 18)
+            root_fill = theme.get('root_fill', '#313244')
+            root_border = theme.get('root_border', '#89b8fa')
+            root_border_w = theme.get('root_border_w', 3)
+            root_text = theme.get('root_text', '#cdd6f4')
+            style_extra = (f'background:{root_fill};border-color:{root_border};'
+                          f'border-width:{root_border_w}px;color:{root_text};font-size:{root_fs}px;')
+
+        nodes_html.append(
+            f'<div class="{cls}" data-id="{nid}"{title_attr} '
+            f'style="left:{left:.1f}px; top:{top:.1f}px; width:{nw:.0f}px; height:{node_h}px;{style_extra}">'
+            f'{label_esc}</div>'
+        )
+
+    title_text = title or theme.get('title_text', 'mindmap')
+
+    # No focus star in mindmap — just highlight styling, no ★ prefix
+    extra_css = """\
+    .node.focus::before { content: none !important; }"""
+
+    html = _html_template(theme, W, H, svg_elements, nodes_html, connections, title_text, output_path, extra_css=extra_css)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(html)
+    print(f"HTML saved to: {output_path}")
+    return output_path
+
+
 def generate_fishbone_html(nodes, tree_edges, free_edges, output_path, focus=None, style='fishbone', title=None, annotations=None):
     theme = THEMES.get('timeline', THEMES['timeline'])
     node_widths = compute_node_widths(nodes, min_w=140, char_w=8, pad=36)
@@ -1061,7 +1402,7 @@ def main():
     parser.add_argument('input', help='DSL file path, or inline DSL text with --dsl')
     parser.add_argument('output', nargs='?', default=None, help='Output HTML path (default: same name as input)')
     parser.add_argument('--dsl', action='store_true', help='Treat input as inline DSL text')
-    parser.add_argument('--style', choices=['notebook', 'ancient', 'blueprint', 'timeline', 'roadmap', 'fishbone'], default=None,
+    parser.add_argument('--style', choices=['notebook', 'ancient', 'blueprint', 'timeline', 'roadmap', 'fishbone', 'mindmap'], default=None,
                         help='Visual style. Overrides DSL style= directive.')
     args = parser.parse_args()
 
@@ -1073,13 +1414,15 @@ def main():
             dsl_text = f.read()
         out = args.output or os.path.join(os.getcwd(), os.path.splitext(os.path.basename(args.input))[0] + '.html')
 
-    nodes, te, fe, focus, dsl_style, dsl_title, annotations = parse_dsl(dsl_text)
+    nodes, te, fe, focus, dsl_style, dsl_title, annotations, sides = parse_dsl(dsl_text)
     style = args.style or dsl_style or 'notebook'
 
     if style == 'timeline':
         generate_timeline_html(nodes, te, fe, out, focus=focus, style=style, title=dsl_title, annotations=annotations)
     elif style == 'roadmap':
         generate_roadmap_html(nodes, te, fe, out, focus=focus, style=style, title=dsl_title, annotations=annotations)
+    elif style == 'mindmap':
+        generate_mindmap_html(nodes, te, fe, out, focus=focus, style=style, title=dsl_title, annotations=annotations, sides=sides)
     elif style == 'fishbone':
         from dsl2fishbone import generate_fishbone_html as _gen_fishbone
         _gen_fishbone(nodes, te, fe, out, focus=focus, title=dsl_title, annotations=annotations)

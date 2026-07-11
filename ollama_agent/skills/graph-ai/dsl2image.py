@@ -23,6 +23,7 @@ def _parse_annotation(line):
 def parse_dsl(text):
     nodes, tree_edges, free_edges, focus = {}, [], [], None
     annotations = {}
+    sides = {}  # node_id -> 'Left' or 'Right' (for mindmap style)
     style = None
     title = None
     last_id = None
@@ -30,6 +31,10 @@ def parse_dsl(text):
         line = line.strip()
         if not line or line.startswith('#'):
             continue
+        # Check for format directive: format=1
+        m_fmt = re.match(r'^format\s*=\s*"?(\w+)"?\s*$', line, re.IGNORECASE)
+        if m_fmt:
+            continue  # format version, ignored for compatibility
         # Check for style directive: style=ancient or style="notebook"
         m_style = re.match(r'^style\s*=\s*"?(\w+)"?\s*$', line, re.IGNORECASE)
         if m_style:
@@ -53,6 +58,16 @@ def parse_dsl(text):
         if annotation is not None:
             # Annotation will be assigned to the node ID on this line
             pass
+        # Extract side tag: [Left] or [Right]
+        side = None
+        m_side = re.search(r'\[(Left|Right)\]', line, re.IGNORECASE)
+        if m_side:
+            side = m_side.group(1).capitalize()
+            line = line[:m_side.start()] + line[m_side.end():]
+            line = line.strip()
+            # Collapse multiple spaces
+            line = re.sub(r'\s+', ' ', line)
+
         m_free_lab = re.match(r'^(\w+)\s+"([^"]+)"\s*-->\s*(.+)$', line)
         m_free_id  = re.match(r'^(\w+)\s*-->\s*(.+)$', line)
         m_free_bare= re.match(r'^-->\s*(.+)$', line)
@@ -62,6 +77,7 @@ def parse_dsl(text):
             nodes[nid] = label; last_id = nid
             if is_focus: focus = nid
             if annotation: annotations[nid] = annotation
+            if side: sides[nid] = side
             for d in deps.split(','):
                 d = d.strip().lstrip('*')  # Strip focus marker from child IDs
                 if d: free_edges.append((nid, d))
@@ -71,6 +87,7 @@ def parse_dsl(text):
             last_id = nid
             if is_focus: focus = nid
             if annotation: annotations[nid] = annotation
+            if side: sides[nid] = side
             for d in deps.split(','):
                 d = d.strip().lstrip('*')  # Strip focus marker from child IDs
                 if d: free_edges.append((nid, d))
@@ -84,6 +101,7 @@ def parse_dsl(text):
             nodes[nid] = label; last_id = nid
             if is_focus: focus = nid
             if annotation: annotations[nid] = annotation
+            if side: sides[nid] = side
             if deps:
                 for d in deps.split(','):
                     d = d.strip().lstrip('*')  # Strip focus marker from child IDs
@@ -98,7 +116,7 @@ def parse_dsl(text):
                 if annotation: annotations[nid] = annotation
     for _, d in tree_edges + free_edges:
         if d not in nodes: nodes[d] = d
-    return nodes, tree_edges, free_edges, focus, style, title, annotations
+    return nodes, tree_edges, free_edges, focus, style, title, annotations, sides
 
 # ---------- Layout ----------
 
@@ -611,7 +629,7 @@ def main():
         with open(args.input, 'r', encoding='utf-8') as f: dsl_text = f.read()
         out = args.output or os.path.join(os.getcwd(), os.path.splitext(os.path.basename(args.input))[0] + '.png')
 
-    nodes, te, fe, focus, dsl_style, dsl_title, annotations = parse_dsl(dsl_text)
+        nodes, te, fe, focus, dsl_style, dsl_title, annotations, sides = parse_dsl(dsl_text)
     # CLI --style overrides DSL style=, DSL style= overrides default
     style = args.style or dsl_style or 'notebook'
     render_diagram(nodes, te, fe, out, focus=focus, style=style, title=dsl_title)

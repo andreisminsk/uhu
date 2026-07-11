@@ -49,12 +49,13 @@ def _get_skill_config(workdir=None):
 
 class GraphAiSkill(Skill):
     name = "graph-ai"
-    description = "Generate dependency/ancestry/timeline/fishbone diagrams from natural language descriptions using the graphai-dsl toolchain"
+    description = "Generate dependency/ancestry/timeline/fishbone/mindmap diagrams from natural language descriptions using the graphai-dsl toolchain"
     triggers = [
         "diagram", "dependency graph", "ancestry", "lineage", "fishbone",
         "ishikawa", "roadmap diagram", "timeline diagram", "draw diagram",
         "render diagram", "dependency tree", "visualize dependencies",
-        "generate diagram", "graph diagram",
+        "generate diagram", "graph diagram", "mindmap", "mind map",
+        "brainstorm diagram", "concept map",
     ]
 
     system_prompt = """\
@@ -70,8 +71,8 @@ CRITICAL — DO NOT WRITE DSL MANUALLY:
 
 Parameters (JSON object):
 - description (string, optional): Natural language text describing the diagram to create. Required for generating new diagrams.
-- dsl_file (string, optional): Path to an existing .dsl file to render (skip generation).
-- style (string, optional): Visual style — notebook, ancient, blueprint, timeline, roadmap, fishbone (default: auto-selected by desc2dsl based on content)
+- dsl_file (string, optional): Path to an existing .dsl or .mm file to render (skip generation). .mm files use the same DSL syntax — do NOT convert or rewrite them. Pass the file directly to the renderer.
+- style (string, optional): Visual style — notebook, ancient, blueprint, timeline, roadmap, fishbone, mindmap (default: auto-selected by desc2dsl based on content)
 - format (string, optional): Output format — png, html, or both (default: both)
 - output (string, optional): Output file BASE NAME only (no path, no directory) — e.g. "my-diagram". The skill automatically places all output files in the project working directory. Do NOT include a full path — just the name.
 - title (string, optional): Diagram title (default: auto-selected by style)
@@ -133,6 +134,10 @@ ID --> OtherID1, OtherID2
 # Annotation (hover tooltip in HTML)
 ID "Label" | "Tooltip text"
 
+# Side tag (mindmap only — forces branch to Left or Right side of root)
+ID "Label" [Left] -> Child1
+ID "Label" [Right] -> Child2
+
 # Comments
 # This is a comment
 ```
@@ -155,6 +160,7 @@ Rules:
 | timeline | Sequences, chronologies | HTML only | Horizontal timeline, alternating cards |
 | roadmap | Comparisons, categorizations | HTML only | Horizontal spine, 60° branching |
 | fishbone | Root-cause analysis (Ishikawa) | HTML only | Dot grid, diagonal bones |
+| mindmap | Brainstorming, concept maps, topic exploration | HTML only | Dark theme, horizontal radial, root centered with branches left/right |
 
 ### Workflow
 
@@ -200,12 +206,14 @@ Falls back to .env in the skill directory, then to built-in defaults.
 - dsl2html.py auto-dispatches to dsl2fishbone.py for fishbone style
 - All scripts accept inline DSL with --dsl flag (input is DSL text, not a file path)
 - ALL output files (.txt, .dsl, .png, .html) must be created in the WORKDIR, never in the skill directory
+- INPUT files (.dsl, .mm) can be anywhere — do NOT copy them to the workdir. The renderer accepts any file path.
 - The skill directory path is provided in the execution output — use it for all script invocations
+- When the skill provides exact RUN commands, use them verbatim — do NOT improvise your own commands
 """
 
     parameters = {
         "description": {"type": "string", "required": False, "description": "Natural language text describing the diagram to create"},
-        "dsl_file": {"type": "string", "required": False, "description": "Path to existing .dsl file to render (skip generation)"},
+        "dsl_file": {"type": "string", "required": False, "description": "Path to existing .dsl or .mm file to render (skip generation). .mm files use the same DSL syntax — do NOT convert them"},
         "style": {"type": "string", "required": False, "description": "Visual style: notebook, ancient, blueprint, timeline, roadmap, fishbone"},
         "format": {"type": "string", "required": False, "description": "Output format: png, html, or both (default: both)"},
         "output": {"type": "string", "required": False, "description": "Output file path without extension"},
@@ -309,10 +317,12 @@ Falls back to .env in the skill directory, then to built-in defaults.
             parts.append(f"Description to process:")
             parts.append(description)
         elif dsl_file:
-            parts.append("=== WORKFLOW: Render existing .dsl file ===")
+            parts.append("=== WORKFLOW: Render existing .dsl/.mm file ===")
             full_dsl = dsl_file if os.path.isabs(dsl_file) else os.path.join(wd, dsl_file)
             dsl_exists = os.path.isfile(full_dsl)
             parts.append(f"DSL file: {full_dsl} ({'found' if dsl_exists else 'NOT found!'})")
+            parts.append("IMPORTANT: .mm files are already in DSL format. Do NOT rewrite or convert them. Pass directly to the renderer.")
+            parts.append("Do NOT copy the input file to the workdir — the renderer accepts any file path. Use the exact RUN commands below.")
             if dsl_exists:
                 try:
                     with open(full_dsl, "r", encoding="utf-8", errors="replace") as f:

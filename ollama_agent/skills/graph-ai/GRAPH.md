@@ -17,6 +17,7 @@ Read the description carefully and determine which category it falls into:
 | **Comparison/Categorization** | "best for X", alternatives, "vs", categories, "top picks", "recommended" | `blueprint` or `roadmap` |
 | **Timeline/Process** | "then", "after", chronological order, phases, steps, "first…next…finally" | `timeline` |
 | **Cause-Effect/Root-Cause** | "causes", "leads to", "because of", fishbone/Ishikawa patterns | `fishbone` |
+| **Mindmap/Brainstorm** | "mindmap", "mind map", "brainstorm", "central topic", "branches from", "radial" | `mindmap` |
 
 ## Step 2: Choose the Style
 
@@ -29,6 +30,7 @@ Set the `style=` directive on the first line based on the content type above. If
 - `timeline` — horizontal timeline, alternating cards. Good for sequences, chronologies.
 - `roadmap` — horizontal spine with branching cards. Good for comparisons, categorizations, landscapes.
 - `fishbone` — Ishikawa diagram. Good for root-cause analysis.
+- `mindmap` — horizontal radial layout, root centered with branches left/right. Good for brainstorming, topic exploration, concept maps.
 
 ## Step 3: Structure the DSL
 

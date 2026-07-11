@@ -197,7 +197,7 @@ def main():
     else:
         with open(args.input, 'r', encoding='utf-8') as f: dsl_text = f.read()
         out = args.output or os.path.join(os.getcwd(), os.path.splitext(os.path.basename(args.input))[0] + '.html')
-    nodes, te, fe, focus, dsl_style, dsl_title, annotations = parse_dsl(dsl_text)
+    nodes, te, fe, focus, dsl_style, dsl_title, annotations, sides = parse_dsl(dsl_text)
     generate_fishbone_html(nodes, te, fe, out, focus=focus, title=dsl_title)
 
 
