@@ -266,7 +266,7 @@ uhu --workdir /path/to/project
 
 ### Disable autosave and file caching
 
-The tool saves sessions in ``.uhu/.sessions`` folder so that user can restore them using /restore command
+The tool saves sessions in ``.uhu/.sessions`` folder so that user can restore them using /restore command. Restoring a session inherits its name for future autosaves (e.g. restoring `MyProj1` → new autosaves become `MyProj1_YYYYMMDD_HHMM`).
 
 ```
 uhu --no-autosave --no-cache
@@ -323,7 +323,7 @@ uhu --no-autosave --no-cache
 | `/md <path>`                       | Create a directory                                                                                                                                           |
 | `/skills`                          | List available skills                                                                                                                                        |
 | `/save [name]`                     | Save session                                                                                                                                                 |
-| `/restore [name]`                  | Restore a saved session                                                                                                                                      |
+| `/restore [name\|number]`         | Restore a saved session (number = Nth newest, e.g. `/restore 1`)                                                                                            |
 | `/sessions`                        | List all saved sessions                                                                                                                                      |
 | `exit` / `/exit` / `/bye`          | Exit the session                                                                                                                                             |
 

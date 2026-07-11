@@ -57,6 +57,15 @@ class PersistenceMixin:
 
     def do_restore(self, name):
         name = name.strip()
+        # If name is a number, resolve it to the Nth session (1-based, newest first)
+        if name and name.isdigit():
+            sessions = self._list_sessions()
+            idx = int(name) - 1
+            if 0 <= idx < len(sessions):
+                name = sessions[idx]["name"]
+            else:
+                agent_print(f"[Invalid session number: {name}. {len(sessions)} session(s) available.]\n")
+                return
         if not name:
             sessions = self._list_sessions()
             if not sessions:
@@ -149,9 +158,25 @@ class PersistenceMixin:
             agent_print(f"[Restored: {name} ({len(self.history) - len([m for m in self.history if m['role'] == 'system'])} of {len(loaded)} messages, model: {saved_model})]")
             if saved_model != self.model:
                 agent_print(f"[⚠ Saved with '{saved_model}', currently '{self.model}']")
+            # Keep autosave name from restored session so derivatives inherit it
+            # Strip any existing timestamp suffix (e.g. MyProj1_20260710_2245 → MyProj1)
+            import re as _re
+            base_name = _re.sub(r'_\d{8}_\d{4}$', '', name)
+            self.autosave_name = f"{base_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
+            agent_print(f"[Autosave name set to: {self.autosave_name}]")
             agent_print()
             self.show_ctx()
             agent_print("[⚠️ Note: Context usage above is estimated. It will adjust to actual after your next message.]\n")
+            # Show last AI message for context
+            last_ai = None
+            for m in reversed(self.history):
+                if m["role"] == "assistant":
+                    last_ai = m["content"]
+                    break
+            if last_ai:
+                agent_print("[Last AI message:]\n")
+                print(last_ai)
+                agent_print("\n")
             self._log("system", f"[/restore {name}]")
         except Exception as e:
             self._log("system", f"[Restore failed: {e}]")
