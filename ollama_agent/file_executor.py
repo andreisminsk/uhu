@@ -234,11 +234,15 @@ class FileExecutor:
             return None
 
         try:
+            # Cache the original content before overwriting
+            file_url = self.cache.cache(path, original_content)
             os.makedirs(os.path.dirname(full_path) or ".", exist_ok=True)
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(current_content)
             total_lines = current_content.count('\n') + 1
             obs = f"[Edited: {path} ({len(edits_applied)} change(s) applied, {total_lines} lines)]"
+            if file_url:
+                obs += f" (cached: {file_url})"
             if failures:
                 warning = f"\n[WARNING: {len(failures)} search block(s) not found]"
                 obs += warning

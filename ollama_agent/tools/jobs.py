@@ -46,10 +46,8 @@ def _subprocess_worker(job, command, workdir):
         stderr=subprocess.STDOUT,
         cwd=workdir,
     )
-    if sys.platform == "win32":
-        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-    else:
-        kwargs["start_new_session"] = True
+    from ..platform import terminal
+    kwargs.update(terminal.subprocess_flags())
 
     proc = subprocess.Popen(command, **kwargs)
     progress_re = re.compile(r'\[?(\d+(?:\.\d+)?)%\]?')

@@ -32,8 +32,32 @@ class ActionMixin:
     # Safety gate — extracted to safety.py for testability
     _safety = CommandSafetyGate()
 
-    # Approval gate — extracted to approval.py for testability
-    _approval = None  # lazily initialized per-instance
+    # Approval gate — lazily initialized per-instance
+    _approval = None
+
+    # ── Approval state delegation ───────────────────────────────────────
+    # ApprovalGate is the single source of truth. These __getattr__/__setattr__
+    # hooks delegate legacy attribute names (auto_all, auto_writes, etc.) to
+    # the gate, so existing code and tests work without mirroring state.
+
+    _APPROVAL_ATTRS = frozenset({
+        'auto_all', 'auto_writes', 'always_writes',
+        'auto_run_prefixes', 'always_runs', '_skill_auto_approve',
+    })
+
+    def __getattr__(self, name):
+        # Only called when normal attribute lookup fails.
+        if name in self._APPROVAL_ATTRS:
+            return getattr(self._get_approval(), name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+    def __setattr__(self, name, value):
+        if name in self._APPROVAL_ATTRS:
+            approval = self.__dict__.get('_approval')
+            if approval is not None:
+                setattr(approval, name, value)
+                return
+        object.__setattr__(self, name, value)
 
     def _check_command_safety(self, cmd):
         """Check a command for safety. Delegates to CommandSafetyGate."""
@@ -60,36 +84,16 @@ class ActionMixin:
         return text[:limit] + f"\n[... {len(text)} chars total, truncated for display]"
 
     def _get_approval(self):
-        """Get or create the ApprovalGate for this instance."""
+        """Get the ApprovalGate (created eagerly in ChatSession.__init__)."""
         if self._approval is None:
             self._approval = ApprovalGate(self.workdir, quiet=getattr(self, 'quiet', False))
-            # Sync state from legacy attributes if they exist
-            if hasattr(self, 'auto_all'):
-                self._approval.auto_all = self.auto_all
-            if hasattr(self, 'auto_writes'):
-                self._approval.auto_writes = self.auto_writes
-            if hasattr(self, 'always_writes'):
-                self._approval.always_writes = self.always_writes
-            if hasattr(self, 'auto_run_prefixes'):
-                self._approval.auto_run_prefixes = self.auto_run_prefixes
-            if hasattr(self, 'always_runs'):
-                self._approval.always_runs = self.always_runs
-            if hasattr(self, '_skill_auto_approve'):
-                self._approval._skill_auto_approve = self._skill_auto_approve
         return self._approval
 
     def _confirm_or_auto(self, prompt, path=None, cmd=None, diff_text=None, force_confirm=False):
-        """Confirm an action. Delegates to ApprovalGate."""
-        gate = self._get_approval()
-        result = gate.confirm(prompt, path=path, cmd=cmd, diff_text=diff_text, force_confirm=force_confirm)
-        # Sync state back to legacy attributes
-        self.auto_all = gate.auto_all
-        self.auto_writes = gate.auto_writes
-        self.always_writes = gate.always_writes
-        self.auto_run_prefixes = gate.auto_run_prefixes
-        self.always_runs = gate.always_runs
-        self._skill_auto_approve = gate._skill_auto_approve
-        return result
+        """Confirm an action. Delegates to ApprovalGate (single source of truth)."""
+        return self._get_approval().confirm(
+            prompt, path=path, cmd=cmd, diff_text=diff_text, force_confirm=force_confirm
+        )
 
     def _coder_config_path(self):
         """Return the path to the project's persistent auto-approval config."""
@@ -97,18 +101,11 @@ class ActionMixin:
 
     def _load_coder_config(self):
         """Load persistent auto-approval settings. Delegates to ApprovalGate."""
-        gate = self._get_approval()
-        gate.load_config()
-        # Sync state back to legacy attributes
-        self.always_writes = gate.always_writes
-        self.always_runs = gate.always_runs
+        self._get_approval().load_config()
 
     def _save_coder_config(self):
         """Save persistent auto-approval settings. Delegates to ApprovalGate."""
-        gate = self._get_approval()
-        gate.always_writes = self.always_writes
-        gate.always_runs = self.always_runs
-        gate.save_config()
+        self._get_approval().save_config()
 
     # ── File executor delegation ────────────────────────────────────────
 
@@ -139,6 +136,43 @@ class ActionMixin:
     def _rollback_edits(self, modified, created):
         """Delegate to RollbackManager."""
         self._get_file_executor().rollback.rollback(modified, created)
+
+    def _pre_cache_tool_target(self, tool_name, params):
+        """Cache files that will be modified by file-modifying tools.
+
+        Caches the current content of the target file(s) before the tool
+        executes, so previous versions are preserved in .uhu/.cache/.
+        """
+        cache = self._get_file_executor().cache
+        if not cache.enabled:
+            return
+
+        paths_to_cache = []
+        if tool_name == "write_file":
+            paths_to_cache.append(params.get("path", ""))
+        elif tool_name == "replace_in_file":
+            paths_to_cache.append(params.get("path", ""))
+        elif tool_name == "move_file":
+            # Cache source (will be removed) and destination (will be overwritten)
+            paths_to_cache.append(params.get("source", ""))
+            paths_to_cache.append(params.get("destination", ""))
+        elif tool_name == "copy_file":
+            # Cache destination (will be overwritten)
+            paths_to_cache.append(params.get("destination", ""))
+
+        for path in paths_to_cache:
+            if not path:
+                continue
+            full_path = os.path.join(self.workdir, path) if not os.path.isabs(path) else path
+            if os.path.isfile(full_path):
+                try:
+                    with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()
+                    file_url = cache.cache(path, content)
+                    if file_url:
+                        agent_print(f"[Pre-cached: {path} -> {file_url}]\n")
+                except Exception:
+                    pass
 
     def execute_write(self, action):
         """Execute a WRITE action. Delegates to FileExecutor."""
@@ -235,6 +269,11 @@ class ActionMixin:
                 )
                 agent_print(msg + "\n")
                 return msg
+        # Pre-cache files that will be modified by file-modifying tools
+        _FILE_MODIFYING_TOOLS = {"write_file", "replace_in_file", "move_file", "copy_file"}
+        if tool_name in _FILE_MODIFYING_TOOLS and self.cache_files:
+            self._pre_cache_tool_target(tool_name, params)
+
         try:
             result = tool.execute(params, workdir=self.workdir)
             msg = f"[TOOL {tool_name}]: {result}"

@@ -13,6 +13,7 @@ import time
 
 from .display import agent_print
 from .process import kill_proc_tree
+from .platform import terminal
 from .safety import CommandSafetyGate, get_base_command
 
 
@@ -137,14 +138,7 @@ class CommandRunner:
         proc = None
         killed = False
 
-        _fallback_encoding = None
-        if sys.platform == "win32":
-            try:
-                import ctypes as _ctypes
-                _oem_cp = _ctypes.windll.kernel32.GetOEMCP()
-                _fallback_encoding = f'cp{_oem_cp}'
-            except Exception:
-                pass
+        _fallback_encoding = terminal.fallback_encoding()
 
         def _decode_line(raw_line):
             try:
@@ -161,10 +155,7 @@ class CommandRunner:
         try:
             kwargs = dict(shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                           cwd=workdir)
-            if sys.platform == "win32":
-                kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-            else:
-                kwargs["start_new_session"] = True
+            kwargs.update(terminal.subprocess_flags())
             agent_print("[Running — Ctrl+C to kill]\n")
             proc = subprocess.Popen(cmd, **kwargs)
 

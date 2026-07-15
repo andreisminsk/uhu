@@ -30,16 +30,8 @@ def show_diff_colored(diff_text):
     if not diff_text or diff_text == "(no changes)":
         print("[No changes]\n")
         return
-    if sys.platform == "win32":
-        try:
-            import ctypes
-            kernel32 = ctypes.windll.kernel32
-            handle = kernel32.GetStdHandle(-11)
-            mode = ctypes.c_ulong()
-            kernel32.GetConsoleMode(handle, ctypes.byref(mode))
-            kernel32.SetConsoleMode(handle, mode.value | 0x0004)
-        except Exception:
-            pass
+    from .platform import terminal
+    terminal.enable_ansi()
     use_color = sys.stdout.isatty()
     for line in diff_text.splitlines():
         if use_color:

@@ -140,7 +140,8 @@ SAFE_SHELL_COMMANDS_WINDOWS = {
 }
 
 # Select the appropriate set for the current platform
-SAFE_SHELL_COMMANDS = SAFE_SHELL_COMMANDS_WINDOWS if sys.platform == 'win32' else SAFE_SHELL_COMMANDS_UNIX
+from .platform import terminal as _terminal
+SAFE_SHELL_COMMANDS = _terminal.safe_commands
 
 # Commands that are ALWAYS blocked — never executed, even with auto-approve.
 # These are destructive and have no legitimate use in an agentic coder workflow.
@@ -153,7 +154,7 @@ BLOCKED_COMMANDS_WINDOWS = {
     'shutdown', 'format', 'del /s /q c:', 'del /s /q C:',
     'rmdir /s /q c:', 'rmdir /s /q C:',
 }
-BLOCKED_COMMANDS = BLOCKED_COMMANDS_WINDOWS if sys.platform == 'win32' else BLOCKED_COMMANDS_UNIX
+BLOCKED_COMMANDS = _terminal.blocked_commands
 
 # Commands that always require explicit user confirmation, even with auto-approve.
 # These are potentially destructive but may have legitimate uses.
@@ -168,7 +169,7 @@ WARNING_COMMANDS_WINDOWS = {
     'pip uninstall', 'npm uninstall',
     'git push', 'git reset --hard', 'git clean',
 }
-WARNING_COMMANDS = WARNING_COMMANDS_WINDOWS if sys.platform == 'win32' else WARNING_COMMANDS_UNIX
+WARNING_COMMANDS = _terminal.warning_commands
 
 # Tools that are always auto-approved (read-only, no side effects, no network calls).
 # These skip the confirmation prompt entirely, similar to safe shell commands.
@@ -324,49 +325,13 @@ MAX_FEEDBACK_ROUNDS = 3
 
 def get_platform_info():
     """Return a dict with platform-specific info: shell_lang, platform_label, shell_label."""
-    if sys.platform == 'win32':
-        return {
-            'shell_lang': 'cmd',
-            'platform_label': 'win32',
-            'shell_label': 'cmd/powershell',
-        }
-    else:
-        return {
-            'shell_lang': 'bash',
-            'platform_label': sys.platform,
-            'shell_label': 'bash/sh',
-        }
+    return {
+        'shell_lang': _terminal.shell_lang,
+        'platform_label': _terminal.platform_label,
+        'shell_label': _terminal.shell_label,
+    }
 
 
 def get_platform_shell_guidance():
     """Return platform-specific shell and command guidance for the system prompt."""
-    from datetime import date
-    info = get_platform_info()
-    today = date.today().isoformat()
-    if sys.platform == 'win32':
-        return (
-            "\n\n"
-f"Platform: {info['platform_label']} | Shell: {info['shell_label']} | OS: {info['platform_label']} | Current date: {today}\n\n"
-            "SHELL AND COMMAND GUIDELINES FOR WINDOWS:\n"
-            "- You are running on Windows. Use Windows-native commands in RUN blocks.\n"
-            "- Use `dir` instead of `ls`\n"
-            "- Use `type` instead of `cat`\n"
-            "- Use `findstr` instead of `grep`\n"
-            "- Use `where` instead of `which` or `command -v`\n"
-            "- Use `set` instead of `env` or `printenv`\n"
-            "- Use `ver` instead of `uname`\n"
-            "- Use `fc` instead of `diff`\n"
-            "- Use `dir /s /b` or `tree /F` instead of `find` for locating files\n"
-            "- Use backslashes or forward slashes in paths (both work on Windows)\n"
-            "- Use `cmd` or `powershell` as the RUN fence language\n"
-            "- Do NOT use bash, sh, or Unix-only commands unless running under WSL\n"
-        )
-    else:
-        return (
-            "\n\n"
-f"Platform: {info['platform_label']} | Shell: {info['shell_label']} | OS: {info['platform_label']} | Current date: {today}\n\n"
-            "SHELL AND COMMAND GUIDELINES FOR UNIX:\n"
-            "- You are running on a Unix-like system. Use standard Unix commands in RUN blocks.\n"
-            "- Use `bash` or `sh` as the RUN fence language\n"
-            "- Standard commands available: ls, cat, grep, find, which, head, tail, diff, wc, etc.\n"
-        )
+    return _terminal.shell_guidance()

@@ -2,9 +2,8 @@
 
 import os
 import re
-import sys
 
-from .constants import SAFE_SHELL_COMMANDS, BLOCKED_COMMANDS, WARNING_COMMANDS
+from .platform import terminal
 
 
 class CommandSafetyGate:
@@ -34,14 +33,6 @@ class CommandSafetyGate:
         re.compile(r'\brmdir\s+/s\s+/q\s+[cC]:', re.IGNORECASE),
     ]
 
-    _WARNING_BASE_COMMANDS_UNIX = {
-        'rm', 'rmdir', 'chmod', 'chown', 'kill', 'killall',
-        'apt', 'apt-get', 'yum', 'dnf', 'brew',
-        'systemctl', 'service',
-    }
-    _WARNING_BASE_COMMANDS_WINDOWS = {
-        'del', 'rmdir', 'taskkill', 'sc', 'net', 'netsh',
-    }
     _WARNING_SUBSTRINGS = {
         'pip uninstall', 'npm uninstall',
         'git push', 'git reset --hard', 'git clean',
@@ -49,9 +40,7 @@ class CommandSafetyGate:
 
     def warning_base_commands(self):
         """Return platform-appropriate warning base commands set."""
-        if sys.platform == 'win32':
-            return self._WARNING_BASE_COMMANDS_WINDOWS
-        return self._WARNING_BASE_COMMANDS_UNIX
+        return terminal.warning_base_commands
 
     def check(self, cmd):
         """Check a command for safety. Returns (level, message)."""
@@ -60,10 +49,10 @@ class CommandSafetyGate:
                 return ('blocked', f"Command blocked for safety: {cmd[:80]}")
 
         base = get_base_command(cmd)
-        if base in BLOCKED_COMMANDS:
+        if base in terminal.blocked_commands:
             return ('blocked', f"Command blocked for safety: {cmd[:80]}")
 
-        if base in WARNING_COMMANDS or base in self.warning_base_commands():
+        if base in terminal.warning_commands or base in self.warning_base_commands():
             return ('warning', f"Destructive command requires confirmation: {cmd[:80]}")
         for substr in self._WARNING_SUBSTRINGS:
             if substr in cmd.lower():
@@ -79,7 +68,7 @@ class CommandSafetyGate:
         if self._SHELL_OPERATORS.search(cmd):
             return False
         base = get_base_command(cmd)
-        return base in SAFE_SHELL_COMMANDS
+        return base in terminal.safe_commands
 
 
 def get_base_command(cmd):

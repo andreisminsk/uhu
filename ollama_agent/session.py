@@ -16,8 +16,8 @@ from .actions import agent_print, tool_print
 from .llm_client import LLMClient
 from .parser import parse_actions
 from .input_utils import read_full_input, _reconfigure_stdout
-from . import input_utils as _iu
-from .commands import CommandMixin
+from .platform import terminal
+from .commands import CommandMixin, DISPATCH_CONTINUE, DISPATCH_BREAK
 from .actions import ActionMixin
 from .persistence import PersistenceMixin
 
@@ -46,12 +46,10 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.history = []
         self.pending_content = []
         self.pending_embeds = []
-        self.auto_all = False
-        self.auto_writes = set()
-        self.auto_run_prefixes = set()
-        self.always_writes = set()
-        self.always_runs = set()
-        self._skill_auto_approve = False
+        # ApprovalGate is the single source of truth for auto-approval state.
+        # Legacy attribute access (self.auto_all, etc.) is delegated via __getattr__/__setattr__.
+        from .approval import ApprovalGate
+        self._approval = ApprovalGate(self.workdir, quiet=self.quiet)
         self._active_skill = None
         self.show_diff = False
         self.cache_files = cache_files
@@ -129,7 +127,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             self.log_file.write(f"{'='*60}\n\n")
             self.log_file.flush()
         logger.info("Session started | model=%s | ctx=%d | agent=%s | stream=%s | tools=%s | skills=%s | thinking=%s",
-                     self.model, self.ctx_size, self.agent, self.stream, self.tools, self.skills, self.thinking)
+                    self.model, self.ctx_size, self.agent, self.stream, self.tools, self.skills, self.thinking)
 
     def _log(self, role, content):
         if self.log_file:
@@ -458,7 +456,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     # Model is stuck on last round — skip to max rounds message
                     continue
                 else:
-                    agent_print("✓ Done — no more actions\n")
+                    agent_print("AGENT: Done — no more actions\n")
                     return
             self._log("system", obs)
             self.history.append({"role": "user", "content": obs})
@@ -511,7 +509,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             self._log("system", obs)
             self.history.append({"role": "user", "content": obs})
         self.history.append({"role": "assistant", "content": "Noted."})
-        agent_print(f"⚠  Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
+        agent_print(f"AGENT: Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
 
     def _send(self, message, images=None, max_rounds=MAX_FEEDBACK_ROUNDS):
         self._log("user", message)
@@ -595,7 +593,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         try:
             while True:
                 try:
-                    user_input = read_full_input("You: ", multiline=True, color=ANSI_LIGHT_GRAY).strip()
+                    _input_result = read_full_input("You: ", multiline=True, color=ANSI_LIGHT_GRAY)
+                    user_input = _input_result.strip()
+                    _was_paste = getattr(_input_result, 'was_paste', False)
                     if user_input:
                         logger.debug("User input: %s", user_input[:100])
                 except (KeyboardInterrupt, EOFError):
@@ -619,117 +619,26 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     elif self.pending_embeds:
                         agent_print("[Image(s) embedded — type your question and press Enter to send]\n")
                     continue
-                if user_input.count("\n") >= 1 and _iu._last_input_was_paste:
+                if user_input.count("\n") >= 1 and _was_paste:
                     line_count = user_input.count("\n") + 1
-                    if sys.platform != "win32":
-                        for _ in range(line_count):
-                            sys.stdout.write("\033[A\033[2K")
-                        sys.stdout.write("\r")
-                        sys.stdout.flush()
-                    else:
+                    # Paste erasure is now handled inside read_full_input
+                    # (cursor-up + clear-to-end-of-screen), because readline
+                    # clobbers DECSC/DECRC cursor save/restore used here.
+                    # On Windows, erasure is still handled below.
+                    if terminal.is_windows:
                         sys.stdout.write("\033[A\033[2K\rYou: ")
                         sys.stdout.flush()
-                    # Sanitize pasted text to prevent UnicodeEncodeError
-                    # from lone surrogates (can happen with msvcrt.getwch()
-                    # on Windows for non-BMP characters like emoji)
-                    try:
-                        user_input.encode('utf-8')
-                    except UnicodeEncodeError:
-                        user_input = user_input.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
-                        agent_print("[Note: Some characters were replaced due to encoding issues]\n")
+                    # Control characters and lone surrogates are already
+                    # stripped by _sanitize_input in read_full_input.
                     self.pending_content.append(f"[Pasted text ({line_count} lines)]\n{user_input}")
                     agent_print(f"[Pasted text ({line_count} lines)]\n")
                     continue
-                if user_input.lower() in ("exit", "/exit", "/bye", "bye"):
-                    logger.info("Session ending (user exit)")
-                    if not self.autosave:
-                        msgs = [m for m in self.history if m["role"] != "system"]
-                        if msgs:
-                            try:
-                                ans = read_full_input("Exit without saving? (y/N): ").strip().lower()
-                            except (KeyboardInterrupt, EOFError):
-                                ans = "y"
-                            if ans != "y":
-                                agent_print("[Cancelled — use /save to save first]\n")
-                                continue
-                    agent_print("Bye.")
+                result = self._dispatch_command(user_input)
+                if result == DISPATCH_BREAK:
                     break
-                if user_input.lower() in ("reset", "/reset"):
-                    sys_msgs = [m for m in self.history if m["role"] == "system"]
-                    self.history.clear()
-                    self.history.extend(sys_msgs)
-                    self.pending_content.clear()
-                    self._log("system", "[reset]")
-                    agent_print("[Context cleared]\n")
+                if result == DISPATCH_CONTINUE:
                     continue
-                if user_input.lower() in ("history", "/history"):
-                    self.show_ctx()
-                    continue
-                if user_input.lower() == "/compact" or user_input.lower().startswith("/compact "):
-                    self.do_compact(user_input[8:].strip())
-                    self.do_sober()
-                    continue
-                if user_input.lower() in ("/v", "/ver", "/version"):
-                    self.do_version()
-                    continue
-                if user_input.lower() == "/sober":
-                    self.do_sober()
-                    continue
-                if user_input.lower().startswith("/auto"):
-                    self.do_auto(user_input[5:])
-                    continue
-                if user_input.lower() == "/diff":
-                    self.show_diff = not self.show_diff
-                    agent_print(f"[Diff display: {'ON' if self.show_diff else 'OFF'}]\n")
-                    continue
-                if user_input.lower().startswith("/memorize"):
-                    self.do_memorize(user_input[9:].strip())
-                    continue
-                if user_input.lower() == "/help":
-                    self.do_help()
-                    continue
-                if user_input.lower() in ("/m", "/multiline"):
-                    ml_text = self.do_multiline()
-                    if ml_text:
-                        text, images = self._build_message(ml_text)
-                        self._send(text, images=images)
-                    continue
-                if user_input.lower().startswith("/embed-bin"):
-                    self.do_embed_bin(user_input[10:])
-                    continue
-                if user_input.lower().startswith("/attach-bin"):
-                    self.do_attach_bin(user_input[11:])
-                    continue
-                if user_input.lower().startswith("/attach"):
-                    self.do_attach(user_input[7:])
-                    continue
-                if user_input.lower().startswith("/search"):
-                    self.do_search(user_input[7:])
-                    continue
-                if user_input.lower().startswith("/peek"):
-                    self.do_peek(user_input[5:])
-                    continue
-                if user_input.lower().startswith("/ls"):
-                    self.do_ls(user_input[3:])
-                    continue
-                if user_input.lower().startswith("/md"):
-                    self.do_md(user_input[3:])
-                    continue
-                if user_input.lower().startswith("/save"):
-                    self.do_save(user_input[5:])
-                    continue
-                if user_input.lower().startswith("/restore"):
-                    self.do_restore(user_input[8:])
-                    continue
-                if user_input.lower() == "/sessions":
-                    self.do_sessions()
-                    continue
-                if user_input.lower() == "/skills":
-                    self.do_skills()
-                    continue
-                if user_input.lower() == "/jobs":
-                    self.do_jobs()
-                    continue
+                # Fall through: not a command — send to model
                 # Reset skill auto-approve for new substantive user messages.
                 # Short continuations like "?" after max feedback rounds keep the flag.
                 if len(user_input.strip()) > 2:

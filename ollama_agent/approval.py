@@ -119,8 +119,12 @@ class ApprovalGate:
                         return True
             try:
                 ans = read_full_input(f"{prompt} (y/N/auto/all/always/d): ", color=ANSI_AGENT).strip().lower()
-            except (KeyboardInterrupt, EOFError):
+            except EOFError:
                 return False
+            # KeyboardInterrupt propagates up to _feedback_loop which handles
+            # it gracefully — printing "[Feedback interrupted]" and returning
+            # to the prompt. Catching it here would silently treat Ctrl+C as
+            # "No" instead of interrupting.
             if ans in ("y", "yes"):
                 return True
             elif ans in ("n", "no"):

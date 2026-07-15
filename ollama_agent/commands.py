@@ -1,11 +1,19 @@
 """Slash-command handlers for ChatSession."""
 
+import logging
 import os
 import re
 import sys
 
 from .constants import MIME_TYPES, IMAGE_MIME_TYPES, SKIP_EXT, MODEL_TEMPERATURE
 from .actions import agent_print
+from .input_utils import read_full_input
+
+logger = logging.getLogger(__name__)
+
+# Sentinels for command dispatch return values
+DISPATCH_CONTINUE = "continue"
+DISPATCH_BREAK = "break"
 
 
 class CommandMixin:
@@ -151,7 +159,38 @@ class CommandMixin:
             )
 
     def do_multiline(self):
+        """Enter multiline mode using prompt_toolkit for rich editing.
+
+        Falls back to the legacy readline-based loop if prompt_toolkit is
+        unavailable or stdin is not a tty.
+        """
+        from .input_utils import _try_prompt_toolkit_input
+
         agent_print("[Multiline mode — type freely, Enter on empty line or /end to submit, Ctrl+C to cancel]")
+
+        # Try prompt_toolkit first (rich editing, history, arrow keys)
+        if sys.stdin.isatty():
+            try:
+                result = _try_prompt_toolkit_input(">>> ", multiline_mode="free_form")
+                if result is not None:
+                    # Strip trailing /end if present
+                    result = result.rstrip()
+                    if result.endswith("/end"):
+                        result = result[:-4].rstrip()
+                    if not result:
+                        agent_print("[Empty input]\n")
+                        return None
+                    line_count = result.count("\n") + 1
+                    agent_print(f"[Multiline: {line_count} line(s)]\n")
+                    return result
+            except KeyboardInterrupt:
+                agent_print("\n[Cancelled]\n")
+                return None
+            except EOFError:
+                agent_print("\n[Cancelled]\n")
+                return None
+
+        # Fallback: legacy readline-based loop (non-tty or no prompt_toolkit)
         lines = []
         while True:
             try:
@@ -742,3 +781,171 @@ class CommandMixin:
             agent_print("  (no specific auto-approvals)")
         agent_print(f"  Config: {self._coder_config_path()}")
         agent_print()
+
+    # ── Command dispatch table ──────────────────────────────────────────
+    # Replaces the if-elif chain in session.run() with a declarative table.
+    # Exact matches are checked first, then prefix matches (sorted by prefix
+    # length DESCENDING to prevent collisions: /attach-bin before /attach).
+
+    _EXACT_COMMANDS = {
+        "exit": "_cmd_exit", "/exit": "_cmd_exit", "/bye": "_cmd_exit", "bye": "_cmd_exit",
+        "reset": "_cmd_reset", "/reset": "_cmd_reset",
+        "history": "_cmd_history", "/history": "_cmd_history",
+        "/v": "_cmd_version", "/ver": "_cmd_version", "/version": "_cmd_version",
+        "/sober": "_cmd_sober", "/diff": "_cmd_diff", "/help": "_cmd_help",
+        "/m": "_cmd_multiline", "/multiline": "_cmd_multiline",
+        "/sessions": "_cmd_sessions", "/skills": "_cmd_skills", "/jobs": "_cmd_jobs",
+        "/compact": "_cmd_compact",
+    }
+
+    _PREFIX_COMMANDS = [
+        ("/attach-bin", "_cmd_attach_bin", 11),
+        ("/embed-bin", "_cmd_embed_bin", 10),
+        ("/memorize", "_cmd_memorize", 9),
+        ("/compact ", "_cmd_compact", 8),
+        ("/restore", "_cmd_restore", 8),
+        ("/attach", "_cmd_attach", 7),
+        ("/search", "_cmd_search", 7),
+        ("/auto", "_cmd_auto", 5),
+        ("/peek", "_cmd_peek", 5),
+        ("/save", "_cmd_save", 5),
+        ("/ls", "_cmd_ls", 3),
+        ("/md", "_cmd_md", 3),
+    ]
+
+    def _dispatch_command(self, user_input):
+        """Try to dispatch user_input as a slash command.
+
+        Returns:
+            DISPATCH_CONTINUE if a command was handled (continue the loop).
+            DISPATCH_BREAK if the session should exit.
+            None if input is not a command (fall through to send to model).
+        """
+        lower = user_input.lower()
+
+        # Exact match first
+        method_name = self._EXACT_COMMANDS.get(lower)
+        if method_name is not None:
+            return getattr(self, method_name)("")
+
+        # Prefix match (sorted by length desc to avoid collisions)
+        for prefix, method_name, offset in self._PREFIX_COMMANDS:
+            if lower.startswith(prefix):
+                return getattr(self, method_name)(user_input[offset:])
+
+        return None
+
+    # ── Command wrapper methods ─────────────────────────────────────────
+
+    def _cmd_exit(self, args):
+        logger.info("Session ending (user exit)")
+        if not self.autosave:
+            msgs = [m for m in self.history if m["role"] != "system"]
+            if msgs:
+                try:
+                    ans = read_full_input("Exit without saving? (y/N): ").strip().lower()
+                except (KeyboardInterrupt, EOFError):
+                    ans = "y"
+                if ans != "y":
+                    agent_print("[Cancelled — use /save to save first]\n")
+                    return DISPATCH_CONTINUE
+        agent_print("Bye.")
+        return DISPATCH_BREAK
+
+    def _cmd_reset(self, args):
+        sys_msgs = [m for m in self.history if m["role"] == "system"]
+        self.history.clear()
+        self.history.extend(sys_msgs)
+        self.pending_content.clear()
+        self._log("system", "[reset]")
+        agent_print("[Context cleared]\n")
+        return DISPATCH_CONTINUE
+
+    def _cmd_history(self, args):
+        self.show_ctx()
+        return DISPATCH_CONTINUE
+
+    def _cmd_version(self, args):
+        self.do_version()
+        return DISPATCH_CONTINUE
+
+    def _cmd_sober(self, args):
+        self.do_sober()
+        return DISPATCH_CONTINUE
+
+    def _cmd_diff(self, args):
+        self.show_diff = not self.show_diff
+        agent_print(f"[Diff display: {'ON' if self.show_diff else 'OFF'}]\n")
+        return DISPATCH_CONTINUE
+
+    def _cmd_help(self, args):
+        self.do_help()
+        return DISPATCH_CONTINUE
+
+    def _cmd_multiline(self, args):
+        ml_text = self.do_multiline()
+        if ml_text:
+            text, images = self._build_message(ml_text)
+            self._send(text, images=images)
+        return DISPATCH_CONTINUE
+
+    def _cmd_compact(self, args):
+        self.do_compact(args.strip())
+        self.do_sober()
+        return DISPATCH_CONTINUE
+
+    def _cmd_sessions(self, args):
+        self.do_sessions()
+        return DISPATCH_CONTINUE
+
+    def _cmd_skills(self, args):
+        self.do_skills()
+        return DISPATCH_CONTINUE
+
+    def _cmd_jobs(self, args):
+        self.do_jobs()
+        return DISPATCH_CONTINUE
+
+    def _cmd_auto(self, args):
+        self.do_auto(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_memorize(self, args):
+        self.do_memorize(args.strip())
+        return DISPATCH_CONTINUE
+
+    def _cmd_embed_bin(self, args):
+        self.do_embed_bin(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_attach_bin(self, args):
+        self.do_attach_bin(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_attach(self, args):
+        self.do_attach(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_search(self, args):
+        self.do_search(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_peek(self, args):
+        self.do_peek(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_ls(self, args):
+        self.do_ls(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_md(self, args):
+        self.do_md(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_save(self, args):
+        self.do_save(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_restore(self, args):
+        self.do_restore(args)
+        return DISPATCH_CONTINUE

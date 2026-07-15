@@ -51,6 +51,11 @@ class PersistenceMixin:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             agent_print(f"[Saved: {path} ({len(msgs)} messages)]\n")
             self._log("system", f"[/save {name}]")
+            # Update autosave name so subsequent autosaves use this name as base
+            # Strip any existing timestamp suffix (e.g. MyProj_20260710_2245 → MyProj)
+            import re as _re
+            base_name = _re.sub(r'_\d{8}_\d{4}$', '', name)
+            self.autosave_name = f"{base_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
         except Exception as e:
             self._log("system", f"[Save failed: {e}]")
             agent_print(f"[Save failed: {e}]\n")
