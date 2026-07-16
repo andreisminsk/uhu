@@ -99,14 +99,13 @@ class CommandMixin:
             "  /v, /ver, /version           Show version\n"
             "  /sober                       Re-inject system prompt to refocus the model\n"
             "  /compact                     Summarize history into a compact briefing\n"
+            "  /compact memory [project|agent]   Compact memory file using LLM\n"
             "  /auto                        Toggle auto-all mode / show approval settings\n"
             "  /auto reset                  Clear session auto-approvals\n"
             "  /auto reset always           Clear persistent (always) approvals\n"
             "  /auto reset all              Clear both session and persistent approvals\n"
             "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
             "  /memorize [project|agent] <text>  Add entry to permanent memory\n"
-            "  /sober                       Re-inject system prompt to refocus the model\n"
-            "  /compact memory [project|agent]   Compact memory file using LLM\n"
             "\n"
             "  /m, /multiline               Enter multiline mode (empty line or /end to submit)\n"
             "  /attach <path|glob|dir> [L<start>-<end>]\n"
@@ -115,12 +114,13 @@ class CommandMixin:
             "  /embed-bin <path>            Embed image directly into next message (for vision models)\n"
             "  /search <pattern> <glob>     Grep for pattern across files\n"
             "  /peek <path>                 Show head+tail of a file\n"
+            "  /cat <path>                  Dump text file content to console\n"
             "  /ls [path]                   List directory contents\n"
+            "  /tree [plain]                Show directory tree (plain = flat relative paths)\n"
             "  /md <path>                   Create a directory\n"
             "\n"
             "  /skills                      List available skills\n"
             "  /jobs                        List all background jobs\n"
-            "  /diff                        Toggle auto-diff for edits\n"
             "\n"
             "  /save [name]                 Save session\n"
             "  /restore [name|number]        Restore a saved session\n"
@@ -549,6 +549,41 @@ class CommandMixin:
         except Exception as e:
             agent_print(f"[Peek failed: {e}]\n")
 
+    def do_cat(self, args_str):
+        """Dump file content to console like Unix cat. Shows error for non-text files."""
+        raw = args_str.strip()
+        if (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'")):
+            raw = raw[1:-1]
+        path = os.path.expanduser(raw)
+        if not os.path.isabs(path):
+            path = os.path.join(self.workdir, path)
+        if not path:
+            agent_print("[Usage: /cat <path>]\n")
+            return
+        if not os.path.isfile(path):
+            agent_print(f"[File not found: {path}]\n")
+            return
+        # Check extension against known binary types
+        _, ext = os.path.splitext(path)
+        if ext.lower() in SKIP_EXT:
+            agent_print(f"[Error: {os.path.basename(path)} appears to be a binary file ({ext}) — use /attach-bin instead]\n")
+            return
+        try:
+            with open(path, "rb") as f:
+                raw_bytes = f.read(8192)
+            # Check for null bytes (strong indicator of binary content)
+            if b"\x00" in raw_bytes:
+                agent_print(f"[Error: {os.path.basename(path)} contains binary data — use /attach-bin instead]\n")
+                return
+            # Try decoding as UTF-8
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            agent_print(content, end="" if content.endswith("\n") else "\n")
+        except UnicodeDecodeError:
+            agent_print(f"[Error: {os.path.basename(path)} is not a valid text file (UTF-8 decode failed) — use /attach-bin instead]\n")
+        except Exception as e:
+            agent_print(f"[Error reading {path}: {e}]\n")
+
     def do_ls(self, args_str):
         raw = args_str.strip()
         if (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'")):
@@ -579,6 +614,74 @@ class CommandMixin:
         for line in lines:
             agent_print(f"  {line}")
         agent_print()
+
+    def do_tree(self, args_str):
+        """Show directory tree. Use 'plain' for flat relative paths."""
+        raw = args_str.strip()
+        plain = raw.lower() == "plain"
+        path = self.workdir
+        # Skip common noise directories
+        skip_dirs = {".git", "__pycache__", "node_modules", ".uhu", ".venv", "venv", ".idea", ".vs"}
+        try:
+            if plain:
+                # Flat list of relative paths
+                entries = []
+                for root, dirs, files in os.walk(path):
+                    dirs[:] = [d for d in dirs if d not in skip_dirs]
+                    for f in files:
+                        full = os.path.join(root, f)
+                        rel = os.path.relpath(full, path).replace("\\", "/")
+                        entries.append(rel)
+                entries.sort()
+                if not entries:
+                    agent_print("[Empty directory]\n")
+                    return
+                agent_print(f"[{path}] ({len(entries)} files, plain)")
+                for e in entries:
+                    agent_print(f"  {e}")
+                agent_print()
+            else:
+                # Hierarchical tree
+                lines = []
+                dir_count = 0
+                file_count = 0
+
+                def _build_tree(cur_path, prefix):
+                    nonlocal dir_count, file_count
+                    try:
+                        entries = sorted(os.listdir(cur_path))
+                    except PermissionError:
+                        lines.append(f"{prefix}[permission denied]")
+                        return
+                    dirs = []
+                    files = []
+                    for name in entries:
+                        full = os.path.join(cur_path, name)
+                        if os.path.isdir(full):
+                            if name not in skip_dirs:
+                                dirs.append(name)
+                        else:
+                            files.append(name)
+                    items = [(d + "/", True) for d in dirs] + [(f, False) for f in files]
+                    for i, (name, is_dir) in enumerate(items):
+                        is_last = (i == len(items) - 1)
+                        connector = "└── " if is_last else "├── "
+                        lines.append(f"{prefix}{connector}{name}")
+                        if is_dir:
+                            dir_count += 1
+                            extension = "    " if is_last else "│   "
+                            _build_tree(os.path.join(cur_path, name), prefix + extension)
+                        else:
+                            file_count += 1
+
+                lines.append(os.path.basename(path) + "/")
+                _build_tree(path, "")
+                agent_print(f"[{path}] ({dir_count} dirs, {file_count} files)")
+                for line in lines:
+                    agent_print(f"  {line}")
+                agent_print()
+        except Exception as e:
+            agent_print(f"[Tree failed: {e}]\n")
 
     def do_md(self, args_str):
         raw = args_str.strip()
@@ -808,6 +911,8 @@ class CommandMixin:
         ("/search", "_cmd_search", 7),
         ("/auto", "_cmd_auto", 5),
         ("/peek", "_cmd_peek", 5),
+        ("/cat", "_cmd_cat", 4),
+        ("/tree", "_cmd_tree", 5),
         ("/save", "_cmd_save", 5),
         ("/ls", "_cmd_ls", 3),
         ("/md", "_cmd_md", 3),
@@ -932,6 +1037,14 @@ class CommandMixin:
 
     def _cmd_peek(self, args):
         self.do_peek(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_cat(self, args):
+        self.do_cat(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_tree(self, args):
+        self.do_tree(args)
         return DISPATCH_CONTINUE
 
     def _cmd_ls(self, args):

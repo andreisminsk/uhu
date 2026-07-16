@@ -10,8 +10,8 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 ## Features
 
 - **Agent mode** (`--agent`): Parse and execute WRITE/EDIT/RUN/FILE blocks from model output
-- **Tools mode** (on by default, `--no-tools` to disable): 20 structured tool calls for filesystem, git, HTTP, browser automation, and more
-- **Skills mode** (`--skills` - off by default): Invoke development skills (code-review, test-gen, doc-gen, plan, md2pdf, docx2md, what-if, root-cause, problem-solving, architect, medicine, business-coach, pro-bidder, text-writer, graph-ai, svg2png) and custom skills
+- **Tools mode** (on by default, `--no-tools` to disable): 28+ structured tool calls for filesystem, git, HTTP, browser automation, web search, calendar, and more
+- **Skills mode** (`--skills` - off by default): Invoke development skills (code-review, test-gen, doc-gen, plan, md2pdf, docx2md, what-if, root-cause, problem-solving, architect, medicine, business-coach, pro-bidder, text-writer, graph-ai, svg2png, git-uncommitted) and custom skills
 - **Streaming support** (`--stream`): Token-by-token output
 - **Session persistence**: Save/restore conversations with `/save` and `/restore`
 - **Auto-compaction**: `/compact` summarizes history to free context
@@ -210,7 +210,7 @@ python ollama_agent.py
 
 ### One-shot mode (non-interactive)
 
-Execute a single prompt with full feedback loop (7 rounds) and exit. No banner, no interactive input. All actions are auto-approved.
+Execute a single prompt with full feedback loop (3 rounds) and exit. No banner, no interactive input. All actions are auto-approved.
 
 ```
 uhu "What does this project do?"
@@ -319,7 +319,9 @@ uhu --no-autosave --no-cache
 | `/embed-bin <path>`               | Embed image directly into message (for vision models, works with `--no-tools`)                                                                              |
 | `/search <pattern> <glob>`         | Search across files                                                                                                                                          |
 | `/peek <path>`                     | Show head+tail of a file                                                                                                                                     |
+| `/cat <path>`                      | Dump text file content to console (error for binary files)                                                                                                  |
 | `/ls [path]`                       | List directory contents                                                                                                                                      |
+| `/tree [plain]`                    | Show directory tree (plain = flat relative paths)                                                                                                           |
 | `/md <path>`                       | Create a directory                                                                                                                                           |
 | `/skills`                          | List available skills                                                                                                                                        |
 | `/save [name]`                     | Save session                                                                                                                                                 |

@@ -1,4 +1,13 @@
-"""Terminal input helpers: multiline, paste detection, echo control."""
+"""Terminal input helpers: multiline, paste detection, echo control.
+
+Input is handled through a chain of InputStrategy implementations:
+  1. PromptToolkitInput   — prompt_toolkit-based (Windows primary, multiline)
+  2. PosixReadlineInput   — readline + termios paste detection (POSIX tty)
+  3. WindowsFallbackInput — bracketed paste + msvcrt timing (Windows / non-tty)
+
+read_full_input() is a thin dispatcher that tries each strategy in order;
+the first one that returns a non-None InputResult wins.
+"""
 
 import re
 import sys
@@ -152,7 +161,51 @@ def _read_bracketed_paste(first_line):
     return InputResult('\n'.join(lines), was_paste=True)
 
 
-def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter"):
+# Module-level history for prompt_toolkit — persists across calls within a
+# session so arrow-up/down navigation works between prompts.
+_pt_history = None
+
+
+def _get_pt_history():
+    """Lazily create a shared InMemoryHistory for prompt_toolkit sessions."""
+    global _pt_history
+    if _pt_history is None:
+        try:
+            from prompt_toolkit.history import InMemoryHistory
+            _pt_history = InMemoryHistory()
+        except ImportError:
+            pass
+    return _pt_history
+
+
+# ── ANSI SGR → prompt_toolkit color mapping ────────────────────────────
+# prompt_toolkit uses CSS-like style strings, not raw ANSI codes.
+# Map the SGR foreground codes we use to prompt_toolkit color names.
+_ANSI_SGR_COLOR_MAP = {
+    '30': 'ansiblack', '31': 'ansired', '32': 'ansigreen',
+    '33': 'ansiyellow', '34': 'ansiblue', '35': 'ansimagenta',
+    '36': 'ansicyan', '37': 'ansiwhite',
+    '90': 'ansibrightblack', '91': 'ansibrightred', '92': 'ansibrightgreen',
+    '93': 'ansibrightyellow', '94': 'ansibrightblue', '95': 'ansibrightmagenta',
+    '96': 'ansibrightcyan', '97': 'ansibrightwhite',
+}
+
+
+def _ansi_sgr_to_ptk_color(ansi_code):
+    """Convert an ANSI SGR escape sequence to a prompt_toolkit style string.
+
+    e.g. '\033[37m' → 'ansiwhite', '\033[93m' → 'ansibrightyellow'.
+    Returns None if the code is not a recognized foreground color.
+    """
+    if not ansi_code:
+        return None
+    m = re.match(r'\x1b\[(\d+)m', ansi_code)
+    if not m:
+        return None
+    return _ANSI_SGR_COLOR_MAP.get(m.group(1))
+
+
+def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter", color=None):
     """Try reading input with prompt_toolkit.
 
     Args:
@@ -205,23 +258,51 @@ def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter"):
             def _(event):
                 event.current_buffer.insert_text('\n')
         else:
-            # shift_enter mode: Shift+Enter / Ctrl+Enter inserts newline,
-            # Enter submits
-            @kb.add('s-enter')
-            def _(event):
-                event.current_buffer.insert_text('\n')
+            # shift_enter mode: Enter submits by default. We add one binding:
+            # if the current line ends with a backslash, Enter inserts a
+                       # newline (line continuation) instead of submitting.
+            # This preserves the \ + Enter multiline behavior that the
+            # Windows readline fallback previously provided.
+            #
+            # Shift+Enter / Ctrl+Enter are NOT bindable in prompt_toolkit —
+            # those keys don't produce distinct escape sequences on most
+            # terminals, and 's-enter'/'c-enter' are not valid Keys enum
+            # members. Multiline input is also available via /multiline
+            # (free_form mode), which binds 'enter' to insert newlines.
 
-            @kb.add('c-enter')
+            @kb.add('enter')
             def _(event):
-                event.current_buffer.insert_text('\n')
+                buf = event.current_buffer
+                # Check if the current line ends with a backslash
+                line = buf.document.current_line
+                if line.rstrip().endswith('\\'):
+                    # Remove the trailing backslash and insert a newline
+                    buf.delete_before_cursor(count=1)
+                    buf.insert_text('\n')
+                else:
+                    buf.validate_and_handle()
 
         # Preserve the current SIGINT handler and restore it unconditionally
         # after the prompt returns, guarding against any residual mutation by
         # prompt_toolkit even with handle_sigint=False.
+        # Map ANSI SGR color code to prompt_toolkit style for input text.
+        _ptk_style = None
+        _prompt_obj = prompt_text
+        if color:
+            from prompt_toolkit.formatted_text import ANSI as _PTK_ANSI
+            from prompt_toolkit.styles import Style as _PTK_Style
+            _color_name = _ansi_sgr_to_ptk_color(color)
+            if _color_name:
+                _ptk_style = _PTK_Style.from_dict({'': _color_name})
+            # ANSI() parses escape sequences in the prompt text
+            _prompt_obj = _PTK_ANSI(f"{color}{prompt_text}")
+
         _saved_sigint = _signal.getsignal(_signal.SIGINT)
         try:
-            session = PromptSession(key_bindings=kb)
-            result = session.prompt(prompt_text, handle_sigint=False)
+            history = _get_pt_history()
+            session = PromptSession(key_bindings=kb, history=history)
+            result = session.prompt(_prompt_obj, handle_sigint=False,
+                                    style=_ptk_style)
         finally:
             _signal.signal(_signal.SIGINT, _saved_sigint)
 
@@ -230,48 +311,85 @@ def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter"):
         return None
     except (EOFError, KeyboardInterrupt):
         raise
-    except Exception:
+    except Exception as e:
+        # Log the error so silent prompt_toolkit failures are diagnosable.
+        # Previously this returned None with no trace, masking bugs like
+        # invalid key bindings that caused prompt_toolkit to never work.
+        import logging
+        logging.getLogger(__name__).debug(
+            "prompt_toolkit input failed: %s: %s", type(e).__name__, e
+        )
         return None
 
 
-def read_full_input(prompt="", multiline=False, color=None):
-    """Read user input with paste detection and multiline continuation support.
+# ── Input strategies ───────────────────────────────────────────────────
 
-    Args:
-        prompt: The prompt string to display.
-        multiline: If True, enable multiline input modes.
-        color: Optional ANSI color code (e.g. "\\033[37m" for light gray).
-               When set and stdout is a tty, the prompt and user input are
-               displayed in this color. The color is reset after input is read.
+
+class InputStrategy:
+    """Abstract input strategy for read_full_input.
+
+    Each strategy's read() returns an InputResult on success, or None if
+    the strategy is not applicable to the current platform/conditions.
     """
-    _reconfigure_stdout()
-    _enable_ansi_windows()
-    if multiline:
-        result = _try_prompt_toolkit_input(prompt)
-        if result is not None:
-            return InputResult(_sanitize_input(result), was_paste=result.count("\n") >= 1)
-    _color_active = bool(color and sys.stdout.isatty())
-    try:
-        # ── POSIX: use input() with readline for arrow key support ──────
-        # On POSIX, input() uses the readline module which handles arrow
-        # keys, history, and line editing. sys.stdin.readline() does NOT
-        # use readline, so arrow keys appear as raw escape sequences.
-        #
-        # We pass the prompt to input() so readline knows the correct
-        # prompt length for cursor positioning. ANSI color codes are
-        # wrapped with \001/\002 (RL_PROMPT_START_IGNORE/END_IGNORE)
-        # so readline excludes them from the visible prompt width.
-        # Without this, arrow keys miscalculate cursor position and
-        # jump to the wrong column.
-        #
-        # We do NOT enable bracketed paste here because readline/libedit
-        # conflicts with the raw marker protocol — it may strip markers
-        # (losing paste detection) or leak them into the input string.
-        # Instead, we detect paste by checking for immediately-buffered
-        # data after input() returns (multi-line paste leaves remaining
-        # lines in the stdin buffer).
-        if not terminal.is_windows and sys.stdin.isatty():
-            if _color_active:
+
+    def read(self, prompt, multiline, color):
+        """Return an InputResult, or None if this strategy is not applicable."""
+        raise NotImplementedError
+
+
+class PromptToolkitInput(InputStrategy):
+    """Read input via prompt_toolkit — provides arrow keys, history, multiline.
+
+    Used as the primary strategy on Windows (where readline is unavailable)
+    and for multiline input on all platforms. Returns None if prompt_toolkit
+    is not installed or the input is not a tty.
+    """
+
+    def read(self, prompt, multiline, color):
+        if not (multiline or terminal.is_windows):
+            return None
+        result = _try_prompt_toolkit_input(prompt, color=color)
+        if result is None:
+            return None
+        return InputResult(
+            _sanitize_input(result),
+            was_paste=result.count("\n") >= 1,
+        )
+
+
+class PosixReadlineInput(InputStrategy):
+    """Read input via input() + readline with termios-based paste detection.
+
+    Applicable on POSIX systems with a tty. Uses readline for arrow key
+    editing and history, then switches to non-canonical mode to detect
+    remaining buffered paste data.
+    """
+
+    def read(self, prompt, multiline, color):
+        if terminal.is_windows or not sys.stdin.isatty():
+            return None
+
+        color_active = bool(color and sys.stdout.isatty())
+        try:
+            # ── POSIX: use input() with readline for arrow key support ──────
+            # On POSIX, input() uses the readline module which handles arrow
+            # keys, history, and line editing. sys.stdin.readline() does NOT
+            # use readline, so arrow keys appear as raw escape sequences.
+            #
+            # We pass the prompt to input() so readline knows the correct
+            # prompt length for cursor positioning. ANSI color codes are
+            # wrapped with \001/\002 (RL_PROMPT_START_IGNORE/END_IGNORE)
+            # so readline excludes them from the visible prompt width.
+            # Without this, arrow keys miscalculate cursor position and
+            # jump to the wrong column.
+            #
+            # We do NOT enable bracketed paste here because readline/libedit
+            # conflicts with the raw marker protocol — it may strip markers
+            # (losing paste detection) or leak them into the input string.
+            # Instead, we detect paste by checking for immediately-buffered
+            # data after input() returns (multi-line paste leaves remaining
+            # lines in the stdin buffer).
+            if color_active:
                 rl_prompt = f"\001{color}\002{prompt}"
             else:
                 rl_prompt = prompt
@@ -348,88 +466,144 @@ def read_full_input(prompt="", multiline=False, color=None):
 
             text = '\n'.join(lines)
             return InputResult(_sanitize_input(text), was_paste=is_paste)
-
-        # ── Windows / non-tty: bracketed paste + timing heuristic ───────
-        if _color_active:
-            sys.stdout.write(color)
-            sys.stdout.flush()
-        sys.stdout.write(prompt)
-        sys.stdout.flush()
-        use_bp = terminal.supports_bracketed_paste and sys.stdin.isatty()
-        if use_bp:
-            terminal.enable_bracketed_paste()
-
-        try:
-            first = sys.stdin.readline()
-        except KeyboardInterrupt:
-            if use_bp:
-                terminal.disable_bracketed_paste()
-            raise
-        if not first:
-            if use_bp:
-                terminal.disable_bracketed_paste()
-            raise EOFError
-
-        # Check for bracketed paste start marker
-        if use_bp and _BP_START in first:
-            result = _read_bracketed_paste(first)
-            terminal.disable_bracketed_paste()
-            return InputResult(_sanitize_input(result), was_paste=True)
-
-        if use_bp:
-            terminal.disable_bracketed_paste()
-
-        # ── Fallback: timing-based heuristic (Windows, legacy terminals) ──
-        lines = [first.rstrip('\n\r')]
-        paste_mode = False
-        if terminal.is_chars_buffered():
-            paste_mode = True
-            _set_echo(False)
-        time.sleep(0.01)
-        if terminal.is_chars_buffered():
-            if not paste_mode:
-                _set_echo(False)
-            try:
-                text = terminal.read_buffered_chars()
-                if text:
-                    remaining = text.split('\n')
-                    if remaining and not remaining[-1]:
-                        remaining = remaining[:-1]
-                    lines.extend(remaining)
-            except KeyboardInterrupt:
-                _set_echo(True)
-                raise
-            finally:
-                _set_echo(True)
-        elif paste_mode:
-            _set_echo(True)
-            sys.stdout.write(first)
-            sys.stdout.flush()
-        if paste_mode and len(lines) > 1:
-            sys.stdout.write("\r")
-            sys.stdout.flush()
-        if multiline and len(lines) == 1 and lines[0].rstrip().endswith('\\'):
-            cont_lines = [lines[0].rstrip()[:-1]]
-            while True:
-                sys.stdout.write("... ")
+        finally:
+            if color_active:
+                sys.stdout.write("\033[0m")
                 sys.stdout.flush()
-                next_line = sys.stdin.readline()
-                if not next_line:
-                    break
-                next_line = next_line.rstrip('\n\r')
-                if next_line.strip() == '':
-                    break
-                if next_line.rstrip().endswith('\\'):
-                    cont_lines.append(next_line.rstrip()[:-1])
-                else:
-                    cont_lines.append(next_line)
-                    break
-            return InputResult(_sanitize_input('\n'.join(cont_lines)), was_paste=False)
-        is_paste = len(lines) > 1
-        if len(lines) == 1:
-            return InputResult(_sanitize_input(lines[0]), was_paste=is_paste)
-        return InputResult(_sanitize_input('\n'.join(lines)), was_paste=is_paste)
-    finally:
-        if _color_active:
-            sys.stdout.write("\033[0m")
+
+
+class WindowsFallbackInput(InputStrategy):
+    """Read input via bracketed paste + msvcrt timing heuristic.
+
+    Applicable on Windows (tty or non-tty) and on POSIX non-tty. This is
+    the fallback when prompt_toolkit is unavailable and the POSIX readline
+    strategy does not apply.
+    """
+
+    def read(self, prompt, multiline, color):
+        # POSIX + tty is handled by PosixReadlineInput
+        if not terminal.is_windows and sys.stdin.isatty():
+            return None
+
+        color_active = bool(color and sys.stdout.isatty())
+        try:
+            if color_active:
+                sys.stdout.write(color)
+                sys.stdout.flush()
+            sys.stdout.write(prompt)
             sys.stdout.flush()
+            use_bp = terminal.supports_bracketed_paste and sys.stdin.isatty()
+            if use_bp:
+                terminal.enable_bracketed_paste()
+
+            try:
+                first = sys.stdin.readline()
+            except KeyboardInterrupt:
+                if use_bp:
+                    terminal.disable_bracketed_paste()
+                raise
+            if not first:
+                if use_bp:
+                    terminal.disable_bracketed_paste()
+                raise EOFError
+
+            # Check for bracketed paste start marker
+            if use_bp and _BP_START in first:
+                result = _read_bracketed_paste(first)
+                terminal.disable_bracketed_paste()
+                return InputResult(_sanitize_input(result), was_paste=True)
+
+            if use_bp:
+                terminal.disable_bracketed_paste()
+
+            # ── Fallback: timing-based heuristic (Windows, legacy terminals) ──
+            lines = [first.rstrip('\n\r')]
+            paste_mode = False
+            if terminal.is_chars_buffered():
+                paste_mode = True
+                _set_echo(False)
+            time.sleep(0.01)
+            if terminal.is_chars_buffered():
+                if not paste_mode:
+                    _set_echo(False)
+                try:
+                    text = terminal.read_buffered_chars()
+                    if text:
+                        remaining = text.split('\n')
+                        if remaining and not remaining[-1]:
+                            remaining = remaining[:-1]
+                        lines.extend(remaining)
+                except KeyboardInterrupt:
+                    _set_echo(True)
+                    raise
+                finally:
+                    _set_echo(True)
+            elif paste_mode:
+                _set_echo(True)
+                sys.stdout.write(first)
+                sys.stdout.flush()
+            if paste_mode and len(lines) > 1:
+                sys.stdout.write("\r")
+                sys.stdout.flush()
+            if multiline and len(lines) == 1 and lines[0].rstrip().endswith('\\'):
+                cont_lines = [lines[0].rstrip()[:-1]]
+                while True:
+                    sys.stdout.write("... ")
+                    sys.stdout.flush()
+                    next_line = sys.stdin.readline()
+                    if not next_line:
+                        break
+                    next_line = next_line.rstrip('\n\r')
+                    if next_line.strip() == '':
+                        break
+                    if next_line.rstrip().endswith('\\'):
+                        cont_lines.append(next_line.rstrip()[:-1])
+                    else:
+                        cont_lines.append(next_line)
+                        break
+                return InputResult(
+                    _sanitize_input('\n'.join(cont_lines)), was_paste=False
+                )
+            is_paste = len(lines) > 1
+            if len(lines) == 1:
+                return InputResult(
+                    _sanitize_input(lines[0]), was_paste=is_paste
+                )
+            return InputResult(
+                _sanitize_input('\n'.join(lines)), was_paste=is_paste
+            )
+        finally:
+            if color_active:
+                sys.stdout.write("\033[0m")
+                sys.stdout.flush()
+
+
+# ── Strategy chain ─────────────────────────────────────────────────────
+
+_strategies = [
+    PromptToolkitInput(),
+    PosixReadlineInput(),
+    WindowsFallbackInput(),
+]
+
+
+def read_full_input(prompt="", multiline=False, color=None):
+    """Read user input with paste detection and multiline continuation support.
+
+    Args:
+        prompt: The prompt string to display.
+        multiline: If True, enable multiline input modes.
+        color: Optional ANSI color code (e.g. "\\033[37m" for light gray).
+               When set and stdout is a tty, the prompt and user input are
+               displayed in this color. The color is reset after input is read.
+
+    Tries each InputStrategy in order; the first that returns a non-None
+    InputResult wins. If no strategy applies, returns an empty InputResult.
+    """
+    _reconfigure_stdout()
+    _enable_ansi_windows()
+    for strategy in _strategies:
+        result = strategy.read(prompt, multiline, color)
+        if result is not None:
+            return result
+    return InputResult("", was_paste=False)

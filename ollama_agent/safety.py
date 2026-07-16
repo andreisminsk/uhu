@@ -59,7 +59,7 @@ class CommandSafetyGate:
                 return ('warning', f"Destructive command requires confirmation: {cmd[:80]}")
 
         if self._SHELL_OPERATORS.search(cmd):
-            return ('chain', f"Shell chaining detected in: {cmd[:80]}")
+            return ('chain', f"AGENT: Shell chaining detected in: {cmd[:80]}")
 
         return ('safe', '')
 
