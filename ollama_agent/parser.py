@@ -366,7 +366,7 @@ def _extract_blocks(text):
             i += 1
             continue
 
-        fence_m = re.match(r"```(bash|sh|shell|cmd|bat|powershell|ps1|pwsh)", stripped)
+        fence_m = re.match(r"```(bash|sh|shell|cmd|bat|powershell|ps1|pwsh|zsh)", stripped)
         if fence_m:
             lang = fence_m.group(1)
             block_start = current_pos
@@ -441,7 +441,7 @@ def parse_actions(text):
             if skill_json_error:
                 action["json_error"] = skill_json_error
             actions.append(action)
-        elif lang in ("bash", "sh", "shell", "cmd", "bat", "powershell", "ps1", "pwsh") and code:
+        elif lang in ("bash", "sh", "shell", "cmd", "bat", "powershell", "ps1", "pwsh", "zsh") and code:
             if not any(s[0] <= start < s[1] for s in write_spans):
                 actions.append({"type": "run", "code": code, "lang": lang, "span": (start, end)})
     return actions

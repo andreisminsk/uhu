@@ -44,7 +44,7 @@ AGENT_SYSTEM_PROMPT = (
     "```{shell_lang}\n"
     "python hello.py\n"
     "```\n\n"
-    "Supported RUN fence languages: bash, sh, shell, cmd, bat, powershell, ps1, pwsh. "
+    "Supported RUN fence languages: bash, sh, shell, cmd, bat, powershell, ps1, pwsh, zsh. "
     "Use the appropriate language for the current platform.\n\n"
     "RULES:\n"
     "- Use **EDIT:** to modify existing files (preferred over WRITE for changes).\n"

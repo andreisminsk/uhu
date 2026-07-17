@@ -20,7 +20,7 @@ class RunCommandTool:
         "- timeout (integer, optional, default 30): Timeout in seconds\n"
         "- shell (string, optional): Shell to use — 'cmd', 'powershell', 'bash' (defaults to platform shell)\n"
         "Returns: stdout, stderr, and exit code. Use this instead of RUN: when you need structured output.\n"
-        "Supported RUN fence languages: bash, sh, shell, cmd, bat, powershell, ps1, pwsh. Use the appropriate language for the current platform."
+        "Supported RUN fence languages: bash, sh, shell, cmd, bat, powershell, ps1, pwsh, zsh. Use the appropriate language for the current platform."
     )
     parameters = {
         "command": {
