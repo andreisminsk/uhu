@@ -442,7 +442,15 @@ class JobManager:
         path = os.path.join(self._workdir, self.JOB_STATE_FILE)
         if not os.path.isfile(path):
             return
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        self._store.load_from(data)
-        logger.info("Loaded %d persisted jobs", len(data))
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self._store.load_from(data)
+            logger.info("Loaded %d persisted jobs", len(data))
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning("Corrupt job state file %s, resetting: %s", path, e)
+            # Remove the corrupt file so next save writes a fresh one
+            try:
+                os.remove(path)
+            except OSError:
+                pass
