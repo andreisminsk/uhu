@@ -131,7 +131,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
 
     def _log(self, role, content):
         if self.log_file:
-            self.log_file.write(f"[{datetime.now().strftime('%H:%M:%S')}] {role.upper()}:\n{content}\n\n")
+            # Strip lone surrogates that can't be encoded as UTF-8
+            safe = content.encode('utf-8', 'surrogatepass').decode('utf-8', 'replace') if content else content
+            self.log_file.write(f"[{datetime.now().strftime('%H:%M:%S')}] {role.upper()}:\n{safe}\n\n")
             self.log_file.flush()
         if role == "system":
             logger.debug("[%s] %s", role, content[:200])

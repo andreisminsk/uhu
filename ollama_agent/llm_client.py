@@ -46,6 +46,25 @@ class LLMClient:
         self.thinking = thinking
         self._log = log_fn or (lambda role, msg: None)
 
+    @staticmethod
+    def _sanitize_messages(messages):
+        """Strip lone surrogates from message content to prevent UTF-8 encode errors."""
+        def _clean(s):
+            if not isinstance(s, str):
+                return s
+            try:
+                s.encode('utf-8')
+                return s
+            except UnicodeEncodeError:
+                return s.encode('utf-8', 'surrogatepass').decode('utf-8', 'replace')
+        cleaned = []
+        for m in messages:
+            nm = dict(m)
+            if 'content' in nm:
+                nm['content'] = _clean(nm['content'])
+            cleaned.append(nm)
+        return cleaned
+
     def _build_options(self):
         return {"num_ctx": self.ctx_size, "temperature": MODEL_TEMPERATURE}
 
@@ -64,6 +83,8 @@ class LLMClient:
             TimeoutError: If non-streaming call exceeds NON_STREAM_TIMEOUT.
             Exception: On model errors.
         """
+        # Sanitize lone surrogates that can't be encoded as UTF-8 by httpx
+        messages = self._sanitize_messages(messages)
         if stream:
             return self._call_streaming(messages)
         else:
