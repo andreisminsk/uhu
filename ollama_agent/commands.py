@@ -105,6 +105,7 @@ class CommandMixin:
             "  /auto reset always           Clear persistent (always) approvals\n"
             "  /auto reset all              Clear both session and persistent approvals\n"
             "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
+            "  /pid                         Show current and parent process IDs\n"
             "  /memorize [project|agent] <text>  Add entry to permanent memory\n"
             "\n"
             "  /m, /multiline               Enter multiline mode (empty line or /end to submit)\n"
@@ -899,6 +900,7 @@ class CommandMixin:
         "/m": "_cmd_multiline", "/multiline": "_cmd_multiline",
         "/sessions": "_cmd_sessions", "/skills": "_cmd_skills", "/jobs": "_cmd_jobs",
         "/compact": "_cmd_compact",
+        "/pid": "_cmd_pid",
     }
 
     _PREFIX_COMMANDS = [
@@ -1005,6 +1007,13 @@ class CommandMixin:
 
     def _cmd_skills(self, args):
         self.do_skills()
+        return DISPATCH_CONTINUE
+
+    def _cmd_pid(self, args):
+        import os
+        pid = os.getpid()
+        ppid = os.getppid()
+        agent_print(f"PID: {pid} | Parent PID: {ppid}\n")
         return DISPATCH_CONTINUE
 
     def _cmd_jobs(self, args):
