@@ -79,6 +79,21 @@ class CommandMixin:
         ctx_msg = f"[ctx: {bar} {source}{total_tokens}/{self.ctx_size} ({pct:.1f}%){warning}]"
         agent_print(ctx_msg + "\n")
         self._log("system", ctx_msg)
+        # Show running/pending jobs summary if any
+        if hasattr(self, '_job_manager') and self._job_manager:
+            jobs = self._job_manager.list_jobs()
+            active = [j for j in jobs if j.get("status") in ("pending", "running")]
+            if active:
+                running = sum(1 for j in active if j.get("status") == "running")
+                pending = sum(1 for j in active if j.get("status") == "pending")
+                parts = []
+                if running:
+                    parts.append(f"{running} running")
+                if pending:
+                    parts.append(f"{pending} pending")
+                job_msg = f"[jobs: {', '.join(parts)}]"
+                agent_print(job_msg + "\n")
+                self._log("system", job_msg)
 
     def do_help(self):
         mode_parts = []
