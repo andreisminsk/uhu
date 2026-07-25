@@ -89,23 +89,29 @@ def _setup_resource_blocking(page, blocked_types):
 
 
 def _close_browser():
-    """Close browser, context, and page. Clean up all resources."""
+    """Close browser, context, and page. Clean up all resources.
+
+    Catches BaseException (not just Exception) because Playwright's sync API
+    can raise KeyboardInterrupt when its dispatcher fiber is interrupted
+    during atexit shutdown, which would otherwise abort cleanup and leave
+    the process hanging.
+    """
     global _browser, _context, _page, _playwright_instance
     for obj in [_page, _context]:
         try:
             if obj:
                 obj.close()
-        except Exception:
+        except BaseException:
             pass
     try:
         if _browser:
             _browser.close()
-    except Exception:
+    except BaseException:
         pass
     try:
         if _playwright_instance:
             _playwright_instance.stop()
-    except Exception:
+    except BaseException:
         pass
     _page = None
     _context = None
