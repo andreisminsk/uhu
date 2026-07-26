@@ -234,15 +234,17 @@ def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter", color=N
         return None
     try:
         # Playwright's sync API can leave the asyncio event loop in a broken
-        # state, causing prompt_toolkit's Application.run_async() coroutine to
-        # never be awaited (RuntimeWarning). Ensure a clean loop before use.
+        # state (not closed, but corrupted), causing prompt_toolkit's
+        # Application.run_async() coroutine to never be awaited (RuntimeWarning).
+        # Force a fresh event loop unconditionally before each prompt_toolkit call.
         import asyncio as _asyncio
         try:
-            _loop = _asyncio.get_event_loop()
-            if _loop.is_closed():
-                _asyncio.set_event_loop(_asyncio.new_event_loop())
-        except RuntimeError:
-            _asyncio.set_event_loop(_asyncio.new_event_loop())
+            _old_loop = _asyncio.get_event_loop()
+            if _old_loop and not _old_loop.is_closed():
+                _old_loop.close()
+        except Exception:
+            pass
+        _asyncio.set_event_loop(_asyncio.new_event_loop())
 
         import signal as _signal
         from prompt_toolkit import PromptSession
