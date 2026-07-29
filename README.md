@@ -21,6 +21,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 - **Batch write limit**: Pauses after 3 file changes per round for review
 - **Thinking mode** (`--thinking`): Handle thinking tokens from reasoning models (qwen3, deepseek-r1)
 - **Browser automation** (on by default with tools): Playwright-based browser with stealth support for scraping and interaction
+- **OpenAI-compatible API** (`--api-openai`): Use OpenAI-compatible endpoints (e.g., Ollama's `/v1` or cloud providers)
 
 ## Installation
 
@@ -39,6 +40,14 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    - Verify Ollama is running: `curl http://localhost:11434/api/tags` 
    - Verify that model was deployed successfully: `ollama run glm-5.1:cloud` 
    - Check your model's context window size for the `--ctx` parameter (e.g. [glm-5.1](https://ollama.com/library/glm-5.1) specifies 198K → `--ctx 202752` since 198 × 1024 = 202752)
+
+3. **Optional — OpenAI-compatible API support**
+
+   If you want to use OpenAI-compatible endpoints (e.g., Ollama's `/v1` or cloud providers):
+   
+   ```
+   pip install openai
+   ```
 
 3. **Clone this repository**
    Assume that you are planning to put the tool into e.g. `~/Projects/` foder, then:
@@ -135,6 +144,7 @@ Add its directory to your PATH, then from any working directory:
 uhu
 uhu --model qwen2.5:14b --ctx 32768
 uhu --no-agent --no-tools
+uhu --api-openai --model kimi-k2.7-code:cloud  # Use OpenAI-compatible endpoint
 ```
 
 ### macOS / Linux
@@ -279,6 +289,9 @@ uhu --no-autosave --no-cache
 | `prompt`          | —                          | One-shot prompt — execute and exit (7 feedback rounds, auto-approve all) |
 | `-v`, `--version` | —                          | Show version and exit                                                    |
 | `--host`          | `http://localhost:11434`   | Ollama server URL                                                        |
+| `--api-ollama`    | (default)                  | Use native Ollama API (default)                                          |
+| `--api-openai`    | —                          | Use OpenAI-compatible API endpoint                                       |
+| `--api-key`       | `ollama`                   | API key for OpenAI-compatible endpoint                                   |
 | `--model`         | `glm-5.1:cloud`            | Model name                                                               |
 | `--ctx`           | `202752`                   | Context window size in tokens                                            |
 | `--no-stream`     | off (streaming on)         | Disable streaming output                                                 |

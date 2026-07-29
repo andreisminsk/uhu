@@ -69,19 +69,88 @@ class ImageAnalysisTool:
         except Exception as e:
             return f"[Error: Failed to read image: {e}]"
 
-        # Call Ollama vision model
-        try:
-            from ollama import Client
-            client = Client(host=base_url)
-            response = client.chat(
-                model=model,
-                messages=[{
+        # Determine API type from config
+        api_type = tool_config.get("api_type", "ollama")
+        timeout = tool_config.get("timeout", 120)  # Default 120s timeout
+        
+        def _call_with_timeout():
+            if api_type == "openai":
+                # Use OpenAI-compatible API
+                try:
+                    from openai import OpenAI
+                except ImportError:
+                    raise RuntimeError("openai package required for OpenAI API. Run: pip install openai")
+                
+                # Ensure /v1 suffix
+                api_base = base_url
+                if not api_base.endswith("/v1"):
+                    api_base = api_base.rstrip("/") + "/v1"
+                
+                api_key = tool_config.get("api_key", "ollama")
+                client = OpenAI(base_url=api_base, api_key=api_key)
+                
+                # Build multimodal message for OpenAI API
+                messages = [{
                     "role": "user",
-                    "content": prompt,
-                    "images": [image_data]
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime};base64,{image_data}"
+                            }
+                        }
+                    ]
                 }]
-            )
-            result = response["message"]["content"]
-            return result
+                
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=4096,
+                    timeout=timeout
+                )
+                return response.choices[0].message.content
+            else:
+                # Use native Ollama API
+                from ollama import Client
+                client = Client(host=base_url)
+                response = client.chat(
+                    model=model,
+                    messages=[{
+                        "role": "user",
+                        "content": prompt,
+                        "images": [image_data]
+                    }]
+                )
+                return response["message"]["content"]
+        
+        # Execute with timeout using threading
+        import threading
+        result_holder = [None]
+        error_holder = [None]
+        done_event = threading.Event()
+        
+        def _worker():
+            try:
+                result_holder[0] = _call_with_timeout()
+            except Exception as e:
+                error_holder[0] = e
+            finally:
+                done_event.set()
+        
+        try:
+            worker = threading.Thread(target=_worker, daemon=True)
+            worker.start()
+            
+            if not done_event.wait(timeout=timeout):
+                return f"[Error: Image analysis timed out after {timeout}s (model: {model}, api_type: {api_type})]"
+            
+            if error_holder[0]:
+                raise error_holder[0]
+            
+            return result_holder[0]
+            
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
-            return f"[Error: Image analysis failed (model: {model}, base_url: {base_url}): {e}]"
+            return f"[Error: Image analysis failed (model: {model}, base_url: {base_url}, api_type: {api_type}): {e}]"

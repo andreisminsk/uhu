@@ -23,7 +23,10 @@ DEFAULT_CONFIG = {
     "tools": {
         "image_analysis": {
             "base_url": "http://localhost:11434/",
-            "model": "gemma4:31b-cloud"
+            "model": "gemma4:31b-cloud",
+            "api_type": "ollama",
+            "api_key": "ollama",
+            "timeout": 120
         },
         "google_calendar": {
             "credentials_path": "~/.ollama_gcal/gs-cred.json",

@@ -15,6 +15,12 @@ def main():
                         help="Show version and exit")
     parser.add_argument("--host", default="http://localhost:11434",
                         help="Ollama server URL (default: http://localhost:11434)")
+    parser.add_argument("--api-ollama", action="store_true", dest="api_ollama",
+                        default=True, help="Use native Ollama API (default)")
+    parser.add_argument("--api-openai", action="store_true", dest="api_openai",
+                        help="Use OpenAI-compatible API endpoint")
+    parser.add_argument("--api-key", default=None,
+                        help="API key for OpenAI-compatible endpoint (default: ollama)")
     parser.add_argument("--model", default="glm-5.1:cloud",
                         help="Model name to use for chat (default: glm-5.1:cloud)")
     parser.add_argument("--ctx", type=int, default=202752,
@@ -71,6 +77,9 @@ def main():
         log_path = None
     else:
         log_path = os.path.join(os.path.abspath(workdir), ".uhu", f"uhu-{os.path.basename(os.path.abspath(workdir))}.log")
+    # Determine API type
+    api_type = "openai" if args.api_openai else "ollama"
+    
     session = ChatSession(
         host=args.host,
         model=args.model,
@@ -88,6 +97,8 @@ def main():
         thinking=args.thinking,
         quiet=bool(args.prompt),
         mcp=args.mcp,
+        api_type=api_type,
+        api_key=args.api_key,
     )
 
     if args.prompt:

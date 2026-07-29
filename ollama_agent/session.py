@@ -9,11 +9,8 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-from ollama import Client
-
 from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
 from .actions import agent_print, tool_print
-from .llm_client import LLMClient
 from .parser import parse_actions
 from .input_utils import read_full_input, _reconfigure_stdout
 from .platform import terminal
@@ -27,10 +24,23 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     def __init__(self, host, model, ctx_size, stream=True, log_path=None,
                 sessions_dir=None, agent=True, workdir=".", autosave=True,
                 tools=True, skills=False, skills_dir="./.skills", cache_files=True,
-                thinking=True, quiet=False, mcp=False):
+                thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None):
         _reconfigure_stdout()
         self.quiet = quiet
-        self.client = Client(host=host)
+        
+        # Initialize LLM backend (native Ollama or OpenAI-compatible)
+        from .backends import create_backend
+        self._backend = create_backend(
+            api_type=api_type,
+            host=host,
+            model=model,
+            ctx_size=ctx_size,
+            thinking=thinking,
+            api_key=api_key
+        )
+        self._api_type = api_type
+        
+        self.client = None  # Deprecated: use _backend instead
         self.model = model
         self.ctx_size = ctx_size
         self.stream = stream
@@ -146,21 +156,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     # stuck in a repetitive loop.
     # ── Model interaction ──────────────────────────────────────────────
 
-    def _get_llm_client(self):
-        """Get or create the LLMClient for this session."""
-        if not hasattr(self, '_llm_client') or self._llm_client is None:
-            self._llm_client = LLMClient(
-                client=self.client,
-                model=self.model,
-                ctx_size=self.ctx_size,
-                thinking=self.thinking,
-                log_fn=self._log,
-            )
-        return self._llm_client
-
     def _call_model(self):
-        """Call the model. Delegates to LLMClient."""
-        return self._get_llm_client().call(self.history, stream=self.stream)
+        """Call the model. Delegates to backend."""
+        return self._backend.call(self.history, stream=self.stream)
 
     def _build_message(self, user_input):
         parts = self.pending_content[:]
@@ -581,7 +579,11 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     def run(self):
         """Main interactive loop."""
         info = get_platform_info()
-        agent_print(f"Connected to {self.client._client.base_url} | Model: {self.model} | "
+        # Show backend info
+        backend_info = f"API: {self._api_type}"
+        if hasattr(self._backend, 'client') and hasattr(self._backend.client, '_client'):
+            backend_info += f" | {self._backend.client._client.base_url}"
+        agent_print(f"Connected | {backend_info} | Model: {self.model} | "
               f"Context: {self.ctx_size} | Stream: {self.stream} | Agent: {self.agent} | "
               f"Tools: {self.tools} | Skills: {self.skills} | Thinking: {self.thinking} | "
               f"Cache: {self.cache_files} | Autosave: {self.autosave}")
