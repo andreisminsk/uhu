@@ -147,7 +147,8 @@ uhu
 uhu --model qwen2.5:14b --ctx 32768
 uhu --no-agent --no-tools
 uhu --api-openai --model kimi-k2.7-code:cloud  # Use OpenAI-compatible endpoint
-uhu --api-openai --model gpt-5.5 --ctx 16384 --tpm 10000  # OpenAI with TPM rate limiting
+uhu --api-openai --api-key %UHU_PROJECTS_KEY% --host https://api.openai.com/v1 --model gpt-5.5 --ctx 1050000 --max-context 100000 --tpm 100000  # OpenAI with TPM rate limiting
+
 ```
 
 ### macOS / Linux
@@ -288,7 +289,7 @@ Recommended values:
 If your OpenAI dashboard says `gpt-5.5` has **200k TPM** or more, you can use:
 
 ```bash
-uhu --api-openai --model gpt-5.5 --ctx 128000 --max-context 32000 --tpm 100000
+--api-openai --api-key %UHU_PROJECTS_KEY% --host https://api.openai.com/v1 --model gpt-5.5 --ctx 1050000 --max-context 100000 --tpm 100000
 ```
 
 Avoid setting `--max-context` near full `--ctx` on Tier 1. In this agent, each feedback round resends conversation history, so a 100k-token context can burn TPM very quickly and trigger 429s.
