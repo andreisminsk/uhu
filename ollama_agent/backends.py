@@ -279,6 +279,53 @@ class OpenAIBackend(LLMBackend):
         else:
             return self._call_blocking(messages)
     
+    def _build_create_kwargs(self, messages: List[Dict], stream: bool) -> Dict[str, Any]:
+        """Build kwargs for chat.completions.create, handling max_tokens vs max_completion_tokens."""
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "stream": stream,
+        }
+        # Some models (e.g. o1/o3 series) don't support temperature or max_tokens.
+        # We try max_completion_tokens first (newer API), fall back to max_tokens,
+        # and if both fail, retry without any max parameter.
+        max_val = min(self.ctx_size, 8192)
+        kwargs["max_completion_tokens"] = max_val
+        return kwargs
+    
+    def _call_create(self, messages: List[Dict], stream: bool):
+        """Call create with fallback for max_tokens parameter incompatibility."""
+        kwargs = self._build_create_kwargs(messages, stream)
+        try:
+            return self.client.chat.completions.create(**kwargs)
+        except Exception as e:
+            err_str = str(e).lower()
+            # Fall back to max_tokens if max_completion_tokens not supported
+            if "max_completion_tokens" in err_str or "unrecognized" in err_str:
+                kwargs.pop("max_completion_tokens", None)
+                kwargs["max_tokens"] = min(self.ctx_size, 8192)
+                try:
+                    return self.client.chat.completions.create(**kwargs)
+                except Exception as e2:
+                    err_str2 = str(e2).lower()
+                    # Some models reject max_tokens too — retry without any max param
+                    if "max_tokens" in err_str2 or "unsupported" in err_str2:
+                        kwargs.pop("max_tokens", None)
+                        return self.client.chat.completions.create(**kwargs)
+                    raise
+            # Some models reject max_completion_tokens with "unsupported" — try max_tokens
+            if "unsupported" in err_str and "max" in err_str:
+                kwargs.pop("max_completion_tokens", None)
+                kwargs["max_tokens"] = min(self.ctx_size, 8192)
+                try:
+                    return self.client.chat.completions.create(**kwargs)
+                except Exception as e2:
+                    if "max_tokens" in str(e2).lower() or "unsupported" in str(e2).lower():
+                        kwargs.pop("max_tokens", None)
+                        return self.client.chat.completions.create(**kwargs)
+                    raise
+            raise
+    
     def _call_streaming(self, messages: List[Dict]) -> Tuple[str, Optional[int]]:
         """Stream response using OpenAI SDK."""
         spinner = Spinner(prefix="AI: ")
@@ -288,13 +335,7 @@ class OpenAIBackend(LLMBackend):
         first = True
         
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=MODEL_TEMPERATURE,
-                stream=True,
-                max_tokens=min(self.ctx_size, 8192)  # Reasonable limit
-            )
+            response = self._call_create(messages, stream=True)
             
             for chunk in response:
                 if not chunk.choices:
@@ -337,12 +378,7 @@ class OpenAIBackend(LLMBackend):
         spinner.start()
         
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=MODEL_TEMPERATURE,
-                max_tokens=min(self.ctx_size, 8192)
-            )
+            response = self._call_create(messages, stream=False)
             
             content = response.choices[0].message.content or ""
             self._last_usage = response.usage
