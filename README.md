@@ -22,6 +22,8 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 - **Thinking mode** (`--thinking`): Handle thinking tokens from reasoning models (qwen3, deepseek-r1)
 - **Browser automation** (on by default with tools): Playwright-based browser with stealth support for scraping and interaction
 - **OpenAI-compatible API** (`--api-openai`): Use OpenAI-compatible endpoints (e.g., Ollama's `/v1` or cloud providers)
+- **Context management** (OpenAI-compatible): Client-side history trimming with summarization and tool-call pair preservation — the OpenAI protocol doesn't guarantee server-side context eviction
+- **TPM rate limiting** (`--tpm`): Proactive tokens-per-minute tracking with rolling 60s window, aggressive 429 retry with jittered backoff and Retry-After parsing
 
 ## Installation
 
@@ -145,6 +147,7 @@ uhu
 uhu --model qwen2.5:14b --ctx 32768
 uhu --no-agent --no-tools
 uhu --api-openai --model kimi-k2.7-code:cloud  # Use OpenAI-compatible endpoint
+uhu --api-openai --model gpt-5.5 --ctx 16384 --tpm 10000  # OpenAI with TPM rate limiting
 ```
 
 ### macOS / Linux
@@ -260,6 +263,51 @@ Refer to model specifications at Ollama web site to set max context size. Exampl
 uhu --model glm-5.1:cloud --ctx 202752
 ```
 
+### OpenAI-compatible API with TPM rate limiting
+
+When using OpenAI-compatible endpoints that enforce tokens-per-minute (TPM) limits (e.g., OpenAI API), use `--tpm` to enable proactive rate-limit tracking and `--max-context` to cap history trimming. This prevents 429 errors by throttling before the limit is hit.
+
+For **OpenAI API Tier 1 + `gpt-5.5`**, start conservatively:
+
+```bash
+uhu --api-openai ^
+  --model gpt-5.5 ^
+  --ctx 128000 ^
+  --max-context 16000 ^
+  --tpm 30000
+```
+
+Recommended values:
+
+| Option | Suggested | Why |
+|---|---:|---|
+| `--ctx` | `128000` | Use the model's large context capacity if available; this is the hard context budget uhu assumes. |
+| `--max-context` | `16000` | Keeps active history smaller so Tier 1 rate limits don't get eaten by huge repeated prompts. |
+| `--tpm` | `30000` | Safe starting cap for Tier 1. Raise later if you confirm your actual dashboard limit is higher. |
+
+If your OpenAI dashboard says `gpt-5.5` has **200k TPM** or more, you can use:
+
+```bash
+uhu --api-openai --model gpt-5.5 --ctx 128000 --max-context 32000 --tpm 100000
+```
+
+Avoid setting `--max-context` near full `--ctx` on Tier 1. In this agent, each feedback round resends conversation history, so a 100k-token context can burn TPM very quickly and trigger 429s.
+
+Practical presets:
+
+```bash
+:: safest
+uhu --api-openai --model gpt-5.5 --ctx 128000 --max-context 12000 --tpm 20000
+
+:: balanced
+uhu --api-openai --model gpt-5.5 --ctx 128000 --max-context 16000 --tpm 30000
+
+:: if dashboard confirms high TPM
+uhu --api-openai --model gpt-5.5 --ctx 128000 --max-context 32000 --tpm 100000
+```
+
+Check your actual limits at [platform.openai.com → Limits](https://platform.openai.com/account/limits) to confirm your tier's TPM allowance.
+
 ### Disable streaming output
 
 ```
@@ -306,6 +354,8 @@ uhu --no-autosave --no-cache
 | `--no-thinking`   | off (thinking on)          | Disable thinking mode for reasoning models                               |
 | `--mcp`           | off                        | Enable MCP server tools (configured in `.ollama_agent.json`)             |
 | `--no-cache`      | off                        | Disable file caching to `.uhu/.cache/` directory                         |
+| `--tpm`           | —                          | TPM limit for OpenAI-compatible backends (enables proactive rate-limit tracking + aggressive 429 retry) |
+| `--max-context`   | `16384` (with `--tpm`)     | Max context cap for history trimming (OpenAI-compatible + `--tpm` only; without `--tpm`, uses `--ctx`) |
 
 ## Slash Commands
 

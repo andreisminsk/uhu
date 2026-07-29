@@ -24,7 +24,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     def __init__(self, host, model, ctx_size, stream=True, log_path=None,
                 sessions_dir=None, agent=True, workdir=".", autosave=True,
                 tools=True, skills=False, skills_dir="./.skills", cache_files=True,
-                thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None):
+                thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
+                tpm_limit=None, max_context=None):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -36,7 +37,10 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             model=model,
             ctx_size=ctx_size,
             thinking=thinking,
-            api_key=api_key
+            api_key=api_key,
+            tpm_limit=tpm_limit,
+            max_context=max_context,
+            quiet=quiet
         )
         self._api_type = api_type
         

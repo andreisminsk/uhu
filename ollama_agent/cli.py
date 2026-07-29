@@ -49,6 +49,10 @@ def main():
                         help="Disable file caching to .uhu/.cache/ directory")
     parser.add_argument("--mcp", action="store_true",
                         help="Enable MCP server tools (configured in .ollama_agent.json)")
+    parser.add_argument("--tpm", type=int, default=None,
+                        help="Tokens-per-minute limit for OpenAI-compatible backends (enables proactive TPM tracking and aggressive 429 retry)")
+    parser.add_argument("--max-context", type=int, default=None,
+                        help="Max context cap for history trimming (OpenAI-compatible + --tpm only, default: 16384)")
     parser.add_argument("prompt", nargs="*", default=[],
                         help="One-shot prompt — execute and exit (no interactive loop)")
     args = parser.parse_args()
@@ -99,6 +103,8 @@ def main():
         mcp=args.mcp,
         api_type=api_type,
         api_key=args.api_key,
+        tpm_limit=args.tpm,
+        max_context=args.max_context,
     )
 
     if args.prompt:
