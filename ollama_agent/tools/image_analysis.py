@@ -27,9 +27,22 @@ class ImageAnalysisTool:
         "- prompt (string, optional, default \"Describe this image in detail.\"): Question or instruction about the image"
     )
 
-    def execute(self, params, workdir=None):
+    def _get_tool_config(self, workdir=None):
+        """Load image_analysis config from .ollama_agent.json."""
         from ._config import load_config, DEFAULT_CONFIG
+        config = load_config(workdir)
+        tool_config = config.get("tools", {}).get("image_analysis", DEFAULT_CONFIG["tools"]["image_analysis"])
+        base_url = tool_config.get("base_url", "http://localhost:11434/")
+        model = tool_config.get("model", "gemma4:31b-cloud")
+        api_type = tool_config.get("api_type", "ollama")
+        return base_url, model, api_type
 
+    def get_details(self, params, workdir=None):
+        """Return extra info for confirmation details display."""
+        base_url, model, api_type = self._get_tool_config(workdir)
+        return f"  model: {model}\n  base_url: {base_url}\n  api_type: {api_type}"
+
+    def execute(self, params, workdir=None):
         path = params.get("path", params.get("file", ""))
         prompt = params.get("prompt", "Describe this image in detail.")
 
@@ -57,10 +70,7 @@ class ImageAnalysisTool:
             return f"[Error: Image too large ({size / (1024*1024):.1f} MB). Maximum: 20 MB]"
 
         # Load config
-        config = load_config(workdir)
-        tool_config = config.get("tools", {}).get("image_analysis", DEFAULT_CONFIG["tools"]["image_analysis"])
-        base_url = tool_config.get("base_url", "http://localhost:11434/")
-        model = tool_config.get("model", "gemma4:31b-cloud")
+        base_url, model, api_type = self._get_tool_config(workdir)
 
         # Read and base64 encode the image
         try:
@@ -69,9 +79,12 @@ class ImageAnalysisTool:
         except Exception as e:
             return f"[Error: Failed to read image: {e}]"
 
-        # Determine API type from config
-        api_type = tool_config.get("api_type", "ollama")
+        # Load timeout from config
+        from ._config import load_config, DEFAULT_CONFIG
+        config = load_config(workdir)
+        tool_config = config.get("tools", {}).get("image_analysis", DEFAULT_CONFIG["tools"]["image_analysis"])
         timeout = tool_config.get("timeout", 120)  # Default 120s timeout
+        api_key = tool_config.get("api_key", "ollama")
         
         def _call_with_timeout():
             if api_type == "openai":
@@ -86,7 +99,6 @@ class ImageAnalysisTool:
                 if not api_base.endswith("/v1"):
                     api_base = api_base.rstrip("/") + "/v1"
                 
-                api_key = tool_config.get("api_key", "ollama")
                 client = OpenAI(base_url=api_base, api_key=api_key)
                 
                 # Build multimodal message for OpenAI API
@@ -147,8 +159,8 @@ class ImageAnalysisTool:
             
             if error_holder[0]:
                 raise error_holder[0]
-            
-            return result_holder[0]
+
+            return f"[image-analysis | model: {model} | base_url: {base_url} | api_type: {api_type}]\n\n{result_holder[0]}"
             
         except KeyboardInterrupt:
             raise

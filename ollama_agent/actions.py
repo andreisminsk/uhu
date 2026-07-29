@@ -221,6 +221,14 @@ class ActionMixin:
         params_preview = json.dumps(params, ensure_ascii=False)
         if len(params_preview) > 60:
             params_preview = params_preview[:57] + "..."
+        # Build extra details from tool if available (e.g. image-analysis shows model/base_url)
+        tool_extra_details = ""
+        if hasattr(tool, 'get_details'):
+            try:
+                tool_extra_details = tool.get_details(params, self.workdir) or ""
+            except Exception:
+                pass
+
         # Safety check for run_command tool — block/warn on dangerous commands
         safety_confirmed = False
         if tool_name == "run_command":
@@ -232,14 +240,14 @@ class ActionMixin:
             safety_confirmed = False
             if safety_level == 'warning':
                 agent_print(f"{safety_msg}")
-                params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"
+                params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}{tool_extra_details and chr(10) + tool_extra_details}"
                 if not self._confirm_or_auto(f"[CONFIRM DESTRUCTIVE] {tool_name}({params_preview})", cmd=cmd, diff_text=params_details, force_confirm=True):
                     agent_print("[Skipped]\n")
                     return None
                 safety_confirmed = True
             elif safety_level == 'chain':
                 agent_print(f"{safety_msg}")
-                params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"
+                params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}{tool_extra_details and chr(10) + tool_extra_details}"
                 if not self._confirm_or_auto(f"[TOOL] {tool_name}({params_preview})", cmd=cmd, diff_text=params_details):
                     agent_print("[Skipped]\n")
                     return None
@@ -253,7 +261,7 @@ class ActionMixin:
         elif tool_name in SAFE_TOOLS or (tool_name == "py_compile" and params.get("action") in ("syntax", "import")):
             agent_print(f"[auto-safe: {tool_name}] [TOOL] {tool_name}({params_preview})")
         else:
-            params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}"
+            params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}{tool_extra_details and chr(10) + tool_extra_details}"
             if not self._confirm_or_auto(f"[TOOL] {tool_name}({params_preview})", cmd=tool_name, diff_text=params_details):
                 agent_print("[Skipped]\n")
                 return None

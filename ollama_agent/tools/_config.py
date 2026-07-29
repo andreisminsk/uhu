@@ -1,7 +1,10 @@
 """Tool configuration — loaded from .ollama_agent.json with built-in defaults."""
 
 import json
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 # ── Configuration ────────────────────────────────────────────────────────
 
@@ -96,8 +99,10 @@ def load_config(workdir=None):
                     user_config = json.load(f)
                 _deep_merge(config, user_config)
                 break  # first found wins
-            except Exception:
-                pass
+            except json.JSONDecodeError as e:
+                logger.warning("Invalid JSON in %s: %s — using defaults", path, e)
+            except Exception as e:
+                logger.warning("Failed to load config from %s: %s — using defaults", path, e)
     _config = config
     return config
 
