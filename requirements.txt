@@ -8,18 +8,21 @@ prompt_toolkit>=3.0
 ddgs>=9.0
 
 # Optional — Markdown to PDF conversion (md2pdf skill, now built-in)
-# markdown
-# pymdown-extensions
-# xhtml2pdf
+markdown
+pymdown-extensions
+xhtml2pdf
 
 # Optional — browser automation
-# playwright
-# playwright-stealth
+playwright
+playwright-stealth
 
 # Optional — Google Calendar integration
-# google-api-python-client
-# google-auth-httplib2
-# google-auth-oauthlib
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
 
 # Optional — DOCX to Markdown conversion (docx2md skill)
-# markitdown
+markitdown
+
+# Optional — OpenAI-compatible API support (for --api-openai flag and image-analysis tool)
+openai>=1.0.0
