@@ -917,7 +917,6 @@ class CommandMixin:
         "/compact": "_cmd_compact",
         "/pid": "_cmd_pid",
     }
-
     _PREFIX_COMMANDS = [
         ("/attach-bin", "_cmd_attach_bin", 11),
         ("/embed-bin", "_cmd_embed_bin", 10),

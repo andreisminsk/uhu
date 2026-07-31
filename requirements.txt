@@ -26,3 +26,6 @@ markitdown
 
 # Optional — OpenAI-compatible API support (for --api-openai flag and image-analysis tool)
 openai>=1.0.0
+
+# Optional — Clipboard image paste (Ctrl+V image detection on Windows/macOS)
+Pillow>=8.1.0

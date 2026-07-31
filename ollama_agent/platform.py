@@ -164,6 +164,20 @@ class TerminalBackend:
         """Combine UTF-16 surrogate pairs into proper Unicode (Windows only)."""
         return text
 
+    # ── Clipboard ────────────────────────────────────────────────────
+
+    def clipboard_has_image(self):
+        """Return True if the system clipboard contains an image."""
+        return False
+
+    def clipboard_save_image(self, dest_path):
+        """Save clipboard image to dest_path (PNG). Returns path or None."""
+        return None
+
+    def clipboard_get_text(self):
+        """Return clipboard text content, or None if not available."""
+        return None
+
 
 # ── Windows backend ───────────────────────────────────────────────────
 
@@ -307,6 +321,45 @@ class Win32Terminal(TerminalBackend):
             "- Do NOT use bash, sh, or Unix-only commands unless running under WSL\n"
         )
 
+    # ── Clipboard ────────────────────────────────────────────────────
+
+    def clipboard_has_image(self):
+        """Return True if the Windows clipboard contains an image."""
+        try:
+            from PIL import ImageGrab
+            img = ImageGrab.grabclipboard()
+            return img is not None and hasattr(img, 'size')
+        except ImportError:
+            return False
+        except Exception:
+            return False
+
+    def clipboard_save_image(self, dest_path):
+        """Save clipboard image as PNG. Returns dest_path or None."""
+        try:
+            from PIL import ImageGrab
+            img = ImageGrab.grabclipboard()
+            if img is None or not hasattr(img, 'size'):
+                return None
+            # Handle RGBA and other modes by converting to RGB if needed
+            if img.mode in ('RGBA', 'LA', 'P'):
+                img = img.convert('RGBA')
+            img.save(dest_path, 'PNG')
+            return dest_path
+        except Exception:
+            return None
+
+    def clipboard_get_text(self):
+        """Return clipboard text, or None."""
+        try:
+            result = subprocess.run(
+                ['powershell', '-NoProfile', '-Command', 'Get-Clipboard'],
+                capture_output=True, text=True, timeout=5
+            )
+            return result.stdout.rstrip('\r\n') if result.returncode == 0 else None
+        except Exception:
+            return None
+
 
 # ── POSIX backend (Linux + macOS) ─────────────────────────────────────
 
@@ -408,6 +461,97 @@ class PosixTerminal(TerminalBackend):
                 "- `find` supports `-print0` but not all GNU extensions\n"
             ])
         return ''.join(lines)
+
+    # ── Clipboard ────────────────────────────────────────────────────
+
+    def clipboard_has_image(self):
+        """Return True if the clipboard contains an image."""
+        if self.is_macos:
+            try:
+                from PIL import ImageGrab
+                img = ImageGrab.grabclipboard()
+                return img is not None and hasattr(img, 'size')
+            except ImportError:
+                return False
+            except Exception:
+                return False
+        # Linux: check xclip or wl-paste for image/png target
+        if shutil.which('xclip'):
+            try:
+                result = subprocess.run(
+                    ['xclip', '-selection', 'clipboard', '-t', '-o'],
+                    capture_output=True, timeout=2
+                )
+                return b'image/png' in result.stdout
+            except Exception:
+                return False
+        if shutil.which('wl-paste'):
+            try:
+                result = subprocess.run(
+                    ['wl-paste', '--list-types'],
+                    capture_output=True, timeout=2
+                )
+                return b'image/png' in result.stdout
+            except Exception:
+                return False
+        return False
+
+    def clipboard_save_image(self, dest_path):
+        """Save clipboard image as PNG. Returns dest_path or None."""
+        if self.is_macos:
+            try:
+                from PIL import ImageGrab
+                img = ImageGrab.grabclipboard()
+                if img is None or not hasattr(img, 'size'):
+                    return None
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    img = img.convert('RGBA')
+                img.save(dest_path, 'PNG')
+                return dest_path
+            except Exception:
+                return None
+        # Linux
+        if shutil.which('xclip'):
+            try:
+                result = subprocess.run(
+                    ['xclip', '-selection', 'clipboard', '-t', 'image/png', '-o'],
+                    capture_output=True, timeout=5
+                )
+                if result.returncode == 0 and result.stdout:
+                    with open(dest_path, 'wb') as f:
+                        f.write(result.stdout)
+                    return dest_path
+            except Exception:
+                pass
+        if shutil.which('wl-paste'):
+            try:
+                result = subprocess.run(
+                    ['wl-paste', '-t', 'image/png'],
+                    capture_output=True, timeout=5
+                )
+                if result.returncode == 0 and result.stdout:
+                    with open(dest_path, 'wb') as f:
+                        f.write(result.stdout)
+                    return dest_path
+            except Exception:
+                pass
+        return None
+
+    def clipboard_get_text(self):
+        """Return clipboard text, or None."""
+        if self.is_macos:
+            cmd = ['pbpaste']
+        elif shutil.which('xclip'):
+            cmd = ['xclip', '-selection', 'clipboard', '-o']
+        elif shutil.which('wl-paste'):
+            cmd = ['wl-paste']
+        else:
+            return None
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+            return result.stdout if result.returncode == 0 else None
+        except Exception:
+            return None
 
 
 # ── Singleton ─────────────────────────────────────────────────────────

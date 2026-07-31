@@ -69,6 +69,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.cache_files = cache_files
         self.thinking = thinking
         self.autosave_name = None
+        self._pasted_images = []  # tracks clipboard-pasted image paths
 
         os.makedirs(self.sessions_dir, exist_ok=True)
 
@@ -604,6 +605,25 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     _input_result = read_full_input("You: ", multiline=True, color=ANSI_LIGHT_GRAY)
                     user_input = _input_result.strip()
                     _was_paste = getattr(_input_result, 'was_paste', False)
+
+                    # Check for pasted image reference from Alt+V clipboard paste
+                    if user_input.startswith("[Pasted image:") and "]" in user_input:
+                        import re as _re
+                        _m = _re.match(r'\[Pasted image:\s*(.+?)\]', user_input)
+                        if _m:
+                            _img_path = _m.group(1).strip()
+                            self._pasted_images.append(_img_path)
+                            # Add to pending_content so the model knows the path
+                            self.pending_content.append(
+                                f"[Pasted image saved to: {_img_path}]"
+                            )
+                            hint = (
+                                f"[Pasted image saved: {_img_path}]\n"
+                                f"To analyze it, say: \"analyze the pasted image\" "
+                                f"or \"what's in the pasted image?\"\n"
+                            )
+                            agent_print(hint)
+                            continue
                     if user_input:
                         logger.debug("User input: %s", user_input[:100])
                 except (KeyboardInterrupt, EOFError):

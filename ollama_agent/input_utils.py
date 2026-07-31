@@ -252,6 +252,47 @@ def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter", color=N
 
         kb = KeyBindings()
 
+        # ── Ctrl+V / Shift+Insert: clipboard image paste ───────────────
+        # When pressed, check if clipboard has an image. If so, save it
+        # to .uhu/.cache/ and inject a reference. If text, fall through to
+        # default paste behavior.
+
+        def _handle_clipboard_paste(event):
+            """Check clipboard for image; if found, save and submit reference."""
+            buf = event.current_buffer
+            try:
+                from .platform import terminal as _term
+                if not _term.clipboard_has_image():
+                    return False  # not an image — let default paste happen
+                # Save image to .uhu/.cache/
+                import os as _os
+                from datetime import datetime as _dt
+                cache_dir = _os.path.join(_os.getcwd(), ".uhu", ".cache")
+                _os.makedirs(cache_dir, exist_ok=True)
+                ts = _dt.now().strftime("%Y%m%d-%H%M%S")
+                dest = _os.path.join(cache_dir, f"clipboard-{ts}.png")
+                saved = _term.clipboard_save_image(dest)
+                if not saved:
+                    return False
+                # Inject reference text and submit
+                ref = f"[Pasted image: {saved}]"
+                buf.text = ref
+                buf.validate_and_handle()
+                return True
+            except Exception:
+                return False
+
+        @kb.add('escape', 'v')
+        def _(event):
+            """Alt+V / Esc+V — paste clipboard image (or text) into prompt."""
+            if _handle_clipboard_paste(event):
+                return
+            # No image — do text paste from clipboard
+            from .platform import terminal as _term
+            text = _term.clipboard_get_text()
+            if text:
+                event.current_buffer.insert_text(text)
+
         if multiline_mode == "free_form":
             # Enter inserts a newline; submit on empty line or /end
             @kb.add('enter')

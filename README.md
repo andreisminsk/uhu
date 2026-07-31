@@ -10,7 +10,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 ## Features
 
 - **Agent mode** (`--agent`): Parse and execute WRITE/EDIT/RUN/FILE blocks from model output
-- **Tools mode** (on by default, `--no-tools` to disable): 28+ structured tool calls for filesystem, git, HTTP, browser automation, web search, calendar, and more
+- **Tools mode** (on by default, `--no-tools` to disable): 34 structured tool calls for filesystem, git, HTTP, browser automation, web search, calendar, jobs, and more
 - **Skills mode** (`--skills` - off by default): Invoke development skills (code-review, test-gen, doc-gen, plan, md2pdf, docx2md, what-if, root-cause, problem-solving, architect, medicine, business-coach, pro-bidder, text-writer, graph-ai, svg2png, git-uncommitted) and custom skills
 - **Streaming support** (`--stream`): Token-by-token output
 - **Session persistence**: Save/restore conversations with `/save` and `/restore`
@@ -24,6 +24,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 - **OpenAI-compatible API** (`--api-openai`): Use OpenAI-compatible endpoints (e.g., Ollama's `/v1` or cloud providers)
 - **Context management** (OpenAI-compatible): Client-side history trimming with summarization and tool-call pair preservation — the OpenAI protocol doesn't guarantee server-side context eviction
 - **TPM rate limiting** (`--tpm`): Proactive tokens-per-minute tracking with rolling 60s window, aggressive 429 retry with jittered backoff and Retry-After parsing
+- **Clipboard image paste** (`Alt+V`): Paste screenshots from clipboard — saves to `.uhu/.cache/` and references in context for analysis with the `image-analysis` tool (requires `Pillow` on Windows/macOS, `xclip`/`wl-paste` on Linux)
 
 ## Installation
 
@@ -129,6 +130,14 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    ```
    pip install markitdown
    ```
+
+10. **Optional — Clipboard image paste (Alt+V)**
+
+    ```
+    pip install Pillow
+    ```
+
+    On Linux, also install `xclip` (X11) or `wl-clipboard` (Wayland) via your package manager.
 
 ## Quick Launch
 
@@ -394,6 +403,15 @@ uhu --no-autosave --no-cache
 | `/sessions`                        | List all saved sessions                                                                                                                                      |
 | `exit` / `/exit` / `/bye`          | Exit the session                                                                                                                                             |
 
+### Keyboard Shortcuts
+
+| Shortcut   | Action                                                                 |
+| ---------- | ---------------------------------------------------------------------- |
+| `Enter`    | Submit input                                                           |
+| `\` + `Enter` | Line continuation (inserts newline)                                |
+| `Alt+V`    | Paste from clipboard — if image, saves to `.uhu/.cache/` and adds a reference; if text, inserts into prompt |
+| `Ctrl+C`   | Interrupt current model call or action                                 |
+
 ## Confirmation Options
 
 When the agent wants to perform an action, you are prompted:
@@ -525,6 +543,13 @@ Available when running with tools enabled (default):
 | `calculator`      | Yes          | Safely evaluate mathematical expressions (arithmetic, trig, log, constants)                                          |
 | `llm_query`       | No           | Send prompts to a secondary LLM                                                                                        |
 | `browser`         | No           | Playwright browser automation with stealth support (navigate, extract, screenshot, PDF, click, fill, scroll, evaluate) |
+| `android_build`   | No           | Android build environment detection and Gradle execution                                                               |
+| `model_test`      | No           | Test model compatibility with the uhu harness                                                                          |
+| `job_submit`      | No           | Submit long-running background jobs (video processing, model analysis, custom commands)                              |
+| `job_list`        | Yes          | List background jobs with status and progress                                                                          |
+| `job_result`      | Yes          | Get output of a completed background job                                                                               |
+| `job_cancel`      | No           | Cancel a running background job                                                                                        |
+| `job_log`         | Yes          | Get last N log lines from a background job                                                                             |
 
 ### Token Counting
 
@@ -697,7 +722,7 @@ Tests are in `tests/` and run with `python -m pytest tests/ -v`:
 
 ### CODERGUIDE.md
 
-Place a `CODERGUIDE.md` file in your project directory to provide coding guidelines to the agent. 
+Place a `CODERGUIDE.md` file in your project directory for your own reference. It is **not** automatically loaded into the agent's context — use `PROJ-MEMORY.md` (via `/memorize project`) for instructions the agent must follow.
 
 ### .uhu/coderconfig.json
 
