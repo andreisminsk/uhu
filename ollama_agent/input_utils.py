@@ -314,14 +314,8 @@ def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter", color=N
         try:
             history = _get_pt_history()
             session = PromptSession(key_bindings=kb, history=history)
-            # Suppress the 'coroutine never awaited' RuntimeWarning that occurs
-            # when Playwright corrupts the asyncio event loop state. The
-            # warning fires even though we catch the exception and return None.
-            import warnings as _warnings
-            with _warnings.catch_warnings():
-                _warnings.simplefilter("ignore", RuntimeWarning)
-                result = session.prompt(_prompt_obj, handle_sigint=False,
-                                        style=_ptk_style)
+            result = session.prompt(_prompt_obj, handle_sigint=False,
+                                    style=_ptk_style)
         finally:
             _signal.signal(_signal.SIGINT, _saved_sigint)
 

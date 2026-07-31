@@ -40,6 +40,16 @@
 	  "command": "cmd",
       "args": ["/c", "mcp-mermaid"],
 	  "timeout": 120
+    },
+	"playwright": {
+      "enabled": false,
+      "command": "npx.cmd",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ],
+      "timeout": 180,
+      "auto_approve": false
     }
   },
   "llm_query": {
