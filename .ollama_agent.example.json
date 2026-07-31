@@ -25,6 +25,15 @@
       "command": "npx",
       "args": ["-y", "mcp-remote", "https://mcp.canva.com/mcp"],
       "timeout": 120
+    }, 
+    "figma": {
+      "enabled": false,
+      "command": "npx",
+      "args": ["-y", "figma-developer-mcp", "--stdio"],
+      "env": {
+        "FIGMA_API_KEY": "YOUR_FIGMA_API_TOKEN_HERE"
+      },
+      "timeout": 120
     },
 	"mcp-mermaid": {
       "enabled": true,
@@ -55,7 +64,10 @@
   "tools": {
     "image_analysis": {
       "base_url": "http://localhost:11434/",
-      "model": "gemma4:31b-cloud"
+      "model": "gemma4:31b-cloud",
+      "_comment": "api_type: 'ollama' for native API, 'openai' for OpenAI-compatible endpoint",
+      "api_type": "ollama",
+      "api_key": "ollama"
     },
     "google_calendar": {
       "credentials_path": "gs-cred.json",
