@@ -217,3 +217,5 @@ gs-cred.json
 .cache/
 .ollama_agent.json
 .uhu/
+
+ollama.com_cookies.txt

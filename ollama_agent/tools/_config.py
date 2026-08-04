@@ -41,6 +41,10 @@ DEFAULT_CONFIG = {
             "api_key": "",
             "cx": ""
         },
+        "ollama_balance": {
+            "cookie_path": "",
+            "ttl": 300
+        },
         "browser": {
             "headless": True,
             "slow_mo": 50,

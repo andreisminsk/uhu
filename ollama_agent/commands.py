@@ -77,8 +77,21 @@ class CommandMixin:
         bar = "█" * filled + "░" * (bar_len - filled)
         warning = " ⚠ Consider '/compact'" if pct >= 80 else ""
         ctx_msg = f"[ctx: {bar} {source}{total_tokens}/{self.ctx_size} ({pct:.1f}%){warning}]"
-        agent_print(ctx_msg + "\n")
+        agent_print(ctx_msg)
         self._log("system", ctx_msg)
+        # Show ollama balance indicator if using native Ollama API
+        if getattr(self, '_api_type', '') == 'ollama':
+            try:
+                from .ollama_balance import get_balance_indicator
+                bal = get_balance_indicator(self.workdir)
+                if bal:
+                    indicator = bal.format_indicator()
+                    if indicator:
+                        agent_print(indicator)
+                        self._log("system", indicator)
+            except Exception:
+                pass
+        agent_print()  # blank line after indicators
         # Show running/pending jobs summary if any
         if hasattr(self, '_job_manager') and self._job_manager:
             jobs = self._job_manager.list_jobs()
