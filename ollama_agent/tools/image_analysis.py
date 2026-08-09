@@ -17,7 +17,8 @@ class ImageAnalysisTool:
     do_not_truncate_observations = True
     description = (
         "Analyze an image file using a vision-capable model. "
-        "Params: {\"path\": \"<file_path>\", \"prompt\": \"<optional question>\", \"model\": \"<optional model override>\"}"
+        "Params: {\"path\": \"<file_path>\", \"prompt\": \"<optional question>\", "
+        "\"model\": \"<optional model override>\", \"timeout\": \"<optional timeout in seconds>\"}"
     )
     system_prompt = (
         "## image-analysis\n"
@@ -25,7 +26,8 @@ class ImageAnalysisTool:
         "Parameters (JSON object):\n"
         "- path (string, required): Path to the image file (use /attach-bin first to make the model aware of it)\n"
         "- prompt (string, optional, default \"Describe this image in detail.\"): Question or instruction about the image\n"
-        "- model (string, optional): Override the configured model (default from .ollama_agent.json)"
+        "- model (string, optional): Override the configured model (default from .ollama_agent.json)\n"
+        "- timeout (integer, optional): Override the configured timeout in seconds (default: 120)"
     )
 
     def _get_tool_config(self, workdir=None):
@@ -86,7 +88,7 @@ class ImageAnalysisTool:
         from ._config import load_config, DEFAULT_CONFIG
         config = load_config(workdir)
         tool_config = config.get("tools", {}).get("image_analysis", DEFAULT_CONFIG["tools"]["image_analysis"])
-        timeout = tool_config.get("timeout", 120)  # Default 120s timeout
+        timeout = params.get("timeout") or tool_config.get("timeout", 120)  # Default 120s timeout
         api_key = tool_config.get("api_key", "ollama")
         
         def _call_with_timeout():
