@@ -17,14 +17,15 @@ class ImageAnalysisTool:
     do_not_truncate_observations = True
     description = (
         "Analyze an image file using a vision-capable model. "
-        "Params: {\"path\": \"<file_path>\", \"prompt\": \"<optional question>\"}"
+        "Params: {\"path\": \"<file_path>\", \"prompt\": \"<optional question>\", \"model\": \"<optional model override>\"}"
     )
     system_prompt = (
         "## image-analysis\n"
         "Analyzes an image file using a vision-capable Ollama model.\n"
         "Parameters (JSON object):\n"
         "- path (string, required): Path to the image file (use /attach-bin first to make the model aware of it)\n"
-        "- prompt (string, optional, default \"Describe this image in detail.\"): Question or instruction about the image"
+        "- prompt (string, optional, default \"Describe this image in detail.\"): Question or instruction about the image\n"
+        "- model (string, optional): Override the configured model (default from .ollama_agent.json)"
     )
 
     def _get_tool_config(self, workdir=None):
@@ -71,6 +72,8 @@ class ImageAnalysisTool:
 
         # Load config
         base_url, model, api_type = self._get_tool_config(workdir)
+        # Allow per-call model override
+        model = params.get("model") or model
 
         # Read and base64 encode the image
         try:

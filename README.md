@@ -25,6 +25,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 - **Context management** (OpenAI-compatible): Client-side history trimming with summarization and tool-call pair preservation — the OpenAI protocol doesn't guarantee server-side context eviction
 - **TPM rate limiting** (`--tpm`): Proactive tokens-per-minute tracking with rolling 60s window, aggressive 429 retry with jittered backoff and Retry-After parsing
 - **Clipboard image paste** (`Alt+V`): Paste screenshots from clipboard — saves to `.uhu/.cache/` and references in context for analysis with the `image-analysis` tool (requires `Pillow` on Windows/macOS, `xclip`/`wl-paste` on Linux)
+- **Ollama balance indicator** (native API only): Shows session/weekly usage and remaining balance from ollama.com alongside the context indicator (requires `beautifulsoup4` + exported cookies in `ollama.com_cookies.txt`)
 
 ## Installation
 
@@ -138,6 +139,14 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
     ```
 
     On Linux, also install `xclip` (X11) or `wl-clipboard` (Wayland) via your package manager.
+
+11. **Optional — Ollama balance indicator (native API)**
+
+    ```
+    pip install beautifulsoup4
+    ```
+
+    Export your ollama.com cookies in Netscape format to `ollama.com_cookies.txt` (in your workdir or agent directory), or set `tools.ollama_balance.cookie_path` in `.ollama_agent.json`.
 
 ## Quick Launch
 
@@ -536,7 +545,7 @@ Available when running with tools enabled (default):
 | `google_search`   | Yes          | Search the web via Google Custom Search API (⚠️ deprecated for new projects; requires API key + CX in config, `enabled: false` by default) |
 | `web_fetch`       | No           | Fetch and extract web page content                                                                                     |
 | `http_request`    | No           | Make HTTP requests (GET, POST, etc.)                                                                                   |
-| `image_analysis`  | No           | Analyze images via Ollama vision model                                                                                 |
+| `image_analysis`  | No           | Analyze images via vision model (optional `model` param overrides config)                                              |
 | `google_calendar` | No           | Manage Google Calendar events                                                                                          |
 | `weather`         | Yes          | Weather forecast via wttr.in (no API key)                                                                             |
 | `token_count`     | Yes          | Estimate token count for text or a file (chars/4, words×1.3, tiktoken)                                               |
