@@ -87,6 +87,15 @@ def _parse_params(code):
             return result, None
     except (ValueError, _json.JSONDecodeError) as e:
         if looks_like_json:
+            # Retry: convert backtick-delimited strings to double-quoted
+            # (LLMs sometimes use backticks instead of quotes in JSON)
+            try:
+                fixed = re.sub(r'`([^`]*)`', r'"\1"', code)
+                result = _json.loads(fixed)
+                if isinstance(result, dict):
+                    return result, None
+            except (ValueError, _json.JSONDecodeError):
+                pass
             return {}, str(e)
     # Fallback: parse simple key: value lines
     # Fallback: parse simple key: value lines
@@ -208,8 +217,11 @@ def _extract_blocks(text):
             if stripped.startswith("```"):
                 if re.match(r"```\w", stripped):
                     fence_depth += 1
-                else:
+                elif fence_depth > 0:
                     fence_depth -= 1
+                else:
+                    # Bare ``` at depth 0 — treat as opening fence (no language tag)
+                    fence_depth += 1
                 code_lines.append(line)
                 pos += len(line)
                 i += 1
