@@ -51,7 +51,7 @@ def _strip_surrounding_fences(raw_code):
             end_idx -= 1
         if end_idx > start_idx:
             stripped = lines[end_idx - 1].strip()
-            if _EOF_SIGNAL_LINE.search(stripped) or _WRITE_SIGNAL_LINE.search(stripped) or _FILE_SIGNAL_LINE.search(stripped) or _EDIT_SIGNAL_LINE.search(stripped):
+            if _EOF_SIGNAL_LINE.match(stripped) or _WRITE_SIGNAL_LINE.match(stripped) or _FILE_SIGNAL_LINE.match(stripped) or _EDIT_SIGNAL_LINE.match(stripped):
                 end_idx -= 1
             else:
                 break
@@ -160,9 +160,86 @@ def parse_edit_content(content):
     return blocks
 
 
+def _compute_masked_lines(text):
+    """Pre-scan to find line indices inside properly-closed fenced code blocks.
+
+    Only properly-closed fences (matching ``` pairs) create masked zones.
+    Unclosed fences (weak model behavior) do NOT mask, so EOF detection
+    still works for models that forget to close fences.
+
+    Returns a set of line indices whose content should be treated as
+    opaque code — signal markers (EOF, WRITE, etc.) on these lines
+    must be ignored to prevent premature block closure.
+    """
+    lines = text.splitlines()
+    masked = set()
+    depth = 0
+    open_start = -1
+
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if re.match(r"```\w", stripped):
+                # Language-tagged fence — always opens
+                if depth == 0:
+                    open_start = idx
+                depth += 1
+            elif depth > 0:
+                # Closing fence
+                depth -= 1
+                if depth == 0:
+                    # Fence properly closed — mask all lines from open to close
+                    for j in range(open_start, idx + 1):
+                        masked.add(j)
+                    open_start = -1
+            else:
+                # Bare ``` at depth 0 — opening fence (no language tag)
+                open_start = idx
+                depth += 1
+    # If depth > 0 at end, fence was never closed — do NOT mask those lines
+
+    return masked
+
+
+def find_risky_markers(text, masked_lines):
+    """Find signal-marker patterns inside masked (fenced) content.
+
+    Returns a list of warning strings for lines that contain patterns
+    resembling real signal markers (EOF, WRITE, EDIT, FILE, TOOL, SKILL)
+    inside properly-closed fenced code blocks. These are advisory warnings
+    — they don't change parsing, but alert the user and model to potential
+    truncation risks if the parser's masking logic ever fails.
+    """
+    lines = text.splitlines()
+    warnings = []
+    signal_patterns = [
+        (_EOF_SIGNAL_LINE, "EOF"),
+        (_WRITE_SIGNAL_LINE, "WRITE"),
+        (_EDIT_SIGNAL_LINE, "EDIT"),
+        (_FILE_SIGNAL_LINE, "FILE"),
+        (_TOOL_SIGNAL_LINE, "TOOL"),
+        (_SKILL_SIGNAL_LINE, "SKILL"),
+    ]
+    for idx in sorted(masked_lines):
+        if idx >= len(lines):
+            continue
+        stripped = lines[idx].strip()
+        for pattern, name in signal_patterns:
+            if pattern.search(stripped):
+                preview = stripped[:80] + "..." if len(stripped) > 80 else stripped
+                warnings.append(
+                    f"Line {idx + 1} contains a pattern resembling a {name} marker "
+                    f"inside a fenced code block: {preview!r}. "
+                    f"If this block fails to parse correctly, this may be the cause."
+                )
+                break  # One warning per line is enough
+    return warnings
+
+
 def _extract_blocks(text):
     """Low-level block extractor yielding (start, end, path, lang, code, closed, btype)."""
     lines = text.splitlines(keepends=True)
+    masked_lines = _compute_masked_lines(text)
     pos = 0
     i = 0
     pending_path = None
@@ -179,7 +256,9 @@ def _extract_blocks(text):
         current_pos = pos
 
         if pending_path:
-            check_eof = (fence_depth == 0) or is_markdown
+            # Skip EOF detection on lines inside properly-closed fences
+            # (their content is opaque code, not signal markers)
+            check_eof = ((fence_depth == 0) or is_markdown) and (i not in masked_lines)
             if check_eof:
                 em = _EOF_SIGNAL_LINE.search(stripped)
                 if em:
@@ -253,7 +332,7 @@ def _extract_blocks(text):
                     is_markdown = False
                 continue
 
-            if fence_depth == 0:
+            if fence_depth == 0 and i not in masked_lines:
                 wm_new = _WRITE_SIGNAL_LINE.search(stripped)
                 em_new = _EDIT_SIGNAL_LINE.search(stripped)
                 fm_new = _FILE_SIGNAL_LINE.search(stripped)

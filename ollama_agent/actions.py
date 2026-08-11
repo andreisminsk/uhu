@@ -19,7 +19,7 @@ from .command_runner import CommandRunner, _fix_win_backslash_quote
 from .display import agent_print, tool_print, show_diff_colored
 from .file_executor import FileExecutor, FileCache, RollbackManager
 from .observation import truncate_observations
-from .parser import parse_actions, _PATH_SIGNAL, _BASH_BLOCK
+from .parser import parse_actions, _PATH_SIGNAL, _BASH_BLOCK, _compute_masked_lines, find_risky_markers
 from .safety import CommandSafetyGate, get_base_command, resolve_tool_name
 from .skills.base import PromptOnlySkill, MarkdownSkill
 
@@ -267,7 +267,8 @@ class ActionMixin:
                 return None
         # Check for missing required parameters
         if not params:
-            required = [k for k, v in tool.parameters.items() if v.get("required", False)]
+            tool_params = getattr(tool, 'parameters', {})
+            required = [k for k, v in tool_params.items() if v.get("required", False)]
             if required:
                 param_hint = ", ".join(f'"{r}": ...' for r in required)
                 msg = (
@@ -277,6 +278,14 @@ class ActionMixin:
                 )
                 agent_print(msg + "\n")
                 return msg
+            # Empty params with no required fields — suspicious, likely parser truncation
+            warn = (f"[⚠ PARSING WARNING: {tool_name} was invoked with empty parameters. "
+                    f"This usually means the TOOL block was truncated during parsing "
+                    f"(e.g. an EOF marker appeared inside the JSON content). "
+                    f"Please re-issue the TOOL call with valid JSON parameters in a "
+                    f"```json block between the TOOL and EOF markers.]")
+            agent_print(warn + "\n")
+            return warn
         # Pre-cache files that will be modified by file-modifying tools
         _FILE_MODIFYING_TOOLS = {"write_file", "replace_in_file", "move_file", "copy_file"}
         if tool_name in _FILE_MODIFYING_TOOLS and self.cache_files:
@@ -378,6 +387,15 @@ class ActionMixin:
                 agent_print("[hint: response contains **WRITE:**/**EDIT:**/**TOOL:**/**SKILL:** blocks -- add --agent, --tools, and/or --skills to execute them]\n")
             return (None, False, False, False)
         actions = parse_actions(response_text)
+        # Detect risky signal-marker patterns inside fenced content
+        masked = _compute_masked_lines(response_text)
+        risky = find_risky_markers(response_text, masked)
+        if risky:
+            for w in risky:
+                agent_print(f"[⚠ {w}]\n")
+            observations_risky = "[⚠ PARSING WARNING: " + " | ".join(risky) + "]"
+        else:
+            observations_risky = None
         if not actions:
             # Check if the model wrote signal lines but with incomplete format
             if _PATH_SIGNAL.search(response_text):
@@ -554,5 +572,7 @@ class ActionMixin:
             for w in placeholder_warnings:
                 agent_print(w + "\n")
             observations.extend(placeholder_warnings)
+        if observations_risky:
+            observations.append(observations_risky)
         result = truncate_observations(observations)
         return (result, user_cancelled_run, has_executed_non_read, has_executed_skill)
