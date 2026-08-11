@@ -71,6 +71,14 @@
       "max_tokens": 131072
     }
   },
+  "llm_parser": {
+    "enabled": false,
+    "model": "glm-5.1:cloud",
+    "base_url": "http://localhost:11434",
+    "timeout": 60,
+    "api_type": "ollama",
+    "api_key": "ollama"	
+  },
   "tools": {
     "image_analysis": {
       "base_url": "http://localhost:11434/",

@@ -66,6 +66,14 @@ DEFAULT_CONFIG = {
             "api_key": "ollama-local",
             "max_tokens": 131072
         }
+    },
+    "llm_parser": {
+        "enabled": False,
+        "model": "",
+        "base_url": "",
+        "timeout": 60,
+        "api_type": "ollama",
+        "api_key": "ollama"
     }
 }
 

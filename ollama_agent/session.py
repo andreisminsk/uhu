@@ -25,7 +25,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 sessions_dir=None, agent=True, workdir=".", autosave=True,
                 tools=True, skills=False, skills_dir="./.skills", cache_files=True,
                 thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
-                tpm_limit=None, max_context=None):
+                tpm_limit=None, max_context=None, no_llm_parsing=False):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -82,6 +82,17 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
 
         # Load persistent auto-approval settings from project config
         self._load_coder_config()
+
+        # LLM fallback parser config
+        from .tools._config import load_config as _load_cfg
+        _cfg = _load_cfg(self.workdir)
+        _parser_cfg = _cfg.get("llm_parser", {})
+        self._llm_parser_enabled = _parser_cfg.get("enabled", False) and not no_llm_parsing
+        self._llm_parser_model = _parser_cfg.get("model", "") or model
+        self._llm_parser_base_url = _parser_cfg.get("base_url", "") or host
+        self._llm_parser_timeout = _parser_cfg.get("timeout", 60)
+        self._llm_parser_api_type = _parser_cfg.get("api_type", "ollama")
+        self._llm_parser_api_key = _parser_cfg.get("api_key", "ollama")
 
         if self.autosave:
             project_name = os.path.basename(self.workdir) or "session"

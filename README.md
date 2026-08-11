@@ -26,6 +26,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 - **TPM rate limiting** (`--tpm`): Proactive tokens-per-minute tracking with rolling 60s window, aggressive 429 retry with jittered backoff and Retry-After parsing
 - **Clipboard image paste** (`Alt+V`): Paste screenshots from clipboard — saves to `.uhu/.cache/` and references in context for analysis with the `image-analysis` tool (requires `Pillow` on Windows/macOS, `xclip`/`wl-paste` on Linux)
 - **Ollama balance indicator** (native API only): Shows session/weekly usage and remaining balance from ollama.com alongside the context indicator (requires `beautifulsoup4` + exported cookies in `ollama.com_cookies.txt`)
+- **LLM fallback parser** (off by default, `--no-llm-parsing` to disable): When the regex parser detects suspicious results (risky markers in fenced content, empty tool params, unclosed blocks), a configurable "Parser LLM" verifies and corrects the parse. Configured via the `llm_parser` section in `.ollama_agent.json` (`model`, `base_url`, `api_type`, `api_key`, `timeout`). Uses the main model by default.
 
 ## Installation
 

@@ -396,6 +396,24 @@ class ActionMixin:
             observations_risky = "[⚠ PARSING WARNING: " + " | ".join(risky) + "]"
         else:
             observations_risky = None
+        # LLM fallback parsing — triggered when regex parser signals trouble
+        llm_parser_warnings = []
+        if getattr(self, '_llm_parser_enabled', False):
+            from .llm_parser import should_trigger_fallback, llm_parse_actions, compare_and_merge
+            # Collect missing_eof_paths early for trigger check
+            _missing_eof = [a.get("path") or a.get("name") for a in actions
+                           if a.get("type") != "run" and not a.get("closed")]
+            if should_trigger_fallback(actions, risky, _missing_eof):
+                agent_print("[LLM parser fallback triggered — verifying parse with LLM...]\n")
+                llm_actions = llm_parse_actions(
+                    self._llm_parser_base_url, self._llm_parser_model,
+                    response_text, timeout=self._llm_parser_timeout,
+                    api_type=self._llm_parser_api_type,
+                    api_key=self._llm_parser_api_key,
+                )
+                actions, llm_parser_warnings = compare_and_merge(actions, llm_actions)
+                for w in llm_parser_warnings:
+                    agent_print(f"{w}\n")
         if not actions:
             # Check if the model wrote signal lines but with incomplete format
             if _PATH_SIGNAL.search(response_text):
@@ -574,5 +592,7 @@ class ActionMixin:
             observations.extend(placeholder_warnings)
         if observations_risky:
             observations.append(observations_risky)
+        for w in llm_parser_warnings:
+            observations.append(w)
         result = truncate_observations(observations)
         return (result, user_cancelled_run, has_executed_non_read, has_executed_skill)

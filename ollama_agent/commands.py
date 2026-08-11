@@ -158,6 +158,9 @@ class CommandMixin:
             "  exit, /exit, /bye, bye       Exit the session\n"
         )
 
+        llm_parser_status = "on" if getattr(self, '_llm_parser_enabled', False) else "off"
+        agent_print(f"  LLM fallback parser: {llm_parser_status} (configure via llm_parser in .ollama_agent.json, --no-llm-parsing to disable)\n")
+
         if self.agent:
             agent_print(
                 "\n"

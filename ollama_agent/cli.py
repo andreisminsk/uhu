@@ -53,6 +53,8 @@ def main():
                         help="Tokens-per-minute limit for OpenAI-compatible backends (enables proactive TPM tracking and aggressive 429 retry)")
     parser.add_argument("--max-context", type=int, default=None,
                         help="Max context cap for history trimming (OpenAI-compatible + --tpm only, default: 16384)")
+    parser.add_argument("--no-llm-parsing", action="store_true",
+                        help="Disable LLM fallback parsing (configured via llm_parser section in .ollama_agent.json)")
     parser.add_argument("prompt", nargs="*", default=[],
                         help="One-shot prompt — execute and exit (no interactive loop)")
     args = parser.parse_args()
@@ -105,6 +107,7 @@ def main():
         api_key=args.api_key,
         tpm_limit=args.tpm,
         max_context=args.max_context,
+        no_llm_parsing=args.no_llm_parsing,
     )
 
     if args.prompt:
