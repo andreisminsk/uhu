@@ -68,6 +68,7 @@ AGENT_SYSTEM_PROMPT = (
     "- Do NOT repeat the same instruction or explanation multiple times.\n"
     "- If you need to study multiple files, use FILE: blocks to read them — do NOT list their contents in prose.\n"
     "- Act with WRITE/EDIT/RUN/FILE blocks rather than describing what you would do.\n"
+    "- When a task is complete or the user has no further request, respond conversationally — no action blocks are needed.\n"
     "- Keep explanations under 200 words unless the user asks for detail.\n"
     "- If you catch yourself repeating content, STOP and take a different approach.\n\n"
     "FIRST INTERACTION:\n"

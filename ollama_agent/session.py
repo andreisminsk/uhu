@@ -192,10 +192,25 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         return text, images if images else None
     # Phrases that suggest the model intends to act but didn't produce action blocks
     _INTENT_PHRASES = (
-        "let me ", "i'll ", "i will ", "i should ", "first, i", "first i",
+        "i'll ", "i will ", "i should ", "first, i", "first i",
         "i need to", "i want to", "let's ", "i can ", "going to ",
         "i'm going to", "i would ", "next, i", "now i'll", "now i will",
         "step 1", "step one", "first step",
+    )
+
+    # "let me" phrases that are conversational, not intent to act
+    _CONVERSATIONAL_LET_ME = (
+        "let me know", "let me think", "let me see", "let me know if",
+        "let me know if you", "let me know when",
+    )
+
+    # Phrases indicating task completion — suppress nudge
+    _COMPLETION_PHRASES = (
+        "complete", "completed", "done", "all set", "all done", "ready to test",
+        "ready", "nothing else", "nothing more", "that's it", "you're all set",
+        "you're all good", "fully implemented", "built and ready", "no more actions",
+        "is implemented", "are implemented", "has been implemented",
+        "let me know if you need", "feel free to", "as always",
     )
 
     def _nudge_if_stuck(self, response_text, had_actions):
@@ -206,13 +221,27 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         lower = response_text.lower().strip()
         # Check if the response is short and contains intent phrases
         if len(response_text) < 500:
+            # Suppress nudge if completion language is present
+            for phrase in self._COMPLETION_PHRASES:
+                if phrase in lower:
+                    return None
+            # Check for "let me" — only nudge if it's intent, not conversational
+            has_let_me = "let me " in lower
+            if has_let_me:
+                # If all "let me" occurrences are conversational, skip
+                is_conversational = any(phrase in lower for phrase in self._CONVERSATIONAL_LET_ME)
+                if is_conversational:
+                    # Only skip if there are no other intent phrases
+                    has_other_intent = any(phrase in lower for phrase in self._INTENT_PHRASES)
+                    if not has_other_intent:
+                        return None
             for phrase in self._INTENT_PHRASES:
                 if phrase in lower:
                     return (
                         "[System: You described what you plan to do but didn't produce any "
-                        "action blocks. Use **WRITE:**, **EDIT:**, **FILE:**, **RUN:**, or "
-                        "**TOOL:** blocks to actually perform actions. Don't just describe "
-                        "your intent — take action now.]"
+                        "action blocks. If there's more work to do, use **WRITE:**, **EDIT:**, "
+                        "**FILE:**, **RUN:**, or **TOOL:** blocks to perform it. "
+                        "If the task is complete, just confirm — no action blocks needed.]"
                     )
         return None
 
