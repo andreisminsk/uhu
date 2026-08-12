@@ -167,10 +167,11 @@ class JobListTool(_ToolBase):
 List all jobs with their status, progress, and elapsed time.
 
 Parameters (JSON object):
-- status (string, optional): Filter by status: pending, running, completed, failed, cancelled
+- status (string, optional): Filter by status: pending, running, completed, failed, cancelled, or "all" for no filter
 
 Example:
 - {} → list all jobs
+- {"status": "all"} → list all jobs (no filter)
 - {"status": "running"} → list only running jobs"""
 
     def execute(self, params, workdir=None):
@@ -178,6 +179,10 @@ Example:
         if mgr is None:
             return {"error": "No job manager available."}
         status_filter = params.get("status")
+        if status_filter:
+            status_filter = status_filter.strip()
+            if status_filter.lower() in ("all", ""):
+                status_filter = None
         jobs = mgr.list_jobs(status_filter=status_filter)
         if not jobs:
             return {"jobs": [], "message": "No jobs found."}
