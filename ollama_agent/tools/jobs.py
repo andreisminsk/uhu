@@ -39,7 +39,13 @@ def get_active_manager():
 # ── Subprocess worker ──────────────────────────────────────────────────
 
 def _subprocess_worker(job, command, workdir):
-    """Run a shell command as a subprocess, streaming output to the job log."""
+    """Run a shell command as a subprocess, streaming output to the job log.
+
+    Registers a ``kill_callback`` on the job so that ``cancel()`` or
+    ``shutdown()`` can force-terminate the child process even when this
+    worker thread is blocked on ``proc.stdout`` and cannot poll the cancel
+    event.
+    """
     kwargs = dict(
         shell=True,
         stdout=subprocess.PIPE,
@@ -52,18 +58,35 @@ def _subprocess_worker(job, command, workdir):
     proc = subprocess.Popen(command, **kwargs)
     progress_re = re.compile(r'\[?(\d+(?:\.\d+)?)%\]?')
 
-    output_lines = []
-    for raw_line in proc.stdout:
-        line = raw_line.decode("utf-8", errors="replace")
-        output_lines.append(line)
-        job.append_log(line.rstrip())
-        m = progress_re.search(line)
-        if m:
-            job.update_progress(float(m.group(1)) / 100.0)
-        if job.cancel_event.is_set():
-            from ..process import kill_proc_tree
+    # Register force-kill so cancel()/shutdown() can terminate the process
+    # even if we're blocked reading stdout.
+    from ..process import kill_proc_tree
+
+    def _kill():
+        if proc.poll() is None:
             kill_proc_tree(proc)
-            break
+
+    job.kill_callback = _kill
+
+    # If already cancelled before we started, kill immediately.
+    if job.cancel_event.is_set():
+        _kill()
+        return "[cancelled]"
+
+    output_lines = []
+    try:
+        for raw_line in proc.stdout:
+            line = raw_line.decode("utf-8", errors="replace")
+            output_lines.append(line)
+            job.append_log(line.rstrip())
+            m = progress_re.search(line)
+            if m:
+                job.update_progress(float(m.group(1)) / 100.0)
+            if job.cancel_event.is_set():
+                _kill()
+                break
+    finally:
+        job.kill_callback = None  # process is dead, no need for further kills
 
     proc.wait(timeout=5)
     if job.cancel_event.is_set():
@@ -78,11 +101,19 @@ def _subprocess_worker(job, command, workdir):
 # ── Tool-wrap worker ───────────────────────────────────────────────────
 
 def _tool_wrap_worker(job, tool_name, params, workdir):
-    """Run an existing tool inside the worker thread."""
+    """Run an existing tool inside the worker thread.
+
+    Note: tool-wrap workers cannot be force-killed — the wrapped tool must
+    poll ``job.cancel_event`` cooperatively. If it doesn't, cancellation
+    sets the status to 'cancelled' but the tool keeps running until it
+    finishes or errors.
+    """
     from . import get as _get
     tool = _get(tool_name)
     if tool is None:
         raise RuntimeError(f"Unknown tool: {tool_name}")
+    if job.cancel_event.is_set():
+        return "[cancelled]"
     result = tool.execute(params, workdir=workdir)
     if isinstance(result, dict) and "error" in result:
         raise RuntimeError(result["error"])

@@ -63,6 +63,9 @@ class Job:
         self._lock = threading.Lock()
         # Back-reference set by JobManager so the worker can emit notifications.
         self._manager: Optional["JobManager"] = None
+        # Force-kill handler set by subprocess workers so cancel()/shutdown()
+        # can terminate the child process even if the worker is blocked on I/O.
+        self.kill_callback: Optional[Callable] = None
 
     # ── lifecycle ──────────────────────────────────────────────────────
 
@@ -78,12 +81,24 @@ class Job:
         logger.info("Job %s started (%s)", self.id, self.name)
 
     def cancel(self):
-        """Cooperatively request cancellation."""
+        """Cooperatively request cancellation, then force-kill if possible.
+
+        Sets the cancel event (cooperative signal) and immediately invokes
+        ``kill_callback`` if registered — this force-terminates subprocesses
+        even when the worker thread is blocked on I/O and cannot poll the
+        event itself.
+        """
         self.cancel_event.set()
         with self._lock:
             if self.status in (_PENDING, _RUNNING):
                 self.status = _CANCELLED
                 self.finished_at = datetime.now()
+        # Force-kill subprocess if a kill callback is registered.
+        if self.kill_callback is not None:
+            try:
+                self.kill_callback()
+            except Exception:
+                logger.warning("Job %s kill_callback failed", self.id, exc_info=True)
         logger.info("Job %s cancelled", self.id)
 
     # ── worker ─────────────────────────────────────────────────────────
@@ -391,7 +406,7 @@ class JobManager:
                             if elapsed > job.timeout:
                                 job.cancel()
                                 self._notify(
-                                    job.id, _FAILED, f"timed out after {job.timeout}s"
+                                    job.id, _CANCELLED, f"timed out after {job.timeout}s"
                                 )
                                 logger.warning("Job %s timed out", job.id)
 
@@ -412,13 +427,19 @@ class JobManager:
     # ── shutdown ───────────────────────────────────────────────────────
 
     def shutdown(self):
-        """Cancel all active jobs, wait up to 5s for threads, stop watchdog."""
+        """Cancel all active jobs, force-kill subprocesses, wait for threads.
+
+        cancel() invokes each job's ``kill_callback`` (if registered),
+        force-terminating subprocesses immediately. We then wait up to 10s
+        for worker threads to drain — longer than the old 5s to give
+        subprocess workers time to exit after kill_proc_tree.
+        """
         self._shutdown = True
         for job in self._store.all():
             if job.status in (_PENDING, _RUNNING):
-                job.cancel()
-        # Wait for running threads to finish (cooperative).
-        deadline = time.time() + 5
+                job.cancel()  # sets cancel_event + invokes kill_callback
+        # Wait for worker threads to finish after force-kill.
+        deadline = time.time() + 10
         for job in self._store.all():
             if job._thread and job._thread.is_alive():
                 remaining = max(0.1, deadline - time.time())
