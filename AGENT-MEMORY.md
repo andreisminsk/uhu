@@ -13,6 +13,9 @@
 - **Always** add `sys.stdout.reconfigure(encoding='utf-8')` before any `print()` or `json.dump()` calls in Python scripts that may output Unicode (emoji, non-ASCII text, etc.).
 - Alternatively, set the environment variable `PYTHONUTF8=1` to force UTF-8 mode globally.
 
+## Date references
+- When the user says "today" or refers to today's date, use the `time_now` tool to get the actual current date instead of guessing.
+
 ## Android build environment
 
 - **DO NOT** set `JAVA_HOME` inline in `cmd` (e.g. `set JAVA_HOME=...;`) — the space in `Program Files` and `;`-separated path semantics break parsing. Use the `android_build` tool or generate a script via `action=script`.

@@ -356,12 +356,10 @@ class CommandMixin:
                 "Write it as a compact context block, not as a narrative:\n\n" + conversation_text
             )
             try:
-                response = self.client.chat(
-                    model=self.model,
-                    messages=[{"role": "user", "content": summary_prompt}],
-                    options={"num_ctx": self.ctx_size, "temperature": MODEL_TEMPERATURE}
+                summary, _ = self._backend.call(
+                    [{"role": "user", "content": summary_prompt}],
+                    stream=False,
                 )
-                summary = response["message"]["content"]
                 # Sanity check: if summary is too short or looks like a chat response, discard it
                 if not summary or len(summary) < 100 or summary.strip().endswith("?"):
                     summary = None
