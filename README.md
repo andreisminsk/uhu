@@ -395,8 +395,9 @@ uhu --no-autosave --no-cache
 | `/auto reset`                      | Clear session auto-approvals                                                                                                                                 |
 | `/auto reset always`               | Clear persistent (always) approvals                                                                                                                          |
 | `/auto reset all`                  | Clear both session and persistent approvals                                                                                                                  |
-| `/diff`                            | Toggle auto-diff for edits                                                                                                                                   |
-| `/pid`                             | Show current and parent process IDs                                                                                                                              |
+| `/diff`                             | Toggle auto-diff for edits                                                                                                                                    |
+| `/timeout [sec\|reset]`             | Show or set the active model-call timeout for this session only (streaming idle gap or blocking total cap, depending on launch mode); no persistence |
+| `/pid`                              | Show current and parent process IDs                                                                                                                               |
 | `/m` or `/multiline`               | Enter multiline mode                                                                                                                                         |
 | `/attach <path>`                   | Attach file(s) to next message                                                                                                                               |
 | `/attach-bin <path>`               | Attach binary file reference (for tool-based analysis)                                                                                                       |

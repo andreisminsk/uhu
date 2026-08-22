@@ -132,8 +132,9 @@ class CommandMixin:
             "  /auto reset                  Clear session auto-approvals\n"
             "  /auto reset always           Clear persistent (always) approvals\n"
             "  /auto reset all              Clear both session and persistent approvals\n"
-            "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
-            "  /pid                         Show current and parent process IDs\n"
+             "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
+             "  /timeout [sec|reset]         Show/set the active model-call timeout (this session only)\n"
+             "  /pid                         Show current and parent process IDs\n"
             "  /memorize [project|agent] <text>  Add entry to permanent memory\n"
             "\n"
             "  /m, /multiline               Enter multiline mode (empty line or /end to submit)\n"
@@ -858,6 +859,41 @@ class CommandMixin:
             agent_print(f"  ⚠ Memory is at capacity ({line_count}/{cfg['max_lines']} lines). Use /compact memory to free space.")
         agent_print()
 
+    def do_timeout(self, args_str):
+        """Show or set the active model-call timeout for this session.
+
+        Only the active mode's timeout is touched: streaming uses
+        STREAM_CHUNK_TIMEOUT (idle gap between chunks), blocking uses
+        NON_STREAM_TIMEOUT (total call cap). No persistence.
+        """
+        backend = getattr(self, '_backend', None)
+        if backend is None:
+            agent_print("[No backend available]\n")
+            return
+        sub = args_str.strip().lower()
+        active = "streaming" if self.stream else "blocking"
+        attr = "STREAM_CHUNK_TIMEOUT" if self.stream else "NON_STREAM_TIMEOUT"
+        default = getattr(type(backend), attr)
+        current = getattr(backend, attr)
+
+        if sub == "":
+            agent_print(f"[timeout: {active} mode — {current}s (default {default}s)]\n")
+            return
+        if sub == "reset":
+            setattr(backend, attr, default)
+            agent_print(f"[timeout reset to default: {default}s ({active} mode)]\n")
+            return
+        try:
+            val = int(sub)
+        except ValueError:
+            agent_print(f"[Invalid timeout: {sub!r} — use a number of seconds, or /timeout reset]\n")
+            return
+        if val <= 0:
+            agent_print("[Timeout must be a positive number of seconds]\n")
+            return
+        setattr(backend, attr, val)
+        agent_print(f"[timeout set to {val}s ({active} mode)]\n")
+
     def do_auto(self, args_str):
         sub = args_str.strip().lower()
         if sub == "reset":
@@ -930,8 +966,10 @@ class CommandMixin:
         "/sessions": "_cmd_sessions", "/skills": "_cmd_skills", "/jobs": "_cmd_jobs",
         "/compact": "_cmd_compact",
         "/pid": "_cmd_pid",
-    }
+         "/timeout": "_cmd_timeout",
+     }
     _PREFIX_COMMANDS = [
+        ("/timeout ", "_cmd_timeout", 8),
         ("/attach-bin", "_cmd_attach_bin", 11),
         ("/embed-bin", "_cmd_embed_bin", 10),
         ("/memorize", "_cmd_memorize", 9),
@@ -1042,6 +1080,10 @@ class CommandMixin:
         pid = os.getpid()
         ppid = os.getppid()
         agent_print(f"PID: {pid} | Parent PID: {ppid}\n")
+        return DISPATCH_CONTINUE
+
+    def _cmd_timeout(self, args):
+        self.do_timeout(args)
         return DISPATCH_CONTINUE
 
     def _cmd_jobs(self, args):

@@ -297,6 +297,11 @@ class LLMBackend(ABC):
         self._trimmer: Optional[HistoryTrimmer] = None
         self._retry: Optional[RetryHandler] = None
         self._tpm_tracker: Optional[TPMTracker] = None
+        # Instance-level timeout overrides (shadow the class constants).
+        # The /timeout command can adjust these for the current session only;
+        # the class constants remain the defaults for /timeout reset.
+        self.STREAM_CHUNK_TIMEOUT = self.STREAM_CHUNK_TIMEOUT
+        self.NON_STREAM_TIMEOUT = self.NON_STREAM_TIMEOUT
 
     def call(self, messages: List[Dict], stream: bool = True) -> Tuple[str, Optional[int]]:
         """Common call flow. Components activate only if configured.
