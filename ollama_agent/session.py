@@ -13,6 +13,7 @@ from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, 
 from .actions import agent_print, tool_print
 from .parser import parse_actions
 from .input_utils import read_full_input, _reconfigure_stdout
+from .utils import check_for_update
 from .platform import terminal
 from .commands import CommandMixin, DISPATCH_CONTINUE, DISPATCH_BREAK
 from .actions import ActionMixin
@@ -139,6 +140,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         if not self.quiet:
             for w in get_memory_warnings(self.workdir):
                 agent_print(f"[⚠ {w}]")
+            self._check_version_async()
 
         # Auto-create parent directory for log file
         if log_path:
@@ -165,6 +167,31 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             logger.debug("[%s] %s", role, content[:200])
         elif role in ("user", "assistant"):
             logger.debug("[%s] %s", role, content[:200])
+
+    def _check_version_async(self):
+        """Check GitHub for a newer version in a background thread."""
+        import threading
+
+        # Read current version from uhu-ver.txt
+        ver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uhu-ver.txt")
+        try:
+            with open(ver_path, "r", encoding="utf-8") as f:
+                current = f.read().strip()
+        except FileNotFoundError:
+            return
+        if not current:
+            return
+
+        def _check():
+            latest, is_newer = check_for_update(current)
+            if is_newer and latest:
+                agent_print(
+                    f"\n[⚠ Update available: v{current} → v{latest}. "
+                    f"Run 'git pull' to update.]\n"
+                )
+
+        t = threading.Thread(target=_check, daemon=True)
+        t.start()
 
     # Maximum response length in characters before truncating.
     # Prevents runaway repetitive output from consuming all context.
