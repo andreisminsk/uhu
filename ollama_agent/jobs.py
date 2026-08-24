@@ -129,7 +129,7 @@ class Job:
             self.append_log(f"[ERROR] {e}")
             event_type = _FAILED
             message = str(e)
-            logger.error("Job %s failed: %s", self.id, e)
+            logger.debug("Job %s failed: %s", self.id, e)
         finally:
             if self._manager is not None:
                 self._manager._notify(self.id, event_type, message)
