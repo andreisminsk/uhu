@@ -166,7 +166,9 @@ class RunCommandTool:
                 timeout=timeout,
             )
         except subprocess.TimeoutExpired:
-            return f"Error: Command timed out after {timeout}s"
+            return (f"Error: Command timed out after {timeout}s. "
+                    f"For long-running commands, use job_submit with a 'command' parameter, "
+                    f"or increase the 'timeout' parameter.")
         except FileNotFoundError as e:
             return f"Error: Command not found: {e}"
         except Exception as e:

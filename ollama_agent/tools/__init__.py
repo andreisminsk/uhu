@@ -21,6 +21,7 @@ from .android_build import AndroidBuildTool
 from .weather import WeatherTool
 from .token_count import TokenCountTool
 from .calculator import CalculatorTool
+from .sleep import SleepTool
 
 
 # ── Tool base class ─────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ register(AndroidBuildTool())
 register(WeatherTool())
 register(TokenCountTool())
 register(CalculatorTool())
+register(SleepTool())
 from .jobs import JobSubmitTool, JobListTool, JobResultTool, JobCancelTool, JobLogTool
 
 register(ModelTestTool())

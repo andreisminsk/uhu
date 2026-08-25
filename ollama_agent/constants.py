@@ -88,6 +88,22 @@ AGENT_TOOLS_RULES = (
     "- NEVER use **RUN:** `python -c '...'` for syntax checks or import tests — use **TOOL:**`py_compile` instead.\n"
     "- For **TOOL:** blocks, the EOF path is the tool name (e.g. **EOF:`read_file`**), NOT the file path being operated on.\n"
     "- If unsure of a file path, use find_file or search_in_files first.\n"
+    "\n"
+    "JOB RULES:\n"
+    "- For commands that may take longer than 30s (builds, test suites, video processing,\n"
+    "  model inference, large downloads), use job_submit instead of run_command.\n"
+    "- After submitting a job, do NOT call job_result immediately — the job may still be running.\n"
+    "  Use sleep to wait for the estimated duration, then job_list to check status, then job_result when completed.\n"
+    "- Typical pattern: job_submit → sleep (estimated duration) → job_list → job_result\n"
+    "- You will also receive [JOB COMPLETED/FAILED] notifications automatically.\n"
+    "\n"
+    "LONG TASK INDICATORS — use job_submit when the command involves:\n"
+    "- ffmpeg, video encoding, image batch processing\n"
+    "- npm/yarn/pip install, gradle build, cargo build\n"
+    "- model training, inference, embedding generation\n"
+    "- pytest/jest with many tests, full test suites\n"
+    "- curl/wget downloading large files\n"
+    "- any command you expect to take >30s\n"
 )
 
 # Rule appended when either tools or skills are enabled — both use
@@ -191,6 +207,7 @@ SAFE_TOOLS = {
     'job_list',         # Lists jobs — read-only, no side effects
     'job_result',       # Gets job result — read-only, no side effects
     'job_log',          # Gets job log — read-only, no side effects
+    'sleep',            # Pure wait — no side effects, auto-approved
 }
 
 # ANSI terminal color codes
