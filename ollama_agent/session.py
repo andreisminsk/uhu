@@ -1,6 +1,7 @@
 """ChatSession: the main interactive chat loop with agentic capabilities."""
 
 import hashlib
+import json
 import logging
 import os
 import sys
@@ -329,12 +330,17 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             name = action.get("name", "").strip()
             if not name:
                 return None
-            # Hash job_submit by type + params to detect identical job submissions
+            # Include a hash of the params so that the same tool called with
+            # different arguments (e.g., read_file at different offsets) is
+            # NOT treated as a repeated/looping action.
+            params = action.get("params", {})
             if name == "job_submit":
-                params = action.get("params", {})
+                # Hash job_submit by type + params to detect identical job submissions
                 job_type = params.get("type", params.get("command", ""))
                 return (atype, name, job_type)
-            return (atype, name)
+            param_str = json.dumps(params, sort_keys=True, ensure_ascii=False)
+            param_hash = hashlib.md5(param_str.encode()).hexdigest()[:8]
+            return (atype, name, param_hash)
         return None
 
     def _check_context_pressure(self):
