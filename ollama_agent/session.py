@@ -45,7 +45,13 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             quiet=quiet
         )
         self._api_type = api_type
-        
+        # Retain construction params for runtime backend switching (/llm command)
+        self._host = host
+        self._api_key = api_key
+        self._thinking = thinking
+        self._tpm_limit = tpm_limit
+        self._max_context = max_context
+
         self.client = None  # Deprecated: use _backend instead
         self.model = model
         self.ctx_size = ctx_size
@@ -191,6 +197,29 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     def _call_model(self):
         """Call the model. Delegates to backend."""
         return self._backend.call(self.history, stream=self.stream)
+
+    def _rebuild_backend(self, api_type=None, model=None, ctx_size=None,
+                         host=None, api_key=None):
+        """Swap the LLM backend at runtime. History and running jobs are untouched."""
+        from .backends import create_backend
+        api_type = api_type or self._api_type
+        model = model or self.model
+        ctx_size = ctx_size if ctx_size is not None else self.ctx_size
+        host = host or self._host
+        api_key = api_key or self._api_key
+
+        self._backend = create_backend(
+            api_type=api_type, host=host, model=model, ctx_size=ctx_size,
+            thinking=self._thinking, api_key=api_key,
+            tpm_limit=self._tpm_limit, max_context=self._max_context,
+            quiet=self.quiet
+        )
+        self.model = model
+        self.ctx_size = ctx_size
+        self._api_type = api_type
+        self._host = host
+        self._api_key = api_key
+        self._log("system", f"[Backend switched: api={api_type} model={model} ctx={ctx_size} host={host}]")
 
     def _build_message(self, user_input):
         parts = self.pending_content[:]

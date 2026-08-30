@@ -133,8 +133,11 @@ class CommandMixin:
             "  /auto reset always           Clear persistent (always) approvals\n"
             "  /auto reset all              Clear both session and persistent approvals\n"
              "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
-             "  /timeout [sec|reset]         Show/set the active model-call timeout (this session only)\n"
-             "  /pid                         Show current and parent process IDs\n"
+            "  /timeout [sec|reset]         Show/set the active model-call timeout (this session only)\n"
+            "  /llm                         Show current API, model, context, host\n"
+            "  /llm [--api-openai|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>]\n"
+            "                               Switch LLM backend at runtime (history preserved)\n"
+            "  /pid                         Show current and parent process IDs\n"
             "  /memorize [project|agent] <text>  Add entry to permanent memory\n"
             "\n"
             "  /m, /multiline               Enter multiline mode (empty line or /end to submit)\n"
@@ -967,8 +970,10 @@ class CommandMixin:
         "/compact": "_cmd_compact",
         "/pid": "_cmd_pid",
          "/timeout": "_cmd_timeout",
+        "/llm": "_cmd_llm",
      }
     _PREFIX_COMMANDS = [
+        ("/llm ", "_cmd_llm", 5),
         ("/timeout ", "_cmd_timeout", 8),
         ("/attach-bin", "_cmd_attach_bin", 11),
         ("/embed-bin", "_cmd_embed_bin", 10),
@@ -1140,4 +1145,70 @@ class CommandMixin:
 
     def _cmd_restore(self, args):
         self.do_restore(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_llm(self, args):
+        """Show or switch LLM backend at runtime.
+
+        /llm                          → show current API, model, context, host
+        /llm [--api-openai|--api-ollama] [--model <name>] [--ctx <size>]
+             [--host <url>] [--api-key <key>]
+        """
+        import os as _os
+        args = args.strip()
+        if not args:
+            api_label = "OpenAI-compatible" if self._api_type == "openai" else "Ollama"
+            agent_print(f"[API: {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}]\n")
+            return DISPATCH_CONTINUE
+
+        new_api = None
+        new_model = None
+        new_ctx = None
+        new_host = None
+        new_key = None
+
+        tokens = args.split()
+        i = 0
+        while i < len(tokens):
+            t = tokens[i].lower()
+            if t == "--api-openai":
+                new_api = "openai"
+            elif t == "--api-ollama":
+                new_api = "ollama"
+            elif t == "--model" and i + 1 < len(tokens):
+                new_model = tokens[i + 1]
+                i += 1
+            elif t == "--ctx" and i + 1 < len(tokens):
+                try:
+                    new_ctx = int(tokens[i + 1])
+                except ValueError:
+                    agent_print("[Error: --ctx must be an integer]\n")
+                    return DISPATCH_CONTINUE
+                i += 1
+            elif t == "--host" and i + 1 < len(tokens):
+                new_host = tokens[i + 1]
+                i += 1
+            elif t == "--api-key" and i + 1 < len(tokens):
+                new_key = tokens[i + 1]
+                i += 1
+            i += 1
+
+        # Validate ctx reduction against current history
+        target_ctx = new_ctx if new_ctx is not None else self.ctx_size
+        estimated_tokens = int(sum(len(m["content"]) / 4 for m in self.history))
+        if target_ctx < estimated_tokens:
+            agent_print(
+                f"[Error: New context size {target_ctx} is too small for current "
+                f"history (~{estimated_tokens} tokens). "
+                f"Use /compact first or choose a larger context.]\n"
+            )
+            return DISPATCH_CONTINUE
+
+        self._rebuild_backend(
+            api_type=new_api, model=new_model, ctx_size=new_ctx,
+            host=new_host, api_key=new_key
+        )
+
+        api_label = "OpenAI-compatible" if self._api_type == "openai" else "Ollama"
+        agent_print(f"[Switched to {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}]\n")
         return DISPATCH_CONTINUE

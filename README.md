@@ -397,6 +397,8 @@ uhu --no-autosave --no-cache
 | `/auto reset all`                  | Clear both session and persistent approvals                                                                                                                  |
 | `/diff`                             | Toggle auto-diff for edits                                                                                                                                    |
 | `/timeout [sec\|reset]`             | Show or set the active model-call timeout for this session only (streaming idle gap or blocking total cap, depending on launch mode); no persistence |
+| `/llm`                              | Show current API type, model, context size, and host                                                                                                              |
+| `/llm [--api-openai\|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>]` | Switch LLM backend at runtime — history and running jobs are preserved. Fails if new ctx is too small for current history. |
 | `/pid`                              | Show current and parent process IDs                                                                                                                               |
 | `/m` or `/multiline`               | Enter multiline mode                                                                                                                                         |
 | `/attach <path>`                   | Attach file(s) to next message                                                                                                                               |
