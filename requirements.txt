@@ -29,3 +29,6 @@ openai>=1.0.0
 
 # Optional — Clipboard image paste (Ctrl+V image detection on Windows/macOS)
 Pillow>=8.1.0
+
+# Optional — System info tool (sys_info: RAM, CPU, GPU load, top processes)
+psutil>=5.9.0

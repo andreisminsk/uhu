@@ -208,6 +208,7 @@ SAFE_TOOLS = {
     'job_result',       # Gets job result — read-only, no side effects
     'job_log',          # Gets job log — read-only, no side effects
     'sleep',            # Pure wait — no side effects, auto-approved
+    'sys_info',         # Read-only system resource report — no side effects
 }
 
 # ANSI terminal color codes

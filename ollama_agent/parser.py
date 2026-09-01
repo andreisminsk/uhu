@@ -521,14 +521,16 @@ def parse_actions(text):
         elif path and btype == "tool":
             tool_params, tool_json_error = _parse_params(code)
             action = {"type": "tool", "name": path, "params": tool_params,
-                            "code": code, "span": (start, end), "closed": closed}
+                            "code": code, "span": (start, end), "closed": closed,
+                            "params_explicit": bool(code.strip())}
             if tool_json_error:
                 action["json_error"] = tool_json_error
             actions.append(action)
         elif path and btype == "skill":
             skill_params, skill_json_error = _parse_params(code)
             action = {"type": "skill", "name": path, "params": skill_params,
-                            "code": code, "span": (start, end), "closed": closed}
+                            "code": code, "span": (start, end), "closed": closed,
+                            "params_explicit": bool(code.strip())}
             if skill_json_error:
                 action["json_error"] = skill_json_error
             actions.append(action)

@@ -278,14 +278,17 @@ class ActionMixin:
                 )
                 agent_print(msg + "\n")
                 return msg
-            # Empty params with no required fields — suspicious, likely parser truncation
-            warn = (f"[⚠ PARSING WARNING: {tool_name} was invoked with empty parameters. "
-                    f"This usually means the TOOL block was truncated during parsing "
-                    f"(e.g. an EOF marker appeared inside the JSON content). "
-                    f"Please re-issue the TOOL call with valid JSON parameters in a "
-                    f"```json block between the TOOL and EOF markers.]")
-            agent_print(warn + "\n")
-            return warn
+            # Empty params with no required fields — only suspicious if the model
+            # provided no JSON block at all (likely parser truncation). An explicit
+            # empty {} block is legitimate for parameterless tools (sys_info, job_list).
+            if not action.get("params_explicit", False):
+                warn = (f"[⚠ PARSING WARNING: {tool_name} was invoked with empty parameters. "
+                        f"This usually means the TOOL block was truncated during parsing "
+                        f"(e.g. an EOF marker appeared inside the JSON content). "
+                        f"Please re-issue the TOOL call with valid JSON parameters in a "
+                        f"```json block between the TOOL and EOF markers.]")
+                agent_print(warn + "\n")
+                return warn
         # Pre-cache files that will be modified by file-modifying tools
         _FILE_MODIFYING_TOOLS = {"write_file", "replace_in_file", "move_file", "copy_file"}
         if tool_name in _FILE_MODIFYING_TOOLS and self.cache_files:
