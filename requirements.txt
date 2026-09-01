@@ -32,3 +32,6 @@ Pillow>=8.1.0
 
 # Optional — System info tool (sys_info: RAM, CPU, GPU load, top processes)
 psutil>=5.9.0
+
+# Optional — Ollama balance indicator (native API, needs exported cookies)
+beautifulsoup4>=4.12.0
