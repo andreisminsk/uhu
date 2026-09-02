@@ -23,6 +23,7 @@ from .token_count import TokenCountTool
 from .calculator import CalculatorTool
 from .sleep import SleepTool
 from .sys_info import SysInfoTool
+from .llm_chat import LlmChatTool
 
 
 # ── Tool base class ─────────────────────────────────────────────────────
@@ -136,6 +137,7 @@ register(TokenCountTool())
 register(CalculatorTool())
 register(SleepTool())
 register(SysInfoTool())
+register(LlmChatTool())
 from .jobs import JobSubmitTool, JobListTool, JobResultTool, JobCancelTool, JobLogTool
 
 register(ModelTestTool())

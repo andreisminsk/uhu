@@ -149,7 +149,7 @@ def _summarize_with_llm(text: str, url: str, max_length: int) -> str:
     """Use an out-of-context LLM call to summarize page content."""
     config = get_config()
     wf_cfg = config.get("web_fetch", {})
-    llm_model = wf_cfg.get("llm_model", "kimi-k2.5:cloud")
+    llm_model = wf_cfg.get("llm_model", "kimi-k2.6:cloud")
     prompt = (
         f"You are a web page summarizer. Summarize the following web page content into a "
         f"concise, information-dense summary of at most {max_length} characters.\n\n"

@@ -33,7 +33,7 @@ class LlmQueryTool:
         prompt = params.get("prompt")
         if not prompt:
             return "[Error: 'prompt' parameter is required]"
-        model = params.get("model", config.get("llm_query", {}).get("model", "kimi-k2.5:cloud"))
+        model = params.get("model", config.get("llm_query", {}).get("model", "kimi-k2.6:cloud"))
         system = params.get("system")
         temperature = params.get("temperature", config.get("llm_query", {}).get("temperature", 0.3))
         max_tokens = params.get("max_tokens")
@@ -69,7 +69,7 @@ def llm_query(
     """
     config = get_config()
     llm_cfg = config.get("llm_query", {})
-    model = model or llm_cfg.get("model", "kimi-k2.5:cloud")
+    model = model or llm_cfg.get("model", "kimi-k2.6:cloud")
     temperature = temperature if temperature is not None else llm_cfg.get("temperature", 0.3)
     timeout = timeout or llm_cfg.get("timeout", 120)
     ollama_url = ollama_url or llm_cfg.get("api_url", "http://localhost:11434")

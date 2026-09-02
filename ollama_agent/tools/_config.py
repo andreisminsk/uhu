@@ -14,12 +14,12 @@ DEFAULT_CONFIG = {
     "user_name": "",
     "llm_query": {
         "api_url": "http://localhost:11434",
-        "model": "kimi-k2.5:cloud",
+        "model": "kimi-k2.6:cloud",
         "temperature": 0.3,
         "timeout": 120
     },
     "web_fetch": {
-        "llm_model": "kimi-k2.5:cloud",
+        "llm_model": "kimi-k2.6:cloud",
         "llm_summarize": True,
         "max_chars": 3000
     },
