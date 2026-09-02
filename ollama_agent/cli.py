@@ -3,10 +3,17 @@
 import argparse
 import logging
 import os
+import sys
 
 logging.basicConfig(level=logging.ERROR, format="%(asctime)s %(name)s %(levelname)s: %(message)s")
 
 from .session import ChatSession
+
+try:
+    import setproctitle
+    setproctitle.setproctitle("uhu")
+except Exception:
+    pass
 
 
 def main():

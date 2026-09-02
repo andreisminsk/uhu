@@ -75,6 +75,21 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 
 5. **Install Python dependencies**
    
+   **Option A — pip install (recommended):**
+   
+   ```
+   pip install -e .
+   ```
+   
+   This installs the `uhu` package with a `uhu` console entry point. Optional extras are available:
+   
+   ```
+   pip install -e ".[search,pdf,browser,calendar,docx,openai,clipboard,sysinfo,balance]"
+   pip install -e ".[all]"  # everything
+   ```
+   
+   **Option B — requirements.txt (legacy):**
+   
    ```
    pip install -r requirements.txt
    ```
@@ -171,6 +186,25 @@ uhu --api-openai --api-key %UHU_PROJECTS_KEY% --host https://api.openai.com/v1 -
 ```
 
 ### macOS / Linux
+
+**Option A — pip entry point (recommended):**
+
+If you installed via `pip install -e .`, the `uhu` command is already in your venv. Create a wrapper on your PATH (e.g. `~/.local/bin/uhu`):
+
+```
+#!/bin/sh
+exec ~/Projects/uhu/venv/bin/uhu "$@"
+```
+
+Make it executable:
+
+```
+chmod +x ~/.local/bin/uhu
+```
+
+The process will appear as `uhu` in your task list (via `setproctitle`).
+
+**Option B — direct script (legacy):**
 
 Create a shell script on your PATH (e.g. `~/.local/bin/uhu`):
 
