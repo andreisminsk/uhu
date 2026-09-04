@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "uhu"
-version = "1.0.1"
+version = "1.0.2"
 description = "Minimalistic agentic coder for Ollama — transparent feedback loop of actions, observations, and model calls"
 requires-python = ">=3.10"
 dependencies = [
@@ -37,7 +37,7 @@ all = [
 ]
 
 [project.scripts]
-uhu = "ollama_agent.cli:main"
+huhu = "ollama_agent.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

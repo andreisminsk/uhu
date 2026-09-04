@@ -306,14 +306,72 @@ def get_top_processes_cpu(n=5, interval=1.0):
     return procs[:n]
 
 
+def _get_phys_footprint_macos(pid):
+    """Get phys_footprint for a process on macOS (matches Activity Monitor).
+
+    Uses proc_pid_rusage with RUSAGE_INFO_V4. The rusage_info_v4 struct has:
+      offset 0-15:  ri_uuid (16 bytes)
+      offset 16:    ri_user_time
+      offset 24:    ri_system_time
+      offset 32:    ri_pkg_idle_wkups
+      offset 40:    ri_pkg_nonidle_wkups
+      offset 48:    ri_pageins
+      offset 56:    ri_wired_size
+      offset 64:    ri_resident_size
+      offset 72:    ri_phys_footprint  <-- this is what Activity Monitor shows
+    phys_footprint includes compressed memory, matching Activity Monitor.
+    """
+    try:
+        import ctypes
+        import ctypes.util
+        import struct
+        libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
+        # Set argtypes to ensure proper calling convention
+        libc.proc_pid_rusage.restype = ctypes.c_int
+        libc.proc_pid_rusage.argtypes = [
+            ctypes.c_int,        # pid
+            ctypes.c_int,        # flavor
+            ctypes.POINTER(ctypes.c_char),  # buffer
+        ]
+        buf = ctypes.create_string_buffer(512)
+        # RUSAGE_INFO_V4 = 4; returns 0 on success
+        ret = libc.proc_pid_rusage(pid, 4, buf)
+        if ret == 0:
+            phys_footprint = struct.unpack_from('Q', buf, 72)[0]
+            if phys_footprint > 0:
+                return phys_footprint
+    except Exception:
+        pass
+    return None
+
+
 def get_top_processes_ram(n=5):
-    """Get top N processes by RAM usage."""
+    """Get top N processes by RAM usage.
+
+    On macOS, uses phys_footprint (includes compressed memory) to match
+    Activity Monitor. On other platforms, uses RSS via psutil.
+    """
     procs = []
-    for p in psutil.process_iter(['pid', 'name', 'memory_percent']):
+    total_mem = psutil.virtual_memory().total
+    use_footprint = sys.platform == "darwin"
+
+    for p in psutil.process_iter(['pid', 'name']):
         try:
-            mem = p.memory_percent()
-            procs.append({'pid': p.pid, 'name': p.info['name'], 'mem_pct': mem,
-                         'mem_mb': p.memory_info().rss / (1024 * 1024)})
+            mem_mb = None
+            mem_pct = None
+
+            if use_footprint:
+                footprint = _get_phys_footprint_macos(p.pid)
+                if footprint is not None and footprint > 0:
+                    mem_mb = footprint / (1024 * 1024)
+                    mem_pct = (footprint / total_mem) * 100
+
+            if mem_mb is None:
+                mem_pct = p.memory_percent()
+                mem_mb = p.memory_info().rss / (1024 * 1024)
+
+            procs.append({'pid': p.pid, 'name': p.info['name'], 'mem_pct': mem_pct,
+                         'mem_mb': mem_mb})
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
     procs.sort(key=lambda x: x['mem_pct'], reverse=True)
