@@ -783,6 +783,13 @@ Stores persistent auto-approval settings:
 
 Custom skill definitions - SKILL.md directories, Python (.py) or JSON (.json) files.
 
+## Feedback
+
+We welcome feedback, bug reports, and suggestions:
+
+- **Telegram:** [@MartiAi_Feedback_bot](https://t.me/MartiAi_Feedback_bot)
+- **GitHub Issues:** [uhu/issues](https://github.com/andreisminsk/uhu/issues)
+
 ## License
 
 This project is licensed under **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**.
