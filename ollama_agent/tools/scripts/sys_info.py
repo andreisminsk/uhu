@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Cross-platform system information script (Windows 11, macOS, Linux).
-Outputs: Total/Used/Free/Reclaimable RAM (GB and %), CPU load, GPU load.
+Outputs: Total/Used/Free/Reclaimable RAM (GB and %), CPU load, GPU load, disk space.
 
 Dependencies: psutil (pip install psutil)
 GPU detection is best-effort — nvidia-smi, WMI, or /sys/class/drm.
@@ -415,6 +415,30 @@ def get_top_processes_gpu(n=5):
     return procs[:n] if procs else None
 
 
+# ── Disk ─────────────────────────────────────────────────────────────────────
+
+def get_disk_info():
+    """Get disk space info for all mounted volumes."""
+    disks = []
+    for part in psutil.disk_partitions():
+        try:
+            usage = psutil.disk_usage(part.mountpoint)
+            disks.append({
+                "device": part.device,
+                "mountpoint": part.mountpoint,
+                "fstype": part.fstype,
+                "total_gb": fmt_gb(usage.total),
+                "used_gb": fmt_gb(usage.used),
+                "used_pct": fmt_pct(usage.used / usage.total) if usage.total else "0%",
+                "free_gb": fmt_gb(usage.free),
+                "free_pct": fmt_pct(usage.free / usage.total) if usage.total else "0%",
+            })
+        except (PermissionError, OSError):
+            # Skip volumes we can't read (e.g. unmounted, restricted)
+            continue
+    return disks
+
+
 # ── Display ─────────────────────────────────────────────────────────────────
 
 def display_all():
@@ -470,6 +494,15 @@ def display_all():
         for p in top_gpu:
             print(f"  {p['pid']:>7}  {p['gpu_mem_mb']:7.0f} MB  {p['name']}")
 
+    # Disk
+    disks = get_disk_info()
+    print("\n── Disk Space ──")
+    for d in disks:
+        label = f"{d['mountpoint']}"
+        if d['device'] and d['device'] != d['mountpoint']:
+            label = f"{d['device']} ({d['mountpoint']})"
+        print(f"  {label}:  {d['used_gb']} / {d['total_gb']} GB used ({d['used_pct']})  |  {d['free_gb']} GB free ({d['free_pct']})")
+
     print("\n" + "=" * 60)
 
 
@@ -489,6 +522,7 @@ def collect_all():
     top_gpu = get_top_processes_gpu(n=5)
     if top_gpu:
         data["top_processes_gpu"] = top_gpu
+    data["disk"] = get_disk_info()
     return data
 
 
