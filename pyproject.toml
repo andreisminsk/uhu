@@ -37,7 +37,7 @@ all = [
 ]
 
 [project.scripts]
-huhu = "ollama_agent.cli:main"
+uhu = "ollama_agent.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
