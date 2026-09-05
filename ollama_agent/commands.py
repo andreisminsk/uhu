@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Sentinels for command dispatch return values
 DISPATCH_CONTINUE = "continue"
 DISPATCH_BREAK = "break"
+DISPATCH_WORKDIR_SWITCH = "workdir_switch"
 
 
 class CommandMixin:
@@ -138,6 +139,7 @@ class CommandMixin:
             "  /llm [--api-openai|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>]\n"
             "                               Switch LLM backend at runtime (history preserved)\n"
             "  /pid                         Show current and parent process IDs\n"
+            "  /workdir [path]              Show or switch working directory (resets context)\n"
             "  /memorize [project|agent] <text>  Add entry to permanent memory\n"
             "\n"
             "  /m, /multiline               Enter multiline mode (empty line or /end to submit)\n"
@@ -971,6 +973,7 @@ class CommandMixin:
         "/pid": "_cmd_pid",
          "/timeout": "_cmd_timeout",
         "/llm": "_cmd_llm",
+        "workdir": "_cmd_workdir", "/workdir": "_cmd_workdir",
      }
     _PREFIX_COMMANDS = [
         ("/llm ", "_cmd_llm", 5),
@@ -989,6 +992,7 @@ class CommandMixin:
         ("/save", "_cmd_save", 5),
         ("/ls", "_cmd_ls", 3),
         ("/md", "_cmd_md", 3),
+        ("/workdir ", "_cmd_workdir", 9),
     ]
 
     def _dispatch_command(self, user_input):
@@ -1015,8 +1019,31 @@ class CommandMixin:
 
     # ── Command wrapper methods ─────────────────────────────────────────
 
+    def _has_active_jobs(self):
+        """Check if there are running or pending jobs. Returns (bool, count)."""
+        if hasattr(self, '_job_manager') and self._job_manager:
+            jobs = self._job_manager.list_jobs()
+            active = [j for j in jobs if j.get('status') in ('pending', 'running')]
+            return bool(active), len(active)
+        return False, 0
+
+    def _confirm_exit_with_jobs(self, active_count):
+        """Prompt user to confirm exit when jobs are active. Returns True if should proceed."""
+        try:
+            ans = read_full_input(
+                f"{active_count} job(s) still running/pending. Exit anyway? (y/N): "
+            ).strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            ans = "y"
+        return ans == "y"
+
     def _cmd_exit(self, args):
         logger.info("Session ending (user exit)")
+        has_jobs, job_count = self._has_active_jobs()
+        if has_jobs:
+            if not self._confirm_exit_with_jobs(job_count):
+                agent_print("[Cancelled]\n")
+                return DISPATCH_CONTINUE
         if not self.autosave:
             msgs = [m for m in self.history if m["role"] != "system"]
             if msgs:
@@ -1090,6 +1117,95 @@ class CommandMixin:
     def _cmd_timeout(self, args):
         self.do_timeout(args)
         return DISPATCH_CONTINUE
+
+    def _cmd_workdir(self, args):
+        """Show or switch working directory.
+
+        /workdir          → show current working directory
+        /workdir <path>   → switch to new workdir (resets context, like exit + relaunch)
+        """
+        args = args.strip()
+
+        # No args — show current workdir
+        if not args:
+            agent_print(f"{self.workdir}\n")
+            return DISPATCH_CONTINUE
+
+        # Resolve path
+        new_dir = os.path.abspath(os.path.expanduser(args))
+
+        # Validate
+        if not os.path.exists(new_dir):
+            agent_print(f"[Error: path does not exist: {new_dir}]\n")
+            return DISPATCH_CONTINUE
+        if not os.path.isdir(new_dir):
+            agent_print(f"[Error: not a directory: {new_dir}]\n")
+            return DISPATCH_CONTINUE
+
+        # Check for running/pending jobs — block switch (unlike exit, workdir switch is not optional)
+        has_jobs, job_count = self._has_active_jobs()
+        if has_jobs:
+            agent_print(f"[Cannot switch workdir: {job_count} job(s) still running/pending. "
+                        f"Wait for them or cancel with /jobs.]\n")
+            return DISPATCH_CONTINUE
+
+        # Save session (same logic as _cmd_exit)
+        if not self.autosave:
+            msgs = [m for m in self.history if m['role'] != 'system']
+            if msgs:
+                try:
+                    ans = read_full_input("Exit without saving? (y/N): ").strip().lower()
+                except (KeyboardInterrupt, EOFError):
+                    ans = 'y'
+                if ans != 'y':
+                    agent_print("[Cancelled — use /save to save first]\n")
+                    return DISPATCH_CONTINUE
+        else:
+            self._do_autosave()
+
+        # Confirm
+        try:
+            ans = read_full_input(
+                f"Switching to {new_dir}. Current session will be saved. Continue? (Y/n) "
+            ).strip().lower()
+        except (KeyboardInterrupt, EOFError):
+            agent_print("[Cancelled]\n")
+            return DISPATCH_CONTINUE
+        if ans == 'n':
+            agent_print("[Cancelled]\n")
+            return DISPATCH_CONTINUE
+
+        # Log the switch
+        self._log('system', f"[workdir switch: {self.workdir} to {new_dir}]")
+
+        # Create new session with preserved params (including /llm runtime changes)
+        from .session import ChatSession
+        new_session = ChatSession(
+            host=self._host,
+            model=self.model,
+            ctx_size=self.ctx_size,
+            stream=self.stream,
+            log_path=None,  # recomputed in __init__
+            sessions_dir=None,  # recomputed in __init__
+            agent=self.agent,
+            workdir=new_dir,
+            tools=self.tools,
+            skills=self.skills,
+            skills_dir=self.skills_dir,
+            autosave=self.autosave,
+            cache_files=self.cache_files,
+            thinking=self.thinking,
+            quiet=self.quiet,
+            mcp=self.mcp,
+            api_type=self._api_type,
+            api_key=self._api_key,
+            tpm_limit=self._tpm_limit,
+            max_context=self._max_context,
+            no_llm_parsing=not self._llm_parser_enabled,
+        )
+
+        self._workdir_switch_target = new_session
+        return DISPATCH_WORKDIR_SWITCH
 
     def _cmd_jobs(self, args):
         self.do_jobs()

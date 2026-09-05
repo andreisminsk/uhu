@@ -16,7 +16,7 @@ from .parser import parse_actions
 from .input_utils import read_full_input, _reconfigure_stdout
 from .utils import check_for_update
 from .platform import terminal
-from .commands import CommandMixin, DISPATCH_CONTINUE, DISPATCH_BREAK
+from .commands import CommandMixin, DISPATCH_CONTINUE, DISPATCH_BREAK, DISPATCH_WORKDIR_SWITCH
 from .actions import ActionMixin
 from .persistence import PersistenceMixin
 
@@ -720,6 +720,17 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     if user_input:
                         logger.debug("User input: %s", user_input[:100])
                 except (KeyboardInterrupt, EOFError):
+                    has_jobs, job_count = self._has_active_jobs()
+                    if has_jobs:
+                        try:
+                            ans = read_full_input(
+                                f"\n{job_count} job(s) still running/pending. Exit anyway? (y/N): "
+                            ).strip().lower()
+                        except (KeyboardInterrupt, EOFError):
+                            ans = "y"
+                        if ans != "y":
+                            agent_print("[Cancelled]\n")
+                            continue
                     if not self.autosave:
                         msgs = [m for m in self.history if m["role"] != "system"]
                         if msgs:
@@ -759,6 +770,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     break
                 if result == DISPATCH_CONTINUE:
                     continue
+                if result == DISPATCH_WORKDIR_SWITCH:
+                    return self._workdir_switch_target
                 # Fall through: not a command — send to model
                 # Reset skill auto-approve for new substantive user messages.
                 # Short continuations like "?" after max feedback rounds keep the flag.

@@ -434,6 +434,7 @@ uhu --no-autosave --no-cache
 | `/llm`                              | Show current API type, model, context size, and host                                                                                                              |
 | `/llm [--api-openai\|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>]` | Switch LLM backend at runtime — history and running jobs are preserved. Fails if new ctx is too small for current history. |
 | `/pid`                              | Show current and parent process IDs                                                                                                                               |
+| `/workdir [path]`                   | Show current working directory, or switch to a new one (saves current session, resets context — equivalent to exit + relaunch with same flags in the new workdir). Blocks if jobs are running. |
 | `/m` or `/multiline`               | Enter multiline mode                                                                                                                                         |
 | `/attach <path>`                   | Attach file(s) to next message                                                                                                                               |
 | `/attach-bin <path>`               | Attach binary file reference (for tool-based analysis)                                                                                                       |

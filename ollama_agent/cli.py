@@ -120,7 +120,8 @@ def main():
     if args.prompt:
         session.run_once(" ".join(args.prompt))
     else:
-        session.run()
+        while session is not None:
+            session = session.run()
 
 
 if __name__ == "__main__":
