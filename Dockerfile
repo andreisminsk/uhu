@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 # ── System dependencies ──────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl git vim nano procps \
+        curl git vim nano procps zstd \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Install Ollama ──────────────────────────────────────────────
