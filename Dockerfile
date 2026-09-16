@@ -20,7 +20,10 @@ RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
     cd /opt/uhu && /opt/venv/bin/pip install --no-cache-dir -e ".[all]"
 
-ENV PATH="/opt/venv/bin:$PATH"
+ENV PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+
+# ── Verify Ollama installed ─────────────────────────────────────
+RUN which ollama && ollama --version
 
 # ── SANDBOX workspace ────────────────────────────────────────────
 RUN mkdir -p /SANDBOX
