@@ -164,6 +164,65 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 
     Export your ollama.com cookies in Netscape format to `ollama.com_cookies.txt` (in your workdir or agent directory), or set `tools.ollama_balance.cookie_path` in `.ollama_agent.json`.
 
+## Docker
+
+A Docker image is available with Ollama, uhu, and three pre-configured models (`glm-5.1:cloud`, `glm-5.2:cloud`, `glm-5.3:cloud`). Models are pulled at container startup.
+
+### Pull the image
+
+```bash
+docker pull ghcr.io/andreisminsk/uhu-sandbox:latest
+```
+
+### Run the container
+
+```bash
+docker run -it \
+  -v ollama-data:/root/.ollama \
+  -v sandbox-projects:/SANDBOX \
+  -p 11434:11434 \
+ghcr.io/andreisminsk/uhu-sandbox:latest
+```
+
+| Volume | Purpose |
+|---|---|
+| `ollama-data` | Persists downloaded Ollama models across restarts |
+| `sandbox-projects` | Persists your project files in `/SANDBOX` |
+
+The `-p 11434:11434` flag exposes the Ollama API on the host (optional — useful if you want to connect from other tools).
+
+### Inside the container
+
+The startup banner guides you through:
+
+1. **Create a project folder:**
+   ```
+   mkdir my-project && cd my-project
+   ```
+
+2. **Run uhu:**
+   ```
+   uhu
+   uhu --model glm-5.2:cloud --ctx 202752
+   ```
+
+### Update uhu inside the container
+
+```bash
+cd /opt/uhu && git pull && pip install -e ".[all]"
+```
+
+### Build locally
+
+```bash
+docker build -t uhu-sandbox .
+docker run -it -v ollama-data:/root/.ollama uhu-sandbox
+```
+
+### GitHub Actions
+
+The workflow in `.github/workflows/docker.yml` builds and pushes the image to GHCR on every push to `main`/`master`. It includes disk cleanup and image size reporting. Requires a `CR_PAT` secret (GitHub PAT with `write:packages` scope) in the repository.
+
 ## Quick Launch
 
 ### Windows
