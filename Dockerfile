@@ -22,6 +22,10 @@ RUN python3 -m venv /opt/venv && \
 
 ENV PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
+# ── Make venv PATH available to SSH login shells ────────────────
+RUN echo 'export PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"' >> /root/.bashrc && \
+    echo 'export PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"' >> /etc/profile.d/uhu.sh
+
 # ── Verify Ollama installed ─────────────────────────────────────
 RUN which ollama && ollama --version
 
