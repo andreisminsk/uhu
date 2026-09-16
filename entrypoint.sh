@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
 
+# ── Inject SSH public keys from SSH_PUBLIC_KEYS env var ─────────
+if [ -n "${SSH_PUBLIC_KEYS}" ]; then
+  mkdir -p /root/.ssh
+  chmod 700 /root/.ssh
+  while IFS= read -r key; do
+    [ -n "$key" ] && echo "$key" >> /root/.ssh/authorized_keys
+  done <<< "${SSH_PUBLIC_KEYS}"
+  chmod 600 /root/.ssh/authorized_keys
+  echo "SSH public keys injected from SSH_PUBLIC_KEYS"
+fi
+
+# ── Start SSH server ────────────────────────────────────────────
+/usr/sbin/sshd
+
 # ── Start Ollama server in background ────────────────────────────
 echo "Starting Ollama server..."
 ollama serve > /tmp/ollama.log 2>&1 &
@@ -57,5 +71,5 @@ cat <<'BANNER'
 
 BANNER
 
-# ── Drop into an interactive shell ──────────────────────────────
-exec /bin/bash
+# ── Keep container alive (SSH in for a shell) ───────────────────
+exec "$@"

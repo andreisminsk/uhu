@@ -176,24 +176,33 @@ docker pull ghcr.io/andreisminsk/ollama-uhu:0.1.0
 
 ### Run the container
 
+The container stays alive via `sleep infinity` — SSH in for a shell.
+
 ```bash
-docker run -it \
+docker run -d \
+  -e SSH_PUBLIC_KEYS="ssh-ed25519 AAAA... user@host" \
   -v ollama-data:/root/.ollama \
   -v sandbox-projects:/SANDBOX \
+  -p 22:22 \
   -p 11434:11434 \
   ghcr.io/andreisminsk/ollama-uhu:0.1.0
 ```
 
-| Volume | Purpose |
+| Flag / Volume | Purpose |
 |---|---|
+| `SSH_PUBLIC_KEYS` | SSH public keys injected into `/root/.ssh/authorized_keys` (newline-separated for multiple) |
 | `ollama-data` | Persists downloaded Ollama models across restarts |
 | `sandbox-projects` | Persists your project files in `/SANDBOX` |
+| `-p 2222:22` | SSH access |
+| `-p 11434:11434` | Ollama API on the host (optional) |
 
-The `-p 11434:11434` flag exposes the Ollama API on the host (optional — useful if you want to connect from other tools).
+### SSH in
 
-### Inside the container
+```bash
+ssh root@<host> -p 22
+```
 
-The startup banner guides you through:
+You'll land in `/SANDBOX`. The startup banner guides you through:
 
 1. **Create a project folder:**
    ```
@@ -216,7 +225,9 @@ cd /opt/uhu && git pull && pip install -e ".[all]"
 
 ```bash
 docker build -t ghcr.io/andreisminsk/ollama-uhu:0.1.0 .
-docker run -it -v ollama-data:/root/.ollama ghcr.io/andreisminsk/ollama-uhu:0.1.0
+docker run -d -e SSH_PUBLIC_KEYS="ssh-ed25519 AAAA... user@host" \
+  -v ollama-data:/root/.ollama -p 22:22 -p 11434:11434 \
+  ghcr.io/andreisminsk/ollama-uhu:0.1.0
 ```
 
 ### GitHub Actions
