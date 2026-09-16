@@ -1,7 +1,8 @@
-FROM python:3.12-slim
+FROM ubuntu:24.04
 
-# ── System dependencies ──────────────────────────────────────────
+# ── Python + system dependencies ─────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-pip python3-venv \
         curl git vim nano procps zstd \
     && rm -rf /var/lib/apt/lists/*
 

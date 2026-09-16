@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-set -e
 
 # ── Start Ollama server in background ────────────────────────────
 echo "Starting Ollama server..."
 ollama serve > /tmp/ollama.log 2>&1 &
+OLLAMA_PID=$!
 sleep 3
 
 # ── Pull Ollama models at startup ───────────────────────────────
 echo "Pulling Ollama models (this may take a while on first run)..."
 for model in glm-5.1:cloud glm-5.2:cloud glm-5.3:cloud; do
     echo "  → Pulling $model..."
-    ollama pull "$model" || echo "  ⚠ Failed to pull $model (will retry on next start)"
+    ollama pull "$model" 2>&1 || echo "  ⚠ Failed to pull $model (will retry on next start)"
 done
 echo "Model pull complete."
 echo
@@ -20,14 +20,14 @@ cat <<'BANNER'
 
   ╔══════════════════════════════════════════════════════════════╗
   ║                                                              ║
-  ║   ██╗   ██╗██╗   ██╗                                         ║
-  ║   ██║   ██║██║   ██║                                         ║
-  ║   ██║   ██║██║   ██║                                         ║
-  ║   ██║   ██║╚██╗ ██╔╝                                         ║
-  ║   ╚██████╔╝ ╚████╔╝                                          ║
-  ║    ╚═════╝   ╚═══╝                                           ║
+  ║    ██╗   ██╗  ██╗  ██╗  ██╗   ██╗                            ║
+  ║    ██║   ██║  ██║  ██║  ██║   ██║                            ║
+  ║    ██║   ██║  ███████║  ██║   ██║                            ║
+  ║    ██║   ██║  ██╔══██║  ██║   ██║                            ║
+  ║    ╚██████╔╝  ██║  ██║  ╚██████╔╝                            ║
+  ║     ╚═════╝   ╚═╝  ╚═╝   ╚═════╝                             ║
   ║                                                              ║
-  ║   uhu — Minimalistic Agentic Coder  (Docker Edition)         ║
+  ║    uhu — Minimalistic Agentic Coder  (Docker Edition)        ║
   ║                                                              ║
   ╠══════════════════════════════════════════════════════════════╣
   ║                                                              ║
