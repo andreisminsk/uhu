@@ -171,7 +171,7 @@ A Docker image is available with Ollama, uhu, and three pre-configured models (`
 ### Pull the image
 
 ```bash
-docker pull ghcr.io/andreisminsk/ollama-uhu:0.1.0
+docker pull ghcr.io/andreisminsk/uhu-ollama:0.1.0
 ```
 
 ### Run the container
@@ -185,7 +185,7 @@ docker run -d \
   -v sandbox-projects:/SANDBOX \
   -p 22:22 \
   -p 11434:11434 \
-  ghcr.io/andreisminsk/ollama-uhu:0.1.0
+  ghcr.io/andreisminsk/uhu-ollama:0.1.0
 ```
 
 | Flag / Volume | Purpose |
@@ -224,10 +224,10 @@ cd /opt/uhu && git pull && pip install -e ".[all]"
 ### Build locally
 
 ```bash
-docker build -t ghcr.io/andreisminsk/ollama-uhu:0.1.0 .
+docker build -t ghcr.io/andreisminsk/uhu-ollama:0.1.0 .
 docker run -d -e SSH_PUBLIC_KEYS="ssh-ed25519 AAAA... user@host" \
   -v ollama-data:/root/.ollama -p 22:22 -p 11434:11434 \
-  ghcr.io/andreisminsk/ollama-uhu:0.1.0
+  ghcr.io/andreisminsk/uhu-ollama:0.1.0
 ```
 
 ### GitHub Actions
