@@ -88,8 +88,8 @@ def get_local_version():
         pass
     try:
         from importlib.metadata import version as _pkg_version
-        # The distribution has shipped under both names (public repo: huhu,
-        # dev editable installs: uhu) — try both.
+        # Historically the console script was misspelled "huhu" in some
+        # builds; keep trying both names for version lookup robustness.
         for dist_name in ("huhu", "uhu"):
             try:
                 v = _pkg_version(dist_name)
