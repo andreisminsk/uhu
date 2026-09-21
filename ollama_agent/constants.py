@@ -217,6 +217,7 @@ ANSI_LIGHT_GRAY = "\033[37m"
 ANSI_AGENT = "\033[93m"  # Bright yellow — used for agent action output
 ANSI_TOOL = "\033[97;2;3m"  # Dim bright white italic — used for tool/file read output
 ANSI_AI = "\033[38;2;0;255;0m"  # Truecolor #00FF00 — AI response output
+ANSI_AI_DIM = "\033[38;2;0;170;0m"  # Truecolor #00AA00 — dimmed thinking preview lines
 
 # MIME type mapping for binary file reference
 MIME_TYPES = {
