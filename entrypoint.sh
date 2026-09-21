@@ -22,7 +22,7 @@ sleep 3
 
 # ── Pull Ollama models at startup ───────────────────────────────
 echo "Pulling Ollama models (this may take a while on first run)..."
-for model in glm-5.1:cloud glm-5.2:cloud glm-5.3:cloud; do
+for model in glm-5.3-flash:cloud glm-5.2:cloud glm-5.3:cloud; do
     echo "  → Pulling $model..."
     ollama pull "$model" 2>&1 || echo "  ⚠ Failed to pull $model (will retry on next start)"
 done
@@ -46,7 +46,7 @@ cat <<'BANNER'
   ╠══════════════════════════════════════════════════════════════╣
   ║                                                              ║
   ║   Ollama models available:                                   ║
-  ║     • glm-5.1:cloud                                          ║
+  ║     • glm-5.3-flash:cloud                                    ║
   ║     • glm-5.2:cloud                                          ║
   ║     • glm-5.3:cloud                                          ║
   ║                                                              ║
