@@ -175,18 +175,22 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             logger.debug("[%s] %s", role, content[:200])
 
     def _check_version(self):
-        """Check GitHub for a newer version. Prints a warning if an update is available."""
+        """Check GitHub for a newer version. Shows 'n/a' for any missing version piece."""
         ver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uhu-ver.txt")
+        current = None
         try:
             with open(ver_path, "r", encoding="utf-8") as f:
-                current = f.read().strip()
+                current = f.read().strip() or None
         except FileNotFoundError:
-            return
-        if not current:
-            return
-        latest, is_newer = check_for_update(current)
-        if is_newer and latest:
-            agent_print(f"[⚠ Update available: v{current} → v{latest}. Run 'git pull' to update.]")
+            pass
+        # Sentinel "0" lets the fetch proceed even when local version is unknown
+        latest, is_newer = check_for_update(current if current else "0")
+        current_disp = f"v{current}" if current else "n/a"
+        latest_disp = f"v{latest}" if latest else "n/a"
+        if current and latest and is_newer:
+            agent_print(f"[⚠ Update available: {current_disp} → {latest_disp}. Run 'git pull' to update.]")
+        elif not current or not latest:
+            agent_print(f"[Version check: local {current_disp} | latest {latest_disp}]")
 
     # Maximum response length in characters before truncating.
     # Prevents runaway repetitive output from consuming all context.
