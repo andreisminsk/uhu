@@ -14,7 +14,7 @@ from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, 
 from .actions import agent_print, tool_print
 from .parser import parse_actions
 from .input_utils import read_full_input, _reconfigure_stdout
-from .utils import check_for_update, get_local_version
+from .utils import check_for_update, get_local_version, get_last_check_error
 from .platform import terminal
 from .commands import CommandMixin, DISPATCH_CONTINUE, DISPATCH_BREAK, DISPATCH_WORKDIR_SWITCH
 from .actions import ActionMixin
@@ -189,9 +189,11 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         if current and latest and is_newer:
             agent_print(f"[⚠ Update available: {current_disp} → {latest_disp}. Run 'git pull' to update.]")
         elif current and latest:
-            agent_print(f"[Version check: up to date ({current_disp} = latest)]")
+            agent_print(f"[Version check: up to date ({current_disp}, latest {latest_disp})]")
         else:
-            agent_print(f"[Version check: local {current_disp} | latest {latest_disp}]")
+            reason = get_last_check_error() if not latest else None
+            suffix = f" — {reason}" if reason else ""
+            agent_print(f"[Version check: local {current_disp} | latest {latest_disp}{suffix}]")
 
     # Maximum response length in characters before truncating.
     # Prevents runaway repetitive output from consuming all context.

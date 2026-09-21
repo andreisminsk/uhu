@@ -102,29 +102,60 @@ def get_local_version():
     return None
 
 
+_last_check_error = None
+
+
+def get_last_check_error():
+    """Return a short description of the last version-check fetch failure, or None."""
+    return _last_check_error
+
+
+def _fetch_text(url, timeout=3):
+    """Fetch URL content as text.
+
+    Prefers requests (a hard dependency) because its bundled certifi CA
+    bundle avoids the macOS 'unable to get local issuer certificate'
+    failures that plague urllib's default SSL context. Falls back to
+    urllib when requests is unavailable.
+    """
+    headers = {"User-Agent": "uhu-version-check"}
+    try:
+        import requests
+        resp = requests.get(url, timeout=timeout, headers=headers)
+        resp.raise_for_status()
+        return resp.text
+    except ImportError:
+        import urllib.request
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+
+
 def check_for_update(current_version, timeout=3):
     """Check GitHub for a newer version. Returns (latest_version, is_newer) or (None, False).
 
     Tries the git-discovered raw URL first, then falls back to the public
     repository — covers pip installs (no .git directory) and private or
-    unreachable remotes.
+    unreachable remotes. On failure, the reason is available via
+    get_last_check_error().
     """
-    import urllib.request
+    global _last_check_error
     urls = []
     discovered = _get_github_raw_url()
     if discovered and discovered != _FALLBACK_RAW_URL:
         urls.append(discovered)
     urls.append(_FALLBACK_RAW_URL)
+    last_error = None
     for url in urls:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "uhu-version-check"})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                latest = resp.read().decode("utf-8", errors="replace").strip()
+            latest = _fetch_text(url, timeout=timeout).strip()
             if latest:
-                is_newer = _compare_versions(latest, current_version) > 0
-                return (latest, is_newer)
+                _last_check_error = None
+                return (latest, _compare_versions(latest, current_version) > 0)
         except Exception as e:
+            last_error = e
             logger.debug("Version check failed for %s: %s", url, e)
+    _last_check_error = f"{type(last_error).__name__}: {last_error}"[:120] if last_error else "no reachable URL"
     return (None, False)
 
 
