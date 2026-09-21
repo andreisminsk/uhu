@@ -54,18 +54,18 @@
   },
   "llm_query": {
     "api_url": "http://localhost:11434",
-    "model": "qwen3.5:397b-cloud",
+    "model": "glm-5.3-flash:cloud",
     "temperature": 0.3,
     "timeout": 120
   },
   "web_fetch": {
-    "llm_model": "qwen3.5:397b-cloud",
+    "llm_model": "glm-5.3-flash:cloud",
     "llm_summarize": true,
     "max_chars": 3000
   },
   "skills": {
     "graph-ai": {
-      "model": "glm-5.1:cloud",
+      "model": "glm-5.3-flash:cloud",
       "base_url": "http://localhost:11434",
       "api_key": "ollama-local",
       "max_tokens": 131072
@@ -73,7 +73,7 @@
   },
   "llm_parser": {
     "enabled": false,
-    "model": "glm-5.1:cloud",
+    "model": "glm-5.3-flash:cloud",
     "base_url": "http://localhost:11434",
     "timeout": 60,
     "api_type": "ollama",
@@ -82,7 +82,7 @@
   "tools": {
     "image_analysis": {
       "base_url": "http://localhost:11434/",
-      "model": "gemma4:31b-cloud",
+      "model": "glm-5.3-flash:cloud",
       "_comment": "api_type: 'ollama' for native API, 'openai' for OpenAI-compatible endpoint",
       "api_type": "ollama",
       "api_key": "ollama"

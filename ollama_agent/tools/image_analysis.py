@@ -36,7 +36,7 @@ class ImageAnalysisTool:
         config = load_config(workdir)
         tool_config = config.get("tools", {}).get("image_analysis", DEFAULT_CONFIG["tools"]["image_analysis"])
         base_url = tool_config.get("base_url", "http://localhost:11434/")
-        model = tool_config.get("model", "gemma4:31b-cloud")
+        model = tool_config.get("model", "glm-5.3-flash:cloud")
         api_type = tool_config.get("api_type", "ollama")
         return base_url, model, api_type
 

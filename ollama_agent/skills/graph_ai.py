@@ -32,7 +32,7 @@ def _get_skill_config(workdir=None):
     Falls back to .env in the skill directory, then to built-in defaults.
     """
     defaults = {
-        "model": "glm-5.1:cloud",
+        "model": "glm-5.3-flash:cloud",
         "base_url": "http://localhost:11434",
         "api_key": "ollama-local",
         "max_tokens": 131072,
@@ -188,7 +188,7 @@ The desc2dsl.py script reads Ollama config from .ollama_agent.json under `skills
 ```json
 "skills": {
     "graph-ai": {
-        "model": "glm-5.1:cloud",
+        "model": "glm-5.3-flash:cloud",
         "base_url": "http://localhost:11434",
         "api_key": "ollama-local",
         "max_tokens": 131072

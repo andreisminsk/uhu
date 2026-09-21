@@ -28,10 +28,10 @@ def main():
                         help="Use OpenAI-compatible API endpoint")
     parser.add_argument("--api-key", default=None,
                         help="API key for OpenAI-compatible endpoint (default: ollama)")
-    parser.add_argument("--model", default="glm-5.1:cloud",
-                        help="Model name to use for chat (default: glm-5.1:cloud)")
-    parser.add_argument("--ctx", type=int, default=202752,
-                        help="Context window size in tokens (default: 202752)")
+    parser.add_argument("--model", default="glm-5.3-flash:cloud",
+                        help="Model name to use for chat (default: glm-5.3-flash:cloud)")
+    parser.add_argument("--ctx", type=int, default=1024000,
+                        help="Context window size in tokens (default: 1024000)")
     parser.add_argument("--no-stream", action="store_false", dest="stream",
                         help="Disable streaming output (streaming is enabled by default)")
     parser.add_argument("--no-log", action="store_true",

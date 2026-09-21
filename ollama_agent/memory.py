@@ -285,7 +285,7 @@ def compact_memory(scope, workdir):
     )
 
     cfg = get_config(workdir)
-    model = cfg.get("llm_query", {}).get("model", "qwen3.5:397b-cloud")
+    model = cfg.get("llm_query", {}).get("model", "glm-5.3-flash:cloud")
     api_url = cfg.get("llm_query", {}).get("api_url", "http://localhost:11434")
 
     try:

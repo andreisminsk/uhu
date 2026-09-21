@@ -26,7 +26,7 @@ DEFAULT_CONFIG = {
     "tools": {
         "image_analysis": {
             "base_url": "http://localhost:11434/",
-            "model": "gemma4:31b-cloud",
+            "model": "glm-5.3-flash:cloud",
             "api_type": "ollama",
             "api_key": "ollama",
             "timeout": 120
@@ -61,7 +61,7 @@ DEFAULT_CONFIG = {
     },
     "skills": {
         "graph-ai": {
-            "model": "glm-5.1:cloud",
+            "model": "glm-5.3-flash:cloud",
             "base_url": "http://localhost:11434",
             "api_key": "ollama-local",
             "max_tokens": 131072

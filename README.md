@@ -41,10 +41,10 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    - Download from [ollama.ai](https://ollama.ai) and follow the installer
    - After installation, Ollama runs as a background service
    - Verify: `ollama list` (should show installed models, or an empty list)
-   - Pull a model: `ollama pull glm-5.1:cloud` (or any model you prefer)
+   - Pull a model: `ollama pull glm-5.3-flash:cloud` (or any model you prefer)
    - Verify Ollama is running: `curl http://localhost:11434/api/tags` 
-   - Verify that model was deployed successfully: `ollama run glm-5.1:cloud` 
-   - Check your model's context window size for the `--ctx` parameter (e.g. [glm-5.1](https://ollama.com/library/glm-5.1) specifies 198K → `--ctx 202752` since 198 × 1024 = 202752)
+   - Verify that model was deployed successfully: `ollama run glm-5.3-flash:cloud` 
+   - Check your model's context window size for the `--ctx` parameter (e.g. [glm-5.3-flash](https://ollama.com/library/glm-5.3-flash) specifies 1000K → `--ctx 1024000` since 1000 × 1024 = 1024000)
 
 3. **Optional — OpenAI-compatible API support**
 
@@ -163,76 +163,6 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
     ```
 
     Export your ollama.com cookies in Netscape format to `ollama.com_cookies.txt` (in your workdir or agent directory), or set `tools.ollama_balance.cookie_path` in `.ollama_agent.json`.
-
-## Docker
-
-A Docker image is available with Ollama, uhu, and three pre-configured models (`glm-5.1:cloud`, `glm-5.2:cloud`, `glm-5.3:cloud`). Models are pulled at container startup.
-
-### Pull the image
-
-```bash
-docker pull ghcr.io/andreisminsk/uhu-ollama:0.1.0
-```
-
-### Run the container
-
-The container stays alive via `sleep infinity` — SSH in for a shell.
-
-```bash
-docker run -d \
-  -e SSH_PUBLIC_KEYS="ssh-ed25519 AAAA... user@host" \
-  -v ollama-data:/root/.ollama \
-  -v sandbox-projects:/SANDBOX \
-  -p 22:22 \
-  -p 11434:11434 \
-  ghcr.io/andreisminsk/uhu-ollama:0.1.0
-```
-
-| Flag / Volume | Purpose |
-|---|---|
-| `SSH_PUBLIC_KEYS` | SSH public keys injected into `/root/.ssh/authorized_keys` (newline-separated for multiple) |
-| `ollama-data` | Persists downloaded Ollama models across restarts |
-| `sandbox-projects` | Persists your project files in `/SANDBOX` |
-| `-p 2222:22` | SSH access |
-| `-p 11434:11434` | Ollama API on the host (optional) |
-
-### SSH in
-
-```bash
-ssh root@<host> -p 22
-```
-
-You'll land in `/SANDBOX`. The startup banner guides you through:
-
-1. **Create a project folder:**
-   ```
-   mkdir my-project && cd my-project
-   ```
-
-2. **Run uhu:**
-   ```
-   uhu
-   uhu --model glm-5.2:cloud --ctx 202752
-   ```
-
-### Update uhu inside the container
-
-```bash
-cd /opt/uhu && git pull && pip install -e ".[all]"
-```
-
-### Build locally
-
-```bash
-docker build -t ghcr.io/andreisminsk/uhu-ollama:0.1.0 .
-docker run -d -e SSH_PUBLIC_KEYS="ssh-ed25519 AAAA... user@host" \
-  -v ollama-data:/root/.ollama -p 22:22 -p 11434:11434 \
-  ghcr.io/andreisminsk/uhu-ollama:0.1.0
-```
-
-### GitHub Actions
-
-The workflow in `.github/workflows/docker.yml` builds and pushes the image to GHCR on every push to `main`/`master`. It includes disk cleanup and image size reporting. Requires a `CR_PAT` secret (GitHub PAT with `write:packages` scope) in the repository.
 
 ## Quick Launch
 
@@ -381,10 +311,10 @@ uhu --skills
 
 ### Custom model and context size
 
-Refer to model specifications at Ollama web site to set max context size. Example: [glm-5.1:cloud](https://ollama.com/library/glm-5.1) specifies 198K → `--ctx 202752` since 198 × 1024 = 202752
+Refer to model specifications at Ollama web site to set max context size. Example: [glm-5.3-flash:cloud](https://ollama.com/library/glm-5.3-flash) specifies 1000K → `--ctx 1024000` since 1000 × 1024 = 1024000
 
 ```
-uhu --model glm-5.1:cloud --ctx 202752
+uhu --model glm-5.3-flash:cloud --ctx 1024000
 ```
 
 ### OpenAI-compatible API with TPM rate limiting
@@ -464,8 +394,8 @@ uhu --no-autosave --no-cache
 | `--api-ollama`    | (default)                  | Use native Ollama API (default)                                          |
 | `--api-openai`    | —                          | Use OpenAI-compatible API endpoint                                       |
 | `--api-key`       | `ollama`                   | API key for OpenAI-compatible endpoint                                   |
-| `--model`         | `glm-5.1:cloud`            | Model name                                                               |
-| `--ctx`           | `202752`                   | Context window size in tokens                                            |
+| `--model`         | `glm-5.3-flash:cloud`      | Model name                                                               |
+| `--ctx`           | `1024000`                  | Context window size in tokens                                            |
 | `--no-stream`     | off (streaming on)         | Disable streaming output                                                 |
 | `--no-log`        | off (logging on)           | Disable conversation logging                                             |
 | `--sessions-dir`  | `<workdir>/.uhu/.sessions` | Directory for saved sessions                                             |

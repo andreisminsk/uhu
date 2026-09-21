@@ -93,7 +93,7 @@ def main():
 
     load_env()
 
-    model = args.model or os.environ.get("MODEL", "glm-5.1:cloud")
+    model = args.model or os.environ.get("MODEL", "glm-5.3-flash:cloud")
     base_url = args.base_url or os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     base_url = re.sub(r'/v1$', '', base_url)  # Strip /v1 since we add it in call_ollama
     api_key = args.api_key or os.environ.get("OLLAMA_API_KEY", "ollama-local")
