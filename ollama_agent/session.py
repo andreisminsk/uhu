@@ -14,7 +14,7 @@ from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, 
 from .actions import agent_print, tool_print
 from .parser import parse_actions
 from .input_utils import read_full_input, _reconfigure_stdout
-from .utils import check_for_update
+from .utils import check_for_update, get_local_version
 from .platform import terminal
 from .commands import CommandMixin, DISPATCH_CONTINUE, DISPATCH_BREAK, DISPATCH_WORKDIR_SWITCH
 from .actions import ActionMixin
@@ -175,21 +175,22 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             logger.debug("[%s] %s", role, content[:200])
 
     def _check_version(self):
-        """Check GitHub for a newer version. Shows 'n/a' for any missing version piece."""
-        ver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uhu-ver.txt")
-        current = None
-        try:
-            with open(ver_path, "r", encoding="utf-8") as f:
-                current = f.read().strip() or None
-        except FileNotFoundError:
-            pass
+        """Check GitHub for a newer version. Always prints a status line.
+
+        - Update available: warning with both versions
+        - Up to date: current version confirmed against latest
+        - Missing pieces: 'n/a' for any unknown version
+        """
+        current = get_local_version()
         # Sentinel "0" lets the fetch proceed even when local version is unknown
         latest, is_newer = check_for_update(current if current else "0")
         current_disp = f"v{current}" if current else "n/a"
         latest_disp = f"v{latest}" if latest else "n/a"
         if current and latest and is_newer:
             agent_print(f"[⚠ Update available: {current_disp} → {latest_disp}. Run 'git pull' to update.]")
-        elif not current or not latest:
+        elif current and latest:
+            agent_print(f"[Version check: up to date ({current_disp} = latest)]")
+        else:
             agent_print(f"[Version check: local {current_disp} | latest {latest_disp}]")
 
     # Maximum response length in characters before truncating.

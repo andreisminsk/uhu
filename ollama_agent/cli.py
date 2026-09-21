@@ -68,14 +68,13 @@ def main():
 
     # Strip surrounding quotes that Windows shell may include in arguments
     if args.version:
-        ver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uhu-ver.txt")
-        try:
-            with open(ver_path, "r", encoding="utf-8") as f:
-                print(f"uhu v{f.read().strip()}")
-            return
-        except FileNotFoundError:
-            print("[Version file not found]")
-            return
+        from .utils import get_local_version
+        version = get_local_version()
+        if version:
+            print(f"uhu v{version}")
+        else:
+            print("[Version not found]")
+        return
 
     workdir = args.workdir
     if workdir and len(workdir) >= 2 and (

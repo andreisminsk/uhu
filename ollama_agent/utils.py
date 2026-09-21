@@ -65,23 +65,67 @@ def _get_github_raw_url(filename="uhu-ver.txt"):
         return None
 
 
-def check_for_update(current_version, timeout=3):
-    """Check GitHub for a newer version. Returns (latest_version, is_newer) or (None, False)."""
+# Fallback raw URL for update checks — the public repository. Used when git
+# discovery fails (pip installs from git+URL have no .git directory) or when
+# the discovered remote is unreachable (e.g. a private repo).
+_FALLBACK_RAW_URL = "https://raw.githubusercontent.com/andreisminsk/uhu/main/uhu-ver.txt"
+
+
+def get_local_version():
+    """Return the local uhu version string, or None if unknown.
+
+    Preference order:
+    1. uhu-ver.txt next to the package — git checkout or direct script run
+    2. Installed package metadata — pip install (incl. git+URL installs)
+    """
+    ver_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uhu-ver.txt")
     try:
-        import urllib.request
-        url = _get_github_raw_url()
-        if not url:
-            return (None, False)
-        req = urllib.request.Request(url, headers={"User-Agent": "uhu-version-check"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            latest = resp.read().decode("utf-8", errors="replace").strip()
-        if not latest:
-            return (None, False)
-        is_newer = _compare_versions(latest, current_version) > 0
-        return (latest, is_newer)
-    except Exception as e:
-        logger.debug("Version check failed: %s", e)
-        return (None, False)
+        with open(ver_path, "r", encoding="utf-8") as f:
+            version = f.read().strip()
+        if version:
+            return version
+    except OSError:
+        pass
+    try:
+        from importlib.metadata import version as _pkg_version
+        # The distribution has shipped under both names (public repo: huhu,
+        # dev editable installs: uhu) — try both.
+        for dist_name in ("huhu", "uhu"):
+            try:
+                v = _pkg_version(dist_name)
+                if v:
+                    return v
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+def check_for_update(current_version, timeout=3):
+    """Check GitHub for a newer version. Returns (latest_version, is_newer) or (None, False).
+
+    Tries the git-discovered raw URL first, then falls back to the public
+    repository — covers pip installs (no .git directory) and private or
+    unreachable remotes.
+    """
+    import urllib.request
+    urls = []
+    discovered = _get_github_raw_url()
+    if discovered and discovered != _FALLBACK_RAW_URL:
+        urls.append(discovered)
+    urls.append(_FALLBACK_RAW_URL)
+    for url in urls:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "uhu-version-check"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                latest = resp.read().decode("utf-8", errors="replace").strip()
+            if latest:
+                is_newer = _compare_versions(latest, current_version) > 0
+                return (latest, is_newer)
+        except Exception as e:
+            logger.debug("Version check failed for %s: %s", url, e)
+    return (None, False)
 
 
 def _compare_versions(a, b):

@@ -262,15 +262,13 @@ class CommandMixin:
         return text
 
     def do_version(self):
-        """Show version from uhu-ver.txt."""
-        import os
-        ver_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uhu-ver.txt")
-        try:
-            with open(ver_path, "r", encoding="utf-8") as f:
-                version = f.read().strip()
+        """Show version — uhu-ver.txt, or package metadata for pip installs."""
+        from .utils import get_local_version
+        version = get_local_version()
+        if version:
             agent_print(f"uhu v{version}\n")
-        except FileNotFoundError:
-            agent_print("[Version file not found]\n")
+        else:
+            agent_print("[Version not found]\n")
 
     def do_sober(self):
         """Re-inject the system prompt to refocus the model."""
