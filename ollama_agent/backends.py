@@ -22,11 +22,23 @@ import time
 from abc import ABC, abstractmethod
 from typing import List, Dict, Tuple, Optional, Any
 
-from .constants import MODEL_TEMPERATURE
+from .constants import MODEL_TEMPERATURE, ANSI_AI, ANSI_RESET
 from .display import agent_print
 from .spinner import Spinner
 
 logger = logging.getLogger(__name__)
+
+
+def _ai_color_on():
+    """Start AI response color (#00FF00) when stdout is a TTY."""
+    if sys.stdout.isatty():
+        sys.stdout.write(ANSI_AI)
+
+
+def _ai_color_off():
+    """Reset AI response color when stdout is a TTY."""
+    if sys.stdout.isatty():
+        sys.stdout.write(ANSI_RESET)
 
 
 # ── Token Counter ─────────────────────────────────────────────────────
@@ -468,6 +480,7 @@ class OllamaNativeBackend(LLMBackend):
                 if token:
                     if first:
                         spinner.stop()
+                        _ai_color_on()
                         sys.stdout.write("AI: ")
                         sys.stdout.flush()
                         first = False
@@ -487,8 +500,10 @@ class OllamaNativeBackend(LLMBackend):
 
         if first:
             spinner.stop()
+            _ai_color_on()
             sys.stdout.write("AI: ")
             sys.stdout.flush()
+        _ai_color_off()
         print("\n")
         return msg, eval_count
 
@@ -535,9 +550,11 @@ class OllamaNativeBackend(LLMBackend):
         spinner.stop()
         msg = response["message"]["content"]
         eval_count = response.get("prompt_eval_count")
+        _ai_color_on()
         sys.stdout.write("AI: ")
         sys.stdout.flush()
         print(f"{msg}\n")
+        _ai_color_off()
         return msg, eval_count
 
 
@@ -695,6 +712,7 @@ class OpenAIBackend(LLMBackend):
                 if token:
                     if first:
                         spinner.stop()
+                        _ai_color_on()
                         sys.stdout.write("AI: ")
                         sys.stdout.flush()
                         first = False
@@ -715,13 +733,15 @@ class OpenAIBackend(LLMBackend):
         
         if first:
             spinner.stop()
+            _ai_color_on()
             sys.stdout.write("AI: ")
             sys.stdout.flush()
+        _ai_color_off()
         print("\n")
         return msg, eval_count
     
     def _call_blocking(self, messages: List[Dict]) -> Tuple[str, Optional[int]]:
-        """Non-streaming call using OpenAI SDK."""
+        """Non-blocking call using OpenAI SDK."""
         spinner = Spinner(prefix="AI: ")
         spinner.start()
         
@@ -733,9 +753,11 @@ class OpenAIBackend(LLMBackend):
             eval_count = response.usage.prompt_tokens if response.usage else None
             
             spinner.stop()
+            _ai_color_on()
             sys.stdout.write("AI: ")
             sys.stdout.flush()
             print(f"{content}\n")
+            _ai_color_off()
             return content, eval_count
             
         except KeyboardInterrupt:
