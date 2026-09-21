@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Cross-platform system information script (Windows 11, macOS, Linux).
-Outputs: Total/Used/Free/Reclaimable RAM (GB and %), CPU load, GPU load, disk space.
+Outputs: Total/Used/Free/Reclaimable RAM (GB and %), CPU load, GPU load, disk space,
+container/cgroup limits (Linux).
 
 Dependencies: psutil (pip install psutil)
 GPU detection is best-effort — nvidia-smi, WMI, or /sys/class/drm.
@@ -439,6 +440,133 @@ def get_disk_info():
     return disks
 
 
+# ── Container / cgroup limits ────────────────────────────────────────────────
+
+def _read_file(path):
+    """Read a small file, return stripped content or None."""
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except Exception:
+        return None
+
+
+def _cgroup_v2_file(filename):
+    """Read a cgroup v2 file for this process.
+
+    Inside containers /sys/fs/cgroup is the container's own cgroup root.
+    On host systems with systemd the process cgroup is nested — derive
+    the path from /proc/self/cgroup.
+    """
+    val = _read_file(f"/sys/fs/cgroup/{filename}")
+    if val is not None:
+        return val
+    cgroup = _read_file("/proc/self/cgroup")
+    if cgroup:
+        for line in cgroup.splitlines():
+            parts = line.split(":")
+            if len(parts) == 3 and parts[0] == "0":
+                rel = parts[2].strip("/")
+                if rel:
+                    val = _read_file(f"/sys/fs/cgroup/{rel}/{filename}")
+                    if val is not None:
+                        return val
+    return None
+
+
+def _detect_container_env():
+    """Best-effort detection of the container runtime."""
+    env = []
+    if os.path.exists("/.dockerenv"):
+        env.append("docker")
+    if os.path.exists("/run/.containerenv"):
+        env.append("podman")
+    if os.environ.get("KUBERNETES_SERVICE_HOST"):
+        env.append("kubernetes")
+    if os.environ.get("RUNPOD_POD_ID") or os.environ.get("RUNPOD_METRICS_PORT"):
+        env.append("runpod")
+    cgroup = _read_file("/proc/1/cgroup") or _read_file("/proc/self/cgroup") or ""
+    if "kubepods" in cgroup and "kubernetes" not in env:
+        env.append("kubernetes")
+    if "docker" in cgroup and "docker" not in env:
+        env.append("docker")
+    if "lxc" in cgroup:
+        env.append("lxc")
+    return env
+
+
+def get_container_limits():
+    """Detect container/cgroup resource limits (Linux only).
+
+    In containers (Docker, Kubernetes, RunPod, ...) psutil reports HOST
+    totals — the container may be capped far below them. This reports
+    the effective limits: usable CPU cores (scheduler affinity, what
+    nproc reports), cgroup CPU quota, cgroup memory cap, and the
+    detected container environment.
+
+    Returns a dict, or None when nothing constrains this process.
+    """
+    if platform.system() != "Linux":
+        return None
+
+    limits = {}
+
+    # Usable CPU cores — respects cpuset/taskset
+    try:
+        limits["cpu_usable"] = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        pass
+
+    # CPU quota — cgroup v2 ("max 100000" = unlimited), then v1 fallback
+    cpu_max = _cgroup_v2_file("cpu.max")
+    if cpu_max:
+        parts = cpu_max.split()
+        if parts[0] != "max":
+            try:
+                quota = int(parts[0])
+                period = int(parts[1]) if len(parts) > 1 else 100000
+                if period > 0:
+                    limits["cpu_quota_cores"] = round(quota / period, 2)
+            except (ValueError, ZeroDivisionError):
+                pass
+    if "cpu_quota_cores" not in limits:
+        quota = _read_file("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
+        period = _read_file("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
+        try:
+            if quota and int(quota) > 0 and period and int(period) > 0:
+                limits["cpu_quota_cores"] = round(int(quota) / int(period), 2)
+        except ValueError:
+            pass
+
+    # Memory cap — cgroup v2 ("max" = unlimited), then v1 fallback
+    mem_max = _cgroup_v2_file("memory.max")
+    if mem_max and mem_max != "max":
+        try:
+            limits["memory_limit_gb"] = fmt_gb(int(mem_max))
+        except ValueError:
+            pass
+    if "memory_limit_gb" not in limits:
+        mem_limit = _read_file("/sys/fs/cgroup/memory/memory.limit_in_bytes")
+        try:
+            # v1 reports a huge sentinel (~2^63) when unlimited
+            if mem_limit and 0 < int(mem_limit) < (1 << 60):
+                limits["memory_limit_gb"] = fmt_gb(int(mem_limit))
+        except ValueError:
+            pass
+
+    env = _detect_container_env()
+    if env:
+        limits["environment"] = env
+
+    if not limits:
+        return None
+    # Bare metal with no caps and full affinity — nothing to report
+    has_cap = any(k in limits for k in ("cpu_quota_cores", "memory_limit_gb", "environment"))
+    if not has_cap and limits.get("cpu_usable") == psutil.cpu_count(logical=True):
+        return None
+    return limits
+
+
 # ── Display ─────────────────────────────────────────────────────────────────
 
 def display_all():
@@ -503,6 +631,19 @@ def display_all():
             label = f"{d['device']} ({d['mountpoint']})"
         print(f"  {label}:  {d['used_gb']} / {d['total_gb']} GB used ({d['used_pct']})  |  {d['free_gb']} GB free ({d['free_pct']})")
 
+    # Container/cgroup limits
+    limits = get_container_limits()
+    if limits:
+        print("\n── Container/Cgroup Limits ──")
+        if limits.get("environment"):
+            print(f"  Environment:       {', '.join(limits['environment'])}")
+        if "cpu_usable" in limits:
+            print(f"  Usable CPU cores: {limits['cpu_usable']} (of {cpu['core_count_logical']} visible)")
+        if "cpu_quota_cores" in limits:
+            print(f"  CPU quota:        {limits['cpu_quota_cores']} cores")
+        if "memory_limit_gb" in limits:
+            print(f"  Memory cap:       {limits['memory_limit_gb']} GB (of {ram['total_gb']} GB visible)")
+
     print("\n" + "=" * 60)
 
 
@@ -523,6 +664,9 @@ def collect_all():
     if top_gpu:
         data["top_processes_gpu"] = top_gpu
     data["disk"] = get_disk_info()
+    limits = get_container_limits()
+    if limits:
+        data["limits"] = limits
     return data
 
 

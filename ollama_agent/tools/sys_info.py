@@ -12,12 +12,19 @@ import sys
 
 class SysInfoTool:
     name = "sys_info"
-    description = "Get system resource usage: RAM, CPU, GPU load, top processes"
+    description = "Get system resource usage: RAM, CPU, GPU load, top processes, container/cgroup limits"
     system_prompt = """## sys_info
 
 Get current system resource usage: RAM (total/used/free/reclaimable/available),
 CPU load (overall + per-core), GPU load (best-effort, platform-specific),
-and top 5 processes by CPU and RAM.
+top 5 processes by CPU and RAM, disk space, and container/cgroup limits.
+
+On Linux, the `limits` section reports what this process can actually use:
+usable CPU cores (scheduler affinity), cgroup CPU quota, cgroup memory cap,
+and detected container environment (docker/kubernetes/runpod). In containers,
+the RAM/CPU sections show HOST totals which can far exceed the container's
+allocation — always check `limits` before sizing workloads (builds, model
+inference, batch jobs).
 
 No parameters. Output is JSON.
 
