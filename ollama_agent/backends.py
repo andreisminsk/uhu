@@ -1,4 +1,4 @@
-"""LLM Backend Abstraction Layer.
+﻿"""LLM Backend Abstraction Layer.
 
 Provides unified interface for different LLM APIs:
 - OllamaNativeBackend: Uses ollama.Client with /api/chat endpoint
@@ -41,7 +41,7 @@ def _ai_color_off():
         sys.stdout.write(ANSI_RESET)
 
 
-# ── Token Counter ─────────────────────────────────────────────────────
+# â”€â”€ Token Counter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TokenCounter:
     """Counts tokens using tiktoken, with graceful fallback to char/4 heuristic."""
@@ -80,14 +80,14 @@ class TokenCounter:
         return self.count([msg])
 
 
-# ── TPM Tracker ───────────────────────────────────────────────────────
+# â”€â”€ TPM Tracker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class TPMTracker:
     """Tracks tokens-per-minute usage to proactively throttle requests.
 
     Maintains a rolling 60-second window of token usage. Before sending,
     checks if the request would exceed the TPM budget. If so, waits until
-    the window clears — transforming 429 errors into planned waits.
+    the window clears â€” transforming 429 errors into planned waits.
     """
 
     def __init__(self, tpm_limit: int, quiet: bool = False):
@@ -109,10 +109,10 @@ class TPMTracker:
     def wait_if_needed(self, estimated_tokens: int):
         """Block until sending estimated_tokens won't exceed TPM limit.
 
-        If a single request exceeds the TPM limit, waiting is pointless —
+        If a single request exceeds the TPM limit, waiting is pointless â€”
         just send it and let the retry handler deal with any 429.
         """
-        # Single request bigger than entire TPM budget — don't wait forever
+        # Single request bigger than entire TPM budget â€” don't wait forever
         if estimated_tokens >= self.tpm_limit:
             return
         while True:
@@ -137,7 +137,7 @@ class TPMTracker:
         self._usage_log.append((time.time(), tokens))
 
 
-# ── History Trimmer ───────────────────────────────────────────────────
+# â”€â”€ History Trimmer â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class HistoryTrimmer:
     """Trims conversation history to fit within a token budget.
@@ -182,7 +182,7 @@ class HistoryTrimmer:
         if dropped_summaries:
             result.append({
                 "role": "system",
-                "content": f"[Earlier conversation trimmed — {len(dropped_summaries)} message(s) dropped: "
+                "content": f"[Earlier conversation trimmed â€” {len(dropped_summaries)} message(s) dropped: "
                            + "; ".join(dropped_summaries) + "]"
             })
         result += self._flatten(groups)
@@ -230,7 +230,7 @@ class HistoryTrimmer:
         return " | ".join(parts)
 
 
-# ── Retry Handler ─────────────────────────────────────────────────────
+# â”€â”€ Retry Handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class RetryHandler:
     """Retry on rate limits and connection errors with jittered backoff."""
@@ -301,7 +301,7 @@ class LLMBackend(ABC):
 
     All rate-limiting and context-management components are Optional and
     default to None. Backends opt in only to the components they need.
-    Ollama leaves all as None — zero overhead, existing behavior preserved.
+    Ollama leaves all as None â€” zero overhead, existing behavior preserved.
     """
 
     def __init__(self):
@@ -335,7 +335,7 @@ class LLMBackend(ABC):
             original = self._token_counter.count(messages)
             final = self._token_counter.count(trimmed)
             if original != final:
-                logger.info("History trimmed: %d → %d tokens", original, final)
+                logger.info("History trimmed: %d â†’ %d tokens", original, final)
 
         # 3. Execute with retry or direct call
         if self._retry:
@@ -460,7 +460,7 @@ class OllamaNativeBackend(LLMBackend):
                         raise stream_error[0]
                     if time.time() - last_chunk_time > self.STREAM_CHUNK_TIMEOUT:
                         spinner.stop()
-                        agent_print(f"\n[Model streaming timeout — no response for {self.STREAM_CHUNK_TIMEOUT}s]\n")
+                        agent_print(f"\n[Model streaming timeout â€” no response for {self.STREAM_CHUNK_TIMEOUT}s]\n")
                         break
                     continue
 
@@ -580,10 +580,10 @@ class OpenAIBackend(LLMBackend):
         self._last_usage = None
         self._quiet = quiet
 
-        # Token counter — always on for OpenAI-compatible backends
+        # Token counter â€” always on for OpenAI-compatible backends
         self._token_counter = TokenCounter(model, per_message_overhead=4)
 
-        # History trimmer — always on (OpenAI protocol doesn't guarantee server-side eviction)
+        # History trimmer â€” always on (OpenAI protocol doesn't guarantee server-side eviction)
         # Without --tpm: use full ctx_size. With --tpm: cap at max_context (default 16384).
         trim_budget = ctx_size
         if tpm_limit is not None:
@@ -594,7 +594,7 @@ class OpenAIBackend(LLMBackend):
             reserve_output=2048
         )
 
-        # Retry handler — always on, but configuration depends on --tpm
+        # Retry handler â€” always on, but configuration depends on --tpm
         if tpm_limit is not None:
             # Aggressive: 429 + rate limits, 20s backoff
             self._retry = RetryHandler(
@@ -673,12 +673,12 @@ class OpenAIBackend(LLMBackend):
                     return self.client.chat.completions.create(**kwargs)
                 except Exception as e2:
                     err_str2 = str(e2).lower()
-                    # Some models reject max_tokens too — retry without any max param
+                    # Some models reject max_tokens too â€” retry without any max param
                     if "max_tokens" in err_str2 or "unsupported" in err_str2:
                         kwargs.pop("max_tokens", None)
                         return self.client.chat.completions.create(**kwargs)
                     raise
-            # Some models reject max_completion_tokens with "unsupported" — try max_tokens
+            # Some models reject max_completion_tokens with "unsupported" â€” try max_tokens
             if "unsupported" in err_str and "max" in err_str:
                 kwargs.pop("max_completion_tokens", None)
                 kwargs["max_tokens"] = min(self.ctx_size, 8192)

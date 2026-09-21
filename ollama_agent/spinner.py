@@ -9,10 +9,13 @@ import threading
 class Spinner:
     """A terminal spinner that animates while waiting, with optional thinking display."""
 
-    def __init__(self, message="Thinking", prefix="", max_thinking_lines=5):
+    def __init__(self, message="Thinking", prefix="", max_thinking_lines=5, color=None):
         self.message = message
         self.prefix = prefix
         self.max_thinking_lines = max_thinking_lines
+        # Optional ANSI color for the spinner line and thinking lines.
+        # Applied only when stdout is a TTY.
+        self.color = color if (color and sys.stdout.isatty()) else None
         self.thinking_text = ""
         self._frames = ["◰", "◳", "◲", "◱"]
         self._stop = threading.Event()
@@ -81,9 +84,9 @@ class Spinner:
                 total_lines = 1 + len(thinking_lines)
 
                 if first:
-                    sys.stdout.write(f"\r{self.prefix}{frame} {self.message}...\n")
+                    sys.stdout.write(f"\r{self.color or ''}{self.prefix}{frame} {self.message}...\033[0m\n")
                     for tl in thinking_lines:
-                        sys.stdout.write(f"\033[2m{tl}\033[0m\n")
+                        sys.stdout.write(f"{self.color or ''}\033[2m{tl}\033[0m\n")
                     self._last_lines = total_lines
                     first = False
                 else:
@@ -93,9 +96,9 @@ class Spinner:
                     # Clear from cursor to end of screen
                     sys.stdout.write("\033[J")
                     # Redraw all lines
-                    sys.stdout.write(f"\r{self.prefix}{frame} {self.message}...\n")
+                    sys.stdout.write(f"\r{self.color or ''}{self.prefix}{frame} {self.message}...\033[0m\n")
                     for tl in thinking_lines:
-                        sys.stdout.write(f"\033[2m{tl}\033[0m\n")
+                        sys.stdout.write(f"{self.color or ''}\033[2m{tl}\033[0m\n")
                     self._last_lines = total_lines
 
                 sys.stdout.flush()
