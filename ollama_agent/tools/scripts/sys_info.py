@@ -14,6 +14,7 @@ import re
 import platform
 import subprocess
 import shutil
+import time
 
 try:
     import psutil
@@ -183,19 +184,9 @@ def get_gpu_load_linux_sysfs():
     return gpus if gpus else None
 
 
-def get_gpu_load_macos():
-    """Get GPU info on macOS via IOKit (no sudo) or powermetrics (sudo)."""
-    # Get GPU names from system_profiler
-    out = run_cmd(["system_profiler", "SPDisplaysDataType"])
-    names = []
-    if out:
-        names = [n.strip() for n in re.findall(r"Chipset Model:\s*(.+)", out)]
-
-    gpu_load = None
-    load_source = "system_profiler"
-
-    # ── Method 1: ioreg (no sudo, no dependencies) ──
-    # Try IOGPUDevice first (Intel/older Macs)
+def _ioreg_gpu_sample():
+    """One ioreg pass (no sudo): returns (gpu_load, source) or (None, None)."""
+    # Try IOGPUDevice first (Intel/older Macs), then AGXAccelerator (Apple Silicon)
     for ioreg_class, patterns in [
         ("IOGPUDevice", [
             (r'"PerformanceStatistics"\s*=\s*\{([^}]+)\}', [
@@ -214,8 +205,6 @@ def get_gpu_load_macos():
             ]),
         ]),
     ]:
-        if gpu_load is not None:
-            break
         ioreg_out = run_cmd(["ioreg", "-r", "-c", ioreg_class, "-d", "3"])
         if not ioreg_out:
             continue
@@ -227,11 +216,30 @@ def get_gpu_load_macos():
             for val_pattern, label in sub_patterns:
                 m = re.search(val_pattern, perf_str)
                 if m:
-                    gpu_load = float(m.group(1))
-                    load_source = f"IOKit/{ioreg_class} ({label})"
-                    break
-            if gpu_load is not None:
-                break
+                    return float(m.group(1)), f"IOKit/{ioreg_class} ({label})"
+    return None, None
+
+
+def get_gpu_load_macos():
+    """Get GPU info on macOS via IOKit (no sudo) or powermetrics (sudo)."""
+    # Get GPU names from system_profiler
+    out = run_cmd(["system_profiler", "SPDisplaysDataType"])
+    names = []
+    if out:
+        names = [n.strip() for n in re.findall(r"Chipset Model:\s*(.+)", out)]
+
+    gpu_load = None
+    load_source = "system_profiler"
+
+    # ── Method 1: ioreg (no sudo, no dependencies) ──
+    # GPU load is bursty — a single instantaneous read usually catches 0
+    # between short render/compute spikes. Sample several times over ~1 s
+    # (mirroring the 1 s CPU sampling window) and keep the peak.
+    for _ in range(5):
+        load, src = _ioreg_gpu_sample()
+        if load is not None and (gpu_load is None or load > gpu_load):
+            gpu_load, load_source = load, src
+        time.sleep(0.2)
 
     # ── Method 3: powermetrics (needs sudo) ──
     if gpu_load is None:
