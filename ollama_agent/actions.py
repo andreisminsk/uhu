@@ -59,6 +59,30 @@ class ActionMixin:
                 return
         object.__setattr__(self, name, value)
 
+    @staticmethod
+    def _load_tools_module():
+        """Import the tool registry, self-healing if sys.modules was poisoned.
+
+        Returns (get, all_tools) on success, or (None, error_str) on failure.
+        A stubbed ollama_agent.tools in sys.modules (e.g. from py_compile 'run'
+        code that replaced it with a bare ModuleType) lacks 'get' and __file__.
+        In that case, evict the stub and re-import from disk.
+        """
+        import importlib
+        import sys
+        tools_mod = sys.modules.get("ollama_agent.tools")
+        if tools_mod is not None and (
+            not hasattr(tools_mod, "get") or getattr(tools_mod, "__file__", None) is None
+        ):
+            # Poisoned stub — evict and re-import
+            for _name in [n for n in sys.modules if n == "ollama_agent.tools" or n.startswith("ollama_agent.tools.")]:
+                del sys.modules[_name]
+        try:
+            mod = importlib.import_module("ollama_agent.tools")
+            return mod.get, mod.all_tools
+        except Exception as e:
+            return None, f"{type(e).__name__}: {e}"
+
     def _check_command_safety(self, cmd):
         """Check a command for safety. Delegates to CommandSafetyGate."""
         return self._safety.check(cmd)
@@ -198,7 +222,16 @@ class ActionMixin:
 
     def execute_tool(self, action):
         """Execute a tool invocation action."""
-        from .tools import get as get_tool, all_tools
+        get_tool, all_tools = self._load_tools_module()
+        if get_tool is None:
+            msg = (
+                f"[TOOL FAILED: {action['name']} — tool registry unavailable "
+                f"(ollama_agent.tools failed to import: {all_tools}). "
+                f"Restart the session to recover.]"
+            )
+            agent_print(msg + "\n")
+            return msg
+        tool_name = action["name"]
         tool_name = action["name"]
         params = action.get("params", {})
         json_error = action.get("json_error")

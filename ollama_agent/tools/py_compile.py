@@ -132,6 +132,11 @@ class PyCompileTool:
         # Without this, `x = 1; [x for _ in range(3)]` raises NameError: 'x'.
         namespace = {"__name__": "__main__", "__builtins__": __builtins__}
 
+        # Snapshot sys.modules: executed code can replace or delete entries
+        # (e.g., stubbing ollama_agent.tools with a bare ModuleType), which
+        # would poison the harness's own lazy imports until process restart.
+        _modules_snapshot = dict(sys.modules)
+
         try:
             with contextlib.redirect_stdout(output):
                 # Try eval first (expressions), then exec (statements)
@@ -154,6 +159,11 @@ class PyCompileTool:
                 lines = lines[:5] + ["..."] + lines[-5:]
             return f"[FAIL] {chr(10).join(lines)}"
         finally:
+            # Undo sys.modules poisoning: restore any entry the executed
+            # code replaced (stubbed) or deleted. Newly added modules are kept.
+            for _name, _mod in _modules_snapshot.items():
+                if sys.modules.get(_name) is not _mod:
+                    sys.modules[_name] = _mod
             os.chdir(old_cwd)
             if added_path and added_path in sys.path:
                 sys.path.remove(added_path)

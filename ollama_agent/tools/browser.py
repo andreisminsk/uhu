@@ -275,6 +275,15 @@ def _ensure_browser(config=None):
             "viewport": viewport,
             "locale": "en-US",
             "timezone_id": "America/New_York",
+            # NOTE: only headers valid for ALL request types may go here.
+            # Context-level extra_http_headers apply to every request —
+            # including subresources. Navigation-only headers
+            # (Sec-Fetch-Dest/Mode/Site/User, Upgrade-Insecure-Requests)
+            # must NOT be pinned: Chromium's fetch-metadata validation
+            # aborts any stylesheet/image/fetch claiming
+            # "Sec-Fetch-Dest: document" (transferSize 0, instant abort —
+            # see tests/browser_repro.py and dev-docs/BROWSER-ISSUES.md).
+            # Chromium generates correct Sec-Fetch-* values per-request.
             "extra_http_headers": {
                 "Accept-Language": "en-US,en;q=0.9",
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -282,11 +291,6 @@ def _ensure_browser(config=None):
                 "Sec-CH-UA": '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
                 "Sec-CH-UA-Mobile": "?0",
                 "Sec-CH-UA-Platform": '"Windows"',
-                "Upgrade-Insecure-Requests": "1",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1",
             },
         }
         if user_agent:
@@ -329,28 +333,28 @@ _SYSTEM_PROMPT = (
     "Go to a URL.\n"
     '```json\n'
     '{"action": "navigate", "url": "https://example.com", "wait_until": "domcontentloaded", "timeout": 30}\n'
-    '"""\n'
+    '```\n'
     "Required: url. Optional: wait_until (load|domcontentloaded|networkidle, default: domcontentloaded), timeout (default: 30).\n"
     "\n"
     "### extract_text\n"
     "Get cleaned text content from the page or a specific element.\n"
     '```json\n'
     '{"action": "extract_text", "selector": "body", "max_length": 5000}\n'
-    '"""\n'
+    '```\n'
     "Optional: selector (CSS, default: body), max_length (default: 5000).\n"
     "\n"
     "### extract_links\n"
     "Get all links on the page.\n"
     '```json\n'
     '{"action": "extract_links", "selector": "a", "max_links": 50}\n'
-    '"""\n'
+    '```\n'
     "Optional: selector (CSS, default: 'a'), max_links (default: 50).\n"
     "\n"
     "### screenshot\n"
     "Capture a screenshot of the page or element. Saves to workdir and returns the file path.\n"
     '```json\n'
     '{"action": "screenshot", "selector": null, "full_page": false, "path": "screenshot.png"}\n'
-    '"""\n'
+    '```\n'
     "Optional: selector (CSS, null=full page), full_page (default: false), path (default: screenshot.png).\n"
     "After screenshot, use image-analysis tool to analyze the image.\n"
     "\n"
@@ -358,7 +362,7 @@ _SYSTEM_PROMPT = (
     "Save the current page as a PDF file.\n"
     '```json\n'
     '{"action": "pdf", "path": "page.pdf", "format": "A4"}\n'
-    '"""\n'
+    '```\n'
     "Optional: path (default: page.pdf), format (default: A4).\n"
     "Note: PDF export only works in headless mode.\n"
     "\n"
@@ -366,55 +370,55 @@ _SYSTEM_PROMPT = (
     "Click an element.\n"
     '```json\n'
     '{"action": "click", "selector": "#button", "text": null, "timeout": 10}\n'
-    '"""\n'
+    '```\n'
     "Provide either selector or text. Optional: timeout (default: 10).\n"
     "\n"
     "### fill\n"
     "Type text into a form field.\n"
     '```json\n'
     '{"action": "fill", "selector": "#search", "value": "search terms", "press_enter": false}\n'
-    '"""\n'
+    '```\n'
     "Required: selector, value. Optional: press_enter (default: false).\n"
     "\n"
     "### wait_for\n"
     "Wait for an element to appear on the page.\n"
     '```json\n'
     '{"action": "wait_for", "selector": ".results", "timeout": 10}\n'
-    '"""\n'
+    '```\n'
     "Required: selector. Optional: timeout (default: 10).\n"
     "\n"
     "### scroll\n"
     "Scroll the page.\n"
     '```json\n'
     '{"action": "scroll", "direction": "down", "amount": 3, "pause": 500}\n'
-    '"""\n'
+    '```\n'
     "Optional: direction (up|down, default: down), amount (viewport heights, default: 3), pause (ms between scrolls, default: 500).\n"
     "\n"
     "### go_back\n"
     "Navigate back in browser history.\n"
     '```json\n'
     '{"action": "go_back"}\n'
-    '"""\n'
+    '```\n'
     "\n"
     "### reload\n"
     "Reload the current page (useful after editing a local HTML file).\n"
     '```json\n'
     '{"action": "reload", "wait_until": "domcontentloaded", "timeout": 30}\n'
-    '"""\n'
+    '```\n'
     "Optional: wait_until (load|domcontentloaded|networkidle, default: domcontentloaded), timeout (default: 30).\n"
     "\n"
     "### evaluate\n"
     "Run JavaScript in the browser and return the result.\n"
     '```json\n'
     '{"action": "evaluate", "script": "document.title"}\n'
-    '"""\n'
+    '```\n'
     "Required: script.\n"
     "\n"
     "### close\n"
     "Close the browser and free resources.\n"
     '```json\n'
     '{"action": "close"}\n'
-    '"""\n'
+    '```\n'
     "Use this when done browsing to free resources.\n"
 )
 
