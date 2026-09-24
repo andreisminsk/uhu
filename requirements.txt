@@ -7,7 +7,7 @@ prompt_toolkit>=3.0
 # OpenAI-compatible API support (--api-openai flag and image-analysis tool)
 openai>=1.0.0
 
-# Browser automation packages (run `playwright install chromium` once to get the browser binary)
+# Optional — Browser automation (run `playwright install chromium` once to get the browser binary)
 playwright
 playwright-stealth
 

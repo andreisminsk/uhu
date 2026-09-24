@@ -80,7 +80,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    This installs the `uhu` package with a `uhu` console entry point. Optional extras are available:
    
    ```
-   pip install -e ".[search,pdf,calendar,docx,clipboard,sysinfo,balance]"
+   pip install -e ".[search,pdf,browser,calendar,docx,clipboard,sysinfo,balance]"
    pip install -e ".[all]"  # everything
    ```
    
@@ -90,13 +90,14 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    pip install -r requirements.txt
    ```
 
-6. **Browser automation (packages installed by default)**
-   
-   The `playwright` and `playwright-stealth` packages are part of the base install. Download the Chromium browser binary (required once, for the browser tool):
+6. **Optional — Browser automation**
    
    ```
+   pip install -e ".[browser]"
    playwright install chromium
    ```
+   
+   The browser tool also auto-installs the Chromium binary on first use if it's missing.
 
 7. **Optional — Google Calendar integration**
    
