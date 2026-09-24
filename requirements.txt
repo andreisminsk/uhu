@@ -4,6 +4,13 @@ requests>=2.28.0
 # Recommended — rich multiline input (Shift+Enter, arrow keys, history)
 prompt_toolkit>=3.0
 
+# OpenAI-compatible API support (--api-openai flag and image-analysis tool)
+openai>=1.0.0
+
+# Browser automation packages (run `playwright install chromium` once to get the browser binary)
+playwright
+playwright-stealth
+
 # Optional — Web search (recommended for reliable DuckDuckGo results)
 ddgs>=9.0
 
@@ -12,10 +19,6 @@ markdown
 pymdown-extensions
 xhtml2pdf
 
-# Optional — browser automation
-playwright
-playwright-stealth
-
 # Optional — Google Calendar integration
 google-api-python-client
 google-auth-httplib2
@@ -23,9 +26,6 @@ google-auth-oauthlib
 
 # Optional — DOCX to Markdown conversion (docx2md skill)
 markitdown
-
-# Optional — OpenAI-compatible API support (for --api-openai flag and image-analysis tool)
-openai>=1.0.0
 
 # Optional — Clipboard image paste (Ctrl+V image detection on Windows/macOS)
 Pillow>=8.1.0

@@ -35,10 +35,14 @@ RUN set -eux; \
 # ── Clone uhu (git clone so users can `git pull` later) ──────────
 RUN git clone https://github.com/andreisminsk/uhu.git /opt/uhu
 
-# ── Create venv and install uhu in editable mode ────────────────
+# ── Create venv, install uhu (editable, all extras), and pre-download ─
+# Chromium for the browser tool. Base install now includes playwright;
+# `playwright install --with-deps chromium` fetches the browser binary
+# and its system libraries so the browser tool works out of the box.
 RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
-    cd /opt/uhu && /opt/venv/bin/pip install --no-cache-dir -e ".[all]"
+    cd /opt/uhu && /opt/venv/bin/pip install --no-cache-dir -e ".[all]" && \
+    /opt/venv/bin/playwright install --with-deps chromium
 
 ENV PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 

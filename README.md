@@ -46,13 +46,9 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    - Verify that model was deployed successfully: `ollama run glm-5.3-flash:cloud` 
    - Check your model's context window size for the `--ctx` parameter (e.g. [glm-5.3-flash](https://ollama.com/library/glm-5.3-flash) specifies 1000K → `--ctx 1024000` since 1000 × 1024 = 1024000)
 
-3. **Optional — OpenAI-compatible API support**
+3. **OpenAI-compatible API support (installed by default)**
 
-   If you want to use OpenAI-compatible endpoints (e.g., Ollama's `/v1` or cloud providers):
-   
-   ```
-   pip install openai
-   ```
+   The `openai` package is part of the base install, so OpenAI-compatible endpoints (e.g., Ollama's `/v1` or cloud providers) work out of the box via the `--api-openai` flag.
 
 3. **Clone this repository**
    Assume that you are planning to put the tool into e.g. `~/Projects/` foder, then:
@@ -84,7 +80,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    This installs the `uhu` package with a `uhu` console entry point. Optional extras are available:
    
    ```
-   pip install -e ".[search,pdf,browser,calendar,docx,openai,clipboard,sysinfo,balance]"
+   pip install -e ".[search,pdf,calendar,docx,clipboard,sysinfo,balance]"
    pip install -e ".[all]"  # everything
    ```
    
@@ -94,10 +90,11 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
    pip install -r requirements.txt
    ```
 
-6. **Optional — Browser automation**
+6. **Browser automation (packages installed by default)**
+   
+   The `playwright` and `playwright-stealth` packages are part of the base install. Download the Chromium browser binary (required once, for the browser tool):
    
    ```
-   pip install playwright playwright-stealth
    playwright install chromium
    ```
 

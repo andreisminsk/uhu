@@ -22,6 +22,38 @@ _BROWSER_DEPS_ERROR = (
     "Run: pip install playwright playwright-stealth && playwright install chromium"
 )
 
+# Set after one auto-install attempt per process, so a failed install
+# doesn't retry (and re-download) on every browser action.
+_chromium_install_attempted = False
+
+
+def _install_chromium():
+    """Lazily download the Chromium browser binary via `playwright install`.
+
+    The pip `playwright` package ships without browser binaries; without
+    this, a fresh local install fails with 'Executable doesn't exist' until
+    the user manually runs `playwright install chromium`. Docker images
+    pre-install it (see Dockerfile); this covers local installs.
+
+    Returns (True, None) on success, (False, error_string) on failure.
+    """
+    global _chromium_install_attempted
+    if _chromium_install_attempted:
+        return False, "Chromium auto-install already attempted this session."
+    _chromium_install_attempted = True
+    import subprocess
+    import sys
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            capture_output=True, text=True, timeout=600,
+        )
+        if result.returncode == 0:
+            return True, None
+        return False, (result.stderr or result.stdout or "unknown error").strip()[:500]
+    except Exception as e:
+        return False, f"{type(e).__name__}: {e}"
+
 
 # ── Browser worker thread ─────────────────────────────────────────────
 
@@ -266,10 +298,23 @@ def _ensure_browser(config=None):
         except Exception as e:
             err_msg = str(e)
             if "Executable doesn't exist" in err_msg or "playwright install" in err_msg.lower():
-                return ("Browser binaries not installed. "
-                        "Run: playwright install chromium")
-            worker._cleanup()
-            return f"[Error launching browser: {e}]"
+                # Chromium binary missing — try one lazy auto-install, then retry
+                ok, install_err = _install_chromium()
+                if ok:
+                    try:
+                        worker._browser = worker._playwright.chromium.launch(
+                            headless=headless, slow_mo=slow_mo
+                        )
+                    except Exception as e2:
+                        worker._cleanup()
+                        return f"[Error launching browser after Chromium install: {e2}]"
+                else:
+                    return ("Browser binaries not installed and auto-install failed: "
+                            f"{install_err}. "
+                            "Run manually: playwright install chromium")
+            else:
+                worker._cleanup()
+                return f"[Error launching browser: {e}]"
 
         context_kwargs = {
             "viewport": viewport,

@@ -2,6 +2,7 @@
 
 import itertools
 import re
+import shutil
 import sys
 import threading
 
@@ -68,13 +69,32 @@ class Spinner:
             return []
         lines = self.thinking_text.splitlines()
         recent = lines[-self.max_thinking_lines:]
+        limit = self._thinking_width_limit()
         result = []
         for line in recent:
             display = self._sanitize(line)
-            if len(display) > 100:
-                display = "..." + display[-97:]
+            if len(display) > limit:
+                display = "..." + display[-(limit - 3):]
             result.append("  " + display)
         return result
+
+    def _thinking_width_limit(self):
+        """Max content chars per thinking line.
+
+        Defaults to 100; shrinks to the terminal width on narrow terminals
+        (e.g. Termux on a phone) so lines never wrap — wrapped lines break
+        the cursor-up redraw logic in _spin(). Subtracts the 2-space indent
+        plus a 1-column safety margin; never goes below 10 chars. Re-queried
+        on every redraw frame, so terminal resizes take effect live.
+        """
+        try:
+            if sys.stdout.isatty():
+                cols = shutil.get_terminal_size(fallback=(0, 0)).columns
+                if 0 < cols < 100:
+                    return max(10, cols - 3)
+        except Exception:
+            pass
+        return 100
 
     def _spin(self):
         first = True
