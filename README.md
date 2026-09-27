@@ -1,4 +1,4 @@
-**This repository is Read-Only.** 
+**This repository is Read-Only.**
 This project is publicly visible for educational or reference purposes
 
 Project demo video: https://youtu.be/heG0QWUt4Lw
