@@ -27,7 +27,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 sessions_dir=None, agent=True, workdir=".", autosave=True,
                 tools=True, skills=False, skills_dir="./.skills", cache_files=True,
                 thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
-                tpm_limit=None, max_context=None, no_llm_parsing=False):
+                tpm_limit=None, max_context=None, no_llm_parsing=False,
+                openai_extra_body=None):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -42,6 +43,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             api_key=api_key,
             tpm_limit=tpm_limit,
             max_context=max_context,
+            extra_body_path=openai_extra_body,
             quiet=quiet
         )
         self._api_type = api_type
@@ -51,6 +53,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._thinking = thinking
         self._tpm_limit = tpm_limit
         self._max_context = max_context
+        self._extra_body_path = openai_extra_body
 
         self.client = None  # Deprecated: use _backend instead
         self.model = model
@@ -206,7 +209,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         return self._backend.call(self.history, stream=self.stream)
 
     def _rebuild_backend(self, api_type=None, model=None, ctx_size=None,
-                         host=None, api_key=None):
+                         host=None, api_key=None, extra_body_path=None):
         """Swap the LLM backend at runtime. History and running jobs are untouched."""
         from .backends import create_backend
         api_type = api_type or self._api_type
@@ -214,11 +217,13 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         ctx_size = ctx_size if ctx_size is not None else self.ctx_size
         host = host or self._host
         api_key = api_key or self._api_key
+        # extra_body_path is used as-is: None = no extra body, path = load file
 
         self._backend = create_backend(
             api_type=api_type, host=host, model=model, ctx_size=ctx_size,
             thinking=self._thinking, api_key=api_key,
             tpm_limit=self._tpm_limit, max_context=self._max_context,
+            extra_body_path=extra_body_path,
             quiet=self.quiet
         )
         self.model = model
@@ -226,7 +231,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._api_type = api_type
         self._host = host
         self._api_key = api_key
-        self._log("system", f"[Backend switched: api={api_type} model={model} ctx={ctx_size} host={host}]")
+        self._extra_body_path = extra_body_path or None
+        self._log("system", f"[Backend switched: api={api_type} model={model} ctx={ctx_size} host={host} extra_body={extra_body_path or 'off'}]")
 
     def _build_message(self, user_input):
         parts = self.pending_content[:]

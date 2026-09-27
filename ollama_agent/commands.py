@@ -136,7 +136,7 @@ class CommandMixin:
              "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
             "  /timeout [sec|reset]         Show/set the active model-call timeout (this session only)\n"
             "  /llm                         Show current API, model, context, host\n"
-            "  /llm [--api-openai|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>]\n"
+            "  /llm [--api-openai|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>] [--extra-body <path>]\n"
             "                               Switch LLM backend at runtime (history preserved)\n"
             "  /pid                         Show current and parent process IDs\n"
             "  /workdir [path]              Show or switch working directory (resets context)\n"
@@ -1266,13 +1266,17 @@ class CommandMixin:
 
         /llm                          → show current API, model, context, host
         /llm [--api-openai|--api-ollama] [--model <name>] [--ctx <size>]
-             [--host <url>] [--api-key <key>]
+             [--host <url>] [--api-key <key>] [--extra-body <path>]
+
+        Note: --extra-body is reset to none when the flag is absent —
+        include it explicitly to keep or change the extras file.
         """
         import os as _os
         args = args.strip()
         if not args:
             api_label = "OpenAI-compatible" if self._api_type == "openai" else "Ollama"
-            agent_print(f"[API: {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}]\n")
+            extra = f" | Extra body: {self._extra_body_path}" if self._extra_body_path else ""
+            agent_print(f"[API: {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}{extra}]\n")
             return DISPATCH_CONTINUE
 
         new_api = None
@@ -1280,6 +1284,7 @@ class CommandMixin:
         new_ctx = None
         new_host = None
         new_key = None
+        new_extra = None
 
         tokens = args.split()
         i = 0
@@ -1305,7 +1310,27 @@ class CommandMixin:
             elif t == "--api-key" and i + 1 < len(tokens):
                 new_key = tokens[i + 1]
                 i += 1
+            elif t == "--extra-body" and i + 1 < len(tokens):
+                new_extra = tokens[i + 1]
+                i += 1
             i += 1
+
+        # Validate extra body file early (fail fast with clean error)
+        if new_extra:
+            import json as _json
+            _p = _os.path.expanduser(new_extra)
+            if not _os.path.isfile(_p):
+                agent_print(f"[Error: --extra-body file not found: {_p}]\n")
+                return DISPATCH_CONTINUE
+            try:
+                with open(_p, "r", encoding="utf-8") as _f:
+                    _data = _json.load(_f)
+                if not isinstance(_data, dict):
+                    agent_print(f"[Error: --extra-body file must contain a JSON object: {_p}]\n")
+                    return DISPATCH_CONTINUE
+            except ValueError as e:
+                agent_print(f"[Error: --extra-body file is not valid JSON: {_p}: {e}]\n")
+                return DISPATCH_CONTINUE
 
         # Validate ctx reduction against current history
         target_ctx = new_ctx if new_ctx is not None else self.ctx_size
@@ -1320,9 +1345,10 @@ class CommandMixin:
 
         self._rebuild_backend(
             api_type=new_api, model=new_model, ctx_size=new_ctx,
-            host=new_host, api_key=new_key
+            host=new_host, api_key=new_key, extra_body_path=new_extra
         )
 
         api_label = "OpenAI-compatible" if self._api_type == "openai" else "Ollama"
-        agent_print(f"[Switched to {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}]\n")
+        extra = f" | Extra body: {self._extra_body_path}" if self._extra_body_path else ""
+        agent_print(f"[Switched to {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}{extra}]\n")
         return DISPATCH_CONTINUE

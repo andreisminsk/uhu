@@ -28,6 +28,8 @@ def main():
                         help="Use OpenAI-compatible API endpoint")
     parser.add_argument("--api-key", default=None,
                         help="API key for OpenAI-compatible endpoint (default: ollama)")
+    parser.add_argument("--openai-extra-body", default=None,
+                        help="Path to JSON file with extra request body params for OpenAI-compatible API (e.g. ~/.uhu/glm-extras.json)")
     parser.add_argument("--model", default="glm-5.3-flash:cloud",
                         help="Model name to use for chat (default: glm-5.3-flash:cloud)")
     parser.add_argument("--ctx", type=int, default=1024000,
@@ -92,6 +94,20 @@ def main():
     # Determine API type
     api_type = "openai" if args.api_openai else "ollama"
     
+    # Validate --openai-extra-body early (fail fast with clean error)
+    if args.openai_extra_body:
+        import json as _json
+        _p = os.path.expanduser(args.openai_extra_body)
+        if not os.path.isfile(_p):
+            print(f"[Error: --openai-extra-body file not found: {_p}]")
+            sys.exit(1)
+        try:
+            with open(_p, "r", encoding="utf-8") as _f:
+                _json.load(_f)
+        except (ValueError, OSError) as _e:
+            print(f"[Error: --openai-extra-body file is invalid: {_p}: {_e}]")
+            sys.exit(1)
+
     session = ChatSession(
         host=args.host,
         model=args.model,
@@ -111,6 +127,7 @@ def main():
         mcp=args.mcp,
         api_type=api_type,
         api_key=args.api_key,
+        openai_extra_body=args.openai_extra_body,
         tpm_limit=args.tpm,
         max_context=args.max_context,
         no_llm_parsing=args.no_llm_parsing,

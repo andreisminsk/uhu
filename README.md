@@ -349,6 +349,96 @@ If your OpenAI dashboard says `gpt-5.5` has **200k TPM** or more, you can use:
 
 Avoid setting `--max-context` near full `--ctx` on Tier 1. In this agent, each feedback round resends conversation history, so a 100k-token context can burn TPM very quickly and trigger 429s.
 
+### Provider-Specific Request Params (`--openai-extra-body`)
+
+Some OpenAI-compatible providers accept non-standard request body fields that the OpenAI SDK doesn't have typed parameters for (e.g. OpenRouter's `reasoning` and `provider` routing). Use `--openai-extra-body` to pass a JSON file whose contents are merged into every request body:
+
+```
+uhu --api-openai --host https://openrouter.ai/api/v1 --model z-ai/glm-5.3-flash --openai-extra-body ~/.uhu/glm-extras.json
+```
+
+`~/.uhu/glm-extras.json`:
+```json
+{
+  "reasoning": { "enabled": true },
+  "provider": { "only": ["sail-research/fp8"], "allow_fallbacks": false }
+}
+```
+
+The file is loaded once at startup (missing file or invalid JSON → clean error and exit). Paths support `~` and environment variable expansion. To change it mid-session, use `/llm --extra-body <path>` — the file is validated before the backend is rebuilt. Note: `/llm` resets the extra body to none when the flag is absent, so include `--extra-body <path>` on every `/llm` invocation that should keep it. Fields in the extras file override code defaults (e.g. `temperature`), since the SDK merges `extra_body` over typed params.
+
+### OpenRouter Example
+
+[OpenRouter](https://openrouter.ai) aggregates many providers behind one OpenAI-compatible endpoint — useful for trying models like `z-ai/glm-5.3-flash` without running them locally. You need an API key from [openrouter.ai/keys](https://openrouter.ai/keys).
+
+**Step 1 — Save the key as an environment variable** (never paste it into the command line where it lands in shell history):
+
+**Windows PowerShell** (current window only):
+```powershell
+$env:OPENROUTER_API_KEY = "sk-or-v1-your-key-here"
+```
+
+**Windows PowerShell** (persistent — new windows only, current window unaffected):
+```powershell
+setx OPENROUTER_API_KEY "sk-or-v1-your-key-here"
+```
+
+**Windows cmd** (persistent — new windows only):
+```cmd
+setx OPENROUTER_API_KEY "sk-or-v1-your-key-here"
+```
+
+**macOS/Linux** (add to `~/.bashrc` or `~/.zshrc`, then `source` it or reopen the terminal):
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-your-key-here"
+```
+
+**Step 2 — Create the extras file** `~/.uhu/provider-sail-research.json`:
+
+> ⚠️ JSON booleans are lowercase `true`/`false` — **not** Python's `True`/`False`. This is the most common mistake when hand-editing these files.
+
+```json
+{
+  "provider": {
+    "only": ["sail-research/us"],
+    "allow_fallbacks": false
+  },
+  "reasoning": {
+    "enabled": true
+  }
+}
+```
+
+- `provider.only` — pin requests to a specific OpenRouter provider (see the model page's *Providers* tab for slugs)
+- `allow_fallbacks: false` — don't silently reroute to another provider if this one is down
+- `reasoning.enabled: true` — request reasoning tokens for reasoning-capable models
+
+**Step 3 — Launch** (note the shell-specific key syntax):
+
+**Windows PowerShell:**
+```powershell
+huhu --api-openai --host https://openrouter.ai/api/v1 --api-key $env:OPENROUTER_API_KEY --model z-ai/glm-5.3-flash --openai-extra-body "~/.uhu/provider-sail-research.json"
+```
+
+**Windows cmd:**
+```cmd
+huhu --api-openai --host https://openrouter.ai/api/v1 --api-key %OPENROUTER_API_KEY% --model z-ai/glm-5.3-flash --openai-extra-body "%USERPROFILE%/.uhu/provider-sail-research.json"
+```
+
+**macOS/Linux:**
+```bash
+uhu --api-openai --host https://openrouter.ai/api/v1 --api-key $OPENROUTER_API_KEY --model z-ai/glm-5.3-flash --openai-extra-body ~/.uhu/provider-sail-research.json
+```
+
+**Troubleshooting:**
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `401 Missing Authentication header` | Key variable empty, or `%VAR%` used in PowerShell | Check with `$env:OPENROUTER_API_KEY` (PowerShell) or `echo %OPENROUTER_API_KEY%` (cmd); `%VAR%` is cmd-only syntax |
+| `argument --api-key: expected one argument` | PowerShell silently drops empty variables when calling native commands | Set the variable first (Step 1); quoting `"$env:OPENROUTER_API_KEY"` turns it into an empty string instead — fix the variable, don't just quote it |
+| `Expecting value: line N column M` in extras file | Python-style `True`/`False`/`None` in JSON | Use lowercase `true`/`false`/`null` |
+| `--openai-extra-body file not found` | Wrong path or `~` not expanded by your shell | Quote the path so uhu expands `~` itself (it handles `~` and env vars internally) |
+
 Practical presets:
 
 ```bash
@@ -396,6 +486,7 @@ uhu --no-autosave --no-cache
 | `--api-ollama`    | (default)                  | Use native Ollama API (default)                                          |
 | `--api-openai`    | —                          | Use OpenAI-compatible API endpoint                                       |
 | `--api-key`       | `ollama`                   | API key for OpenAI-compatible endpoint                                   |
+| `--openai-extra-body` | —                     | Path to JSON file with extra request body params for OpenAI-compatible API (e.g. `~/.uhu/glm-extras.json`). Supports `~` and env var expansion. Loaded once at startup; use `/llm --extra-body` to change at runtime. |
 | `--model`         | `glm-5.3-flash:cloud`      | Model name                                                               |
 | `--ctx`           | `1024000`                  | Context window size in tokens                                            |
 | `--no-stream`     | off (streaming on)         | Disable streaming output                                                 |
@@ -433,8 +524,8 @@ uhu --no-autosave --no-cache
 | `/auto reset all`                  | Clear both session and persistent approvals                                                                                                                  |
 | `/diff`                             | Toggle auto-diff for edits                                                                                                                                    |
 | `/timeout [sec\|reset]`             | Show or set the active model-call timeout for this session only (streaming idle gap or blocking total cap, depending on launch mode); no persistence |
-| `/llm`                              | Show current API type, model, context size, and host                                                                                                              |
-| `/llm [--api-openai\|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>]` | Switch LLM backend at runtime — history and running jobs are preserved. Fails if new ctx is too small for current history. |
+| `/llm`                              | Show current API type, model, context size, host, and extra-body path (if set)                                                                                     |
+| `/llm [--api-openai\|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>] [--extra-body <path>]` | Switch LLM backend at runtime — history and running jobs are preserved. Fails if new ctx is too small for current history. `--extra-body` loads a new JSON file with provider-specific request params (validated before switching); when the flag is absent, the extra body is reset to none. |
 | `/pid`                              | Show current and parent process IDs                                                                                                                               |
 | `/workdir [path]`                   | Show current working directory, or switch to a new one (saves current session, resets context — equivalent to exit + relaunch with same flags in the new workdir). Blocks if jobs are running. |
 | `/m` or `/multiline`               | Enter multiline mode                                                                                                                                         |

@@ -566,7 +566,8 @@ class OpenAIBackend(LLMBackend):
     
     def __init__(self, base_url: str, api_key: str, model: str, ctx_size: int,
                  thinking: bool = True, tpm_limit: Optional[int] = None,
-                 max_context: Optional[int] = None, quiet: bool = False):
+                 max_context: Optional[int] = None, quiet: bool = False,
+                 extra_body_path: Optional[str] = None):
         super().__init__()
         try:
             from openai import OpenAI
@@ -579,6 +580,8 @@ class OpenAIBackend(LLMBackend):
         self.thinking = thinking
         self._last_usage = None
         self._quiet = quiet
+        # Provider-specific request body params from JSON file (--openai-extra-body)
+        self._extra_body = self._load_extra_body(extra_body_path)
 
         # Token counter — always on for OpenAI-compatible backends
         self._token_counter = TokenCounter(model, per_message_overhead=4)
@@ -621,6 +624,27 @@ class OpenAIBackend(LLMBackend):
         # Some models put reasoning in separate field which we capture
         return False
     
+    @staticmethod
+    def _load_extra_body(path: Optional[str]) -> Dict[str, Any]:
+        """Load extra request body params from a JSON file (--openai-extra-body).
+
+        Supports ~ and environment variable expansion. Fails fast with a
+        clear error if the file is missing, unreadable, or not a JSON object.
+        """
+        if not path:
+            return {}
+        expanded = os.path.expandvars(os.path.expanduser(path))
+        if not os.path.isfile(expanded):
+            raise FileNotFoundError(f"--openai-extra-body file not found: {expanded}")
+        try:
+            with open(expanded, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except ValueError as e:
+            raise ValueError(f"--openai-extra-body file is not valid JSON: {expanded}: {e}")
+        if not isinstance(data, dict):
+            raise ValueError(f"--openai-extra-body file must contain a JSON object: {expanded}")
+        return data
+
     def _sanitize_messages(self, messages: List[Dict]) -> List[Dict]:
         """Convert messages to OpenAI format and sanitize."""
         sanitized = []
@@ -651,6 +675,9 @@ class OpenAIBackend(LLMBackend):
             "messages": messages,
             "stream": stream,
         }
+        # Provider-specific params from --openai-extra-body JSON file
+        if self._extra_body:
+            kwargs["extra_body"] = dict(self._extra_body)
         # Some models (e.g. o1/o3 series) don't support temperature or max_tokens.
         # We try max_completion_tokens first (newer API), fall back to max_tokens,
         # and if both fail, retry without any max parameter.
@@ -777,7 +804,8 @@ def create_backend(
     api_key: Optional[str] = None,
     tpm_limit: Optional[int] = None,
     max_context: Optional[int] = None,
-    quiet: bool = False
+    quiet: bool = False,
+    extra_body_path: Optional[str] = None
 ) -> LLMBackend:
     """Factory function to create appropriate backend.
     
@@ -790,6 +818,7 @@ def create_backend(
         api_key: API key (required for OpenAI, optional for Ollama)
         tpm_limit: Tokens-per-minute limit (OpenAI-compatible only, enables TPM tracking)
         max_context: Max context cap for trimming (OpenAI-compatible + --tpm only)
+        extra_body_path: Path to JSON file with extra request body params (OpenAI-compatible only)
         quiet: Suppress non-essential output
     
     Returns:
@@ -810,6 +839,7 @@ def create_backend(
             thinking=thinking,
             tpm_limit=tpm_limit,
             max_context=max_context,
+            extra_body_path=extra_body_path,
             quiet=quiet
         )
     else:
