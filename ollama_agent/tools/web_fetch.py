@@ -24,7 +24,13 @@ class WebFetchTool:
         "truncated to conserve context. Use a larger max_length only if you need more detail.\n"
         "When summarize=true, the page is first scraped fully, then distilled by an LLM\n"
         "into a concise summary within max_length characters — preserving key facts, numbers,\n"
-        "specs, and benchmarks while removing boilerplate."
+        "specs, and benchmarks while removing boilerplate.\n"
+        "\n"
+        "FAILURE HANDLING — do NOT fall back to curl/wget via run_command:\n"
+        "- Result ends with '[... truncated]' → retry web_fetch with a larger max_length.\n"
+        "- HTTP error, unsupported content type, or empty/skeleton content (JS-rendered page)\n"
+        "  → escalate to the browser tool (navigate + extract_text), not curl.\n"
+        "- Need custom headers, POST, or raw status codes → use http_request, not curl."
     )
 
     def execute(self, params, workdir=None):

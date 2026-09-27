@@ -95,6 +95,13 @@ def tools_system_prompt(enabled_names=None, workdir=None):
         "- Do NOT guess or fabricate information when you can search for the accurate answer.",
         "- Always prefer searching over providing potentially outdated or incorrect information.",
         "",
+        "WEB TOOL LADDER — never fall back to curl/wget via run_command for fetching:",
+        "- web_fetch: default for page and documentation content.",
+        "- If the result ends with '[... truncated]' — retry web_fetch with a larger max_length. Do NOT switch tools.",
+        "- http_request: APIs and raw HTTP — custom headers, POST/JSON bodies, status codes, structured output.",
+        "- browser: only when web_fetch fails (HTTP error, unsupported content type, empty/JS-rendered content) or the page needs JS rendering, cookies, clicks, or screenshots.",
+        "- curl/wget in run_command: LAST RESORT only — shell quoting breaks easily and output is unbounded.",
+        "",
         "Available tools:",
         "",
     ]

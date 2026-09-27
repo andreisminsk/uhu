@@ -18,7 +18,8 @@ class HttpRequestTool:
         "- json_body (object, optional): Request body as JSON (for POST/PUT/PATCH) — overrides body\n"
         "- timeout (integer, optional, default 30): Timeout in seconds\n"
         "- max_length (integer, optional, default 5000): Maximum response body length to return\n"
-        "Use this for API testing and HTTP operations. Avoids shell quoting issues with curl."
+        "Use this for API testing and HTTP operations. Prefer this over curl/wget in RUN\n"
+        "blocks — avoids shell quoting issues, returns structured output with bounded length."
     )
     parameters = {
         "url": {
