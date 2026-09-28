@@ -105,6 +105,15 @@ class ReadFileTool(FilesystemTool):
         except Exception as e:
             return f"Error reading file: {e}"
 
+        # Content-tier redaction — secrets in innocently-named files never reach the LLM
+        from ..privacy import PrivacyGate
+        from ._config import load_config
+        _gate = PrivacyGate(load_config(workdir))
+        if _gate.enabled:
+            _red = _gate.redact("".join(lines))[0]
+            if _red != "".join(lines):
+                lines = _red.splitlines(keepends=True)
+
         total_lines = len(lines)
         selected = lines[offset - 1: offset - 1 + limit]
         content = "".join(selected)
@@ -191,6 +200,12 @@ class SearchInFilesTool(FilesystemTool):
 
         matches = []
         files_searched = 0
+        skipped_sensitive = []
+
+        # Privacy gate — skip sensitive files with a note, no confirmation prompt
+        from ..privacy import PrivacyGate
+        from ._config import load_config
+        _gate = PrivacyGate(load_config(workdir))
 
         def _search_file(fpath):
             nonlocal files_searched
@@ -198,6 +213,11 @@ class SearchInFilesTool(FilesystemTool):
             ext = os.path.splitext(fpath)[1].lower()
             if ext in skip_ext:
                 return
+            if _gate.enabled:
+                _d = _gate.check_path(rel, workdir)
+                if _d.action in ("block", "confirm", "redact"):
+                    skipped_sensitive.append(rel)
+                    return
             # Check glob
             if globs != ["*"]:
                 matched = any(fnmatch.fnmatch(os.path.basename(fpath), g) for g in globs)
@@ -229,13 +249,19 @@ class SearchInFilesTool(FilesystemTool):
             return f"Error: Path not found: {search_path}"
 
         if not matches:
-            return f"No matches for '{pattern}' in {search_path} ({files_searched} files searched)"
+            base = f"No matches for '{pattern}' in {search_path} ({files_searched} files searched)"
+            if skipped_sensitive:
+                base += f"\n[Skipped sensitive file(s): {', '.join(sorted(set(skipped_sensitive)))} — use read_file to read them (requires user confirmation)]"
+            return base
 
         total = len(matches)
         header = f"[Found {total} match(es) in {files_searched} file(s) for '{pattern}' in {search_path}]"
         if total >= max_results:
             header += f" (showing first {max_results})"
-        return header + "\n" + "\n".join(matches)
+        result = header + "\n" + "\n".join(matches)
+        if skipped_sensitive:
+            result += f"\n[Skipped sensitive file(s): {', '.join(sorted(set(skipped_sensitive)))} — use read_file to read them (requires user confirmation)]"
+        return result
 
 
 class ListFilesTool(FilesystemTool):
@@ -290,6 +316,11 @@ class ListFilesTool(FilesystemTool):
         file_count = 0
         dir_count = 0
 
+        # Privacy gate for [sensitive] annotation
+        from ..privacy import PrivacyGate
+        from ._config import load_config
+        _gate = PrivacyGate(load_config(workdir))
+
         def _list_dir(dir_path, prefix=""):
             nonlocal file_count, dir_count
             try:
@@ -313,7 +344,13 @@ class ListFilesTool(FilesystemTool):
                         files_here.append(name)
 
             for name in files_here:
-                lines.append(f"{prefix}{name}")
+                # Privacy — annotate sensitive files so the model can plan around them
+                _suffix = ""
+                if _gate.enabled:
+                    _rel = os.path.relpath(os.path.join(dir_path, name), workdir)
+                    if _gate.check_path(_rel, workdir).action != "allow":
+                        _suffix = " [sensitive]"
+                lines.append(f"{prefix}{name}{_suffix}")
                 file_count += 1
             for name in dirs_here:
                 lines.append(f"{prefix}{name}/")

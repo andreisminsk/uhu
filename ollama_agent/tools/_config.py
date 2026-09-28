@@ -61,6 +61,13 @@ DEFAULT_CONFIG = {
             "timeout": 15
         }
     },
+    "privacy": {
+        "mode": "standard",          # off | standard | strict
+        "policy": "confirm",         # block | confirm | redact (filename tier)
+        "filename_patterns": [],      # empty = use defaults from privacy.py
+        "content_patterns": [],       # empty = use defaults from privacy.py
+        "allow": []                   # user-exempt paths (e.g. ".env.example")
+    },
     "memory": {
         "max_lines": 50,
         "warn_threshold": 40

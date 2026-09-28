@@ -286,6 +286,33 @@ class ActionMixin:
                     return None
                 safety_confirmed = True
 
+        # Privacy gate — sensitive files must not enter LLM context without confirmation.
+        # Runs BEFORE the auto-safe branch: read tools are auto-approved, so this is
+        # the only place to intercept them. Cloud models (proxied via ollama.com or
+        # direct OpenAI-compatible endpoints) send content off-machine.
+        if tool_name in ("read_file", "peek_file", "search_in_files") and params.get("path"):
+            from .privacy import PrivacyGate
+            from .tools._config import load_config
+            gate = PrivacyGate(load_config(self.workdir))
+            if gate.enabled:
+                target = params["path"]
+                if os.path.isfile(os.path.join(self.workdir, target)) or os.path.isfile(target):
+                    decision = gate.check_path(target, self.workdir)
+                    if decision.action == "block":
+                        msg = (f"[TOOL FAILED: {tool_name} — '{target}' is a sensitive file "
+                               f"({decision.reason}) and privacy mode is strict. "
+                               f"Ask the user to read it manually if needed.]")
+                        agent_print(msg + "\n")
+                        return msg
+                    if decision.action == "confirm":
+                        if not self._confirm_or_auto(f"[SENSITIVE FILE] read {target}", force_confirm=True):
+                            msg = f"[TOOL FAILED: {tool_name} — reading '{target}' declined by user (sensitive file: {decision.reason})]"
+                            agent_print(msg + "\n")
+                            return msg
+                        agent_print(f"[Privacy: user approved reading sensitive file '{target}']")
+                    elif decision.action == "redact":
+                        agent_print(f"[Privacy: '{target}' will be redacted (sensitive file: {decision.reason})]")
+
         # Auto-approve safe tools (read-only, no side effects)
         # py_compile is auto-safe only for syntax/import actions (not 'run', which executes code)
         # Skip general confirmation if already confirmed by safety check above

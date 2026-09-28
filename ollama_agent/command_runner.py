@@ -214,6 +214,18 @@ class CommandRunner:
                 raise KeyboardInterrupt
 
             combined = "".join(output_lines).strip()
+            # Privacy egress net — redact secret-shaped content from command output
+            # (e.g. `type .env`, `cat ~/.ssh/id_rsa`, `set` dumping env vars)
+            try:
+                from .privacy import PrivacyGate
+                from .tools._config import load_config
+                _gate = PrivacyGate(load_config(workdir))
+                if _gate.enabled:
+                    combined, _n = _gate.redact(combined)
+                    if _n:
+                        agent_print(f"\n[Privacy: redacted {_n} secret-shaped value(s) from command output]\n")
+            except Exception:
+                pass
             lines = combined.splitlines()
             if len(lines) > 60:
                 combined = "\n".join(lines[-60:]) + f"\n[... trimmed, showing last 60 of {len(lines)} lines]"

@@ -620,6 +620,20 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         agent_print(f"AGENT: Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
 
     def _send(self, message, images=None, max_rounds=MAX_FEEDBACK_ROUNDS):
+        # Privacy egress net — redact secret-shaped content from the outgoing
+        # user message (covers pasted secrets, command output quoted by the user,
+        # and anything else headed to the LLM / session autosave)
+        try:
+            from .privacy import PrivacyGate
+            from .tools._config import load_config
+            _gate = PrivacyGate(load_config(self.workdir))
+            if _gate.enabled:
+                _red, _n = _gate.redact(message)
+                if _n:
+                    agent_print(f"[Privacy: redacted {_n} secret-shaped value(s) from outgoing message]")
+                    message = _red
+        except Exception:
+            pass
         self._log("user", message)
         msg = {"role": "user", "content": message}
         if images:

@@ -28,6 +28,15 @@ class FileCache:
         """
         if not self.enabled:
             return None
+        # Privacy — never write sensitive files into .uhu/.cache/
+        try:
+            from .privacy import PrivacyGate
+            from .tools._config import load_config
+            _gate = PrivacyGate(load_config(self.workdir))
+            if _gate.enabled and _gate.check_path(path, self.workdir).action != "allow":
+                return None
+        except Exception:
+            pass
         cache_dir = os.path.join(self.workdir, ".uhu", ".cache")
         if os.path.isabs(path):
             try:
@@ -261,6 +270,23 @@ class FileExecutor:
             msg = f"[READ FAILED: {path} does not exist]"
             agent_print(msg + "\n")
             return msg
+        # Privacy gate — sensitive files must not enter LLM context without confirmation
+        from .privacy import PrivacyGate
+        from .tools._config import load_config
+        gate = PrivacyGate(load_config(self.workdir))
+        if gate.enabled:
+            decision = gate.check_path(path, self.workdir)
+            if decision.action == "block":
+                msg = (f"[READ FAILED: {path} — sensitive file ({decision.reason}), "
+                       f"privacy mode is strict. Ask the user to read it manually.]")
+                agent_print(msg + "\n")
+                return msg
+            if decision.action == "confirm":
+                if not self._confirm(f"[SENSITIVE FILE] read {path}", force_confirm=True):
+                    msg = f"[READ FAILED: {path} — declined by user (sensitive file: {decision.reason})]"
+                    agent_print(msg + "\n")
+                    return msg
+                agent_print(f"[Privacy: user approved reading sensitive file '{path}']")
         ext = os.path.splitext(path)[1].lower()
         if ext in SKIP_EXT:
             msg = f"[READ FAILED: {path} — binary/skipped extension ({ext})]"
@@ -273,6 +299,11 @@ class FileExecutor:
             msg = f"[READ FAILED: {path}: {e}]"
             agent_print(msg + "\n")
             return msg
+        # Content-tier redaction — secrets in innocently-named files never reach the LLM
+        if gate.enabled:
+            content, n_red = gate.redact(content)
+            if n_red:
+                agent_print(f"[Privacy: redacted {n_red} secret-shaped value(s) in {path}]")
         lines_count = content.count("\n") + (1 if content and not content.endswith("\n") else 0)
         file_url = self.cache.cache(path, content)
         max_chars = min(self.ctx_size // 2, 200000)
