@@ -10,7 +10,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 ## Features
 
 - **Agent mode** (`--agent`): Parse and execute WRITE/EDIT/RUN/FILE blocks from model output
-- **Tools mode** (on by default, `--no-tools` to disable): 34 structured tool calls for filesystem, git, HTTP, browser automation, web search, calendar, jobs, and more
+- **Tools mode** (on by default, `--no-tools` to disable): 35 structured tool calls for filesystem, git, HTTP, browser automation, web search, calendar, desktop UI automation, jobs, and more
 - **Skills mode** (`--skills` - off by default): Invoke development skills (code-review, test-gen, doc-gen, plan, md2pdf, docx2md, what-if, root-cause, problem-solving, architect, medicine, business-coach, pro-bidder, text-writer, graph-ai, svg2png, git-uncommitted) and custom skills
 - **Streaming support** (`--stream`): Token-by-token output
 - **Session persistence**: Save/restore conversations with `/save` and `/restore`
@@ -684,6 +684,8 @@ Available when running with tools enabled (default):
 | `calculator`      | Yes          | Safely evaluate mathematical expressions (arithmetic, trig, log, constants)                                          |
 | `llm_query`       | No           | Send prompts to a secondary LLM                                                                                        |
 | `browser`         | No           | Playwright browser automation with stealth support (navigate, extract, screenshot, PDF, click, fill, scroll, evaluate) |
+| `ui_automation`   | Partial      | Automate native desktop apps: list windows, focus, send keystrokes, click, capture screen/window/region to PNG (Windows/macOS/Linux) |
+| `android_build`   | No           | Android build environment detection and Gradle execution                                                               |
 | `android_build`   | No           | Android build environment detection and Gradle execution                                                               |
 | `model_test`      | No           | Test model compatibility with the uhu harness                                                                          |
 | `job_submit`      | No           | Submit long-running background jobs (video processing, model analysis, custom commands)                              |

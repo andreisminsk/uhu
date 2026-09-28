@@ -53,6 +53,12 @@ DEFAULT_CONFIG = {
             "timeout": 30,
             "user_agent": None,
             "block_resources": []
+        },
+        "ui_automation": {
+            "output_dir": ".uhu/.cache",
+            "default_delay_ms": 800,
+            "max_keys_length": 200,
+            "timeout": 15
         }
     },
     "memory": {

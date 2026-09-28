@@ -293,6 +293,10 @@ class ActionMixin:
             pass
         elif tool_name in SAFE_TOOLS or (tool_name == "py_compile" and params.get("action") in ("syntax", "import")):
             agent_print(f"[auto-safe: {tool_name}] [TOOL] {tool_name}({params_preview})")
+        elif tool_name == "ui_automation" and (
+                params.get("action", "capture") == "list_windows"
+                or (params.get("action", "capture") == "capture" and not params.get("keys"))):
+            agent_print(f"[auto-safe: {tool_name}] [TOOL] {tool_name}({params_preview})")
         else:
             params_details = f"[Tool details]\n  name: {tool_name}\n  params:\n{json.dumps(params, indent=4, ensure_ascii=False)}{tool_extra_details and chr(10) + tool_extra_details}"
             if not self._confirm_or_auto(f"[TOOL] {tool_name}({params_preview})", cmd=tool_name, diff_text=params_details):
