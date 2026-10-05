@@ -127,8 +127,9 @@ class TPMTracker:
                 wait_seconds = 1
             if not self.quiet:
                 agent_print(
-                    f"\n[TPM limit: {current}/{self.tpm_limit} tokens used. "
-                    f"Waiting {wait_seconds:.0f}s for budget to clear...]\n"
+                    f"\n[TPM limit: {current}/{self.tpm_limit} tokens used in the last 60s. "
+                    f"Sending the next prompt (~{estimated_tokens} tokens) would exceed the limit — "
+                    f"waiting {wait_seconds:.0f}s for budget to clear...]\n"
                 )
             time.sleep(min(wait_seconds, 60))
 

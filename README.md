@@ -503,6 +503,7 @@ uhu --no-autosave --no-cache
 | `--no-thinking`   | off (thinking on)          | Disable thinking mode for reasoning models                               |
 | `--mcp`           | off                        | Enable MCP server tools (configured in `.ollama_agent.json`)             |
 | `--no-cache`      | off                        | Disable file caching to `.uhu/.cache/` directory                         |
+| `--no-logo`       | off (logo on)              | Do not print the ASCII logo at startup (also auto-skipped in terminals narrower than 47 columns) |
 | `--tpm`           | —                          | TPM limit for OpenAI-compatible backends (enables proactive rate-limit tracking + aggressive 429 retry) |
 | `--max-context`   | `16384` (with `--tpm`)     | Max context cap for history trimming (OpenAI-compatible + `--tpm` only; without `--tpm`, uses `--ctx`) |
 

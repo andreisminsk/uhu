@@ -3,6 +3,7 @@
 import argparse
 import logging
 import os
+import shutil
 import sys
 
 logging.basicConfig(level=logging.ERROR, format="%(asctime)s %(name)s %(levelname)s: %(message)s")
@@ -14,6 +15,30 @@ try:
     setproctitle.setproctitle("uhu")
 except Exception:
     pass
+
+
+def print_logo():
+    """Print the ASCII logo from uhu-appicon.txt in neon green (AI output color).
+
+    Skipped when the terminal is narrower than 47 columns.
+    """
+    if shutil.get_terminal_size().columns < 47:
+        return
+    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uhu-appicon.txt")
+    try:
+        with open(logo_path, "r", encoding="utf-8") as f:
+            logo = f.read()
+    except OSError:
+        return
+    from .constants import ANSI_AI, ANSI_RESET
+    from .platform import terminal
+    print()
+    terminal.enable_ansi()
+    if sys.stdout.isatty():
+        print(ANSI_AI + logo.rstrip("\n") + ANSI_RESET)
+    else:
+        print(logo.rstrip("\n"))
+    print()
 
 
 def main():
@@ -64,6 +89,8 @@ def main():
                         help="Max context cap for history trimming (OpenAI-compatible + --tpm only, default: 16384)")
     parser.add_argument("--no-llm-parsing", action="store_true",
                         help="Disable LLM fallback parsing (configured via llm_parser section in .ollama_agent.json)")
+    parser.add_argument("--no-logo", action="store_true",
+                        help="Do not print the ASCII logo at startup")
     parser.add_argument("prompt", nargs="*", default=[],
                         help="One-shot prompt — execute and exit (no interactive loop)")
     args = parser.parse_args()
@@ -77,6 +104,9 @@ def main():
         else:
             print("[Version not found]")
         return
+
+    if not args.no_logo and not args.prompt:
+        print_logo()
 
     workdir = args.workdir
     if workdir and len(workdir) >= 2 and (
