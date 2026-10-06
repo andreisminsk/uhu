@@ -891,6 +891,9 @@ We welcome feedback, bug reports, and suggestions:
 
 ## License
 
+Copyright 
+Author: Andrei Suvorov (c) 2026
+
 This project is licensed under **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**.
 
 You are free to use, modify, and share this work for **non-commercial purposes only**, provided you:
