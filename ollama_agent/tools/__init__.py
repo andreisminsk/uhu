@@ -25,6 +25,8 @@ from .sleep import SleepTool
 from .sys_info import SysInfoTool
 from .llm_chat import LlmChatTool
 from .ui_automation import UiAutomationTool
+from .pytest_tool import PytestTool
+from .npm_build import NpmBuildTool
 
 
 # ── Tool base class ─────────────────────────────────────────────────────
@@ -147,6 +149,8 @@ register(SleepTool())
 register(SysInfoTool())
 register(LlmChatTool())
 register(UiAutomationTool())
+register(PytestTool())
+register(NpmBuildTool())
 from .jobs import JobSubmitTool, JobListTool, JobResultTool, JobCancelTool, JobLogTool
 
 register(ModelTestTool())
