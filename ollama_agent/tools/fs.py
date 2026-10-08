@@ -568,6 +568,7 @@ class ReplaceInFileTool(FilesystemTool):
         "- replacements (array of objects, required): Each object has:\n"
         "  - search (string): The exact text to find (whitespace matters)\n"
         "  - replace (string): The text to replace it with\n"
+        "  - all (boolean, optional, default false): If true, replace EVERY occurrence of search. Default: search must be unique in the file.\n"
         "All replacements are applied sequentially. If any search text is not found, no changes are made.\n"
         "Example:\n"
         "**TOOL:`replace_in_file`**\n"
@@ -585,7 +586,7 @@ class ReplaceInFileTool(FilesystemTool):
         },
         "replacements": {
             "type": "array",
-            "description": "Array of {search, replace} objects",
+            "description": "Array of {search, replace} objects; optional 'all': true replaces every occurrence",
             "required": True,
         },
     }
@@ -612,37 +613,70 @@ class ReplaceInFileTool(FilesystemTool):
         except Exception as e:
             return f"Error reading file: {e}"
 
+        def _match_locations(text, needle):
+            """Return (line_no, line_text) for each occurrence of needle."""
+            locs = []
+            start = 0
+            while True:
+                idx = text.find(needle, start)
+                if idx < 0:
+                    break
+                line_no = text.count("\n", 0, idx) + 1
+                line_start = text.rfind("\n", 0, idx) + 1
+                line_end = text.find("\n", idx + len(needle))
+                if line_end < 0:
+                    line_end = len(text)
+                locs.append((line_no, text[line_start:line_end].strip()))
+                start = idx + len(needle)
+            return locs
+
         applied = 0
+        total_occurrences = 0
         failures = []
         new_content = content
 
         for i, rep in enumerate(replacements):
             search = rep.get("search", "")
             replace = rep.get("replace", "")
+            replace_all = bool(rep.get("all", False))
+            if not search:
+                failures.append(f"  {i+1}. Empty 'search' text")
+                continue
             if search not in new_content:
                 preview = search[:80].replace("\n", "\\n")
                 failures.append(f"  {i+1}. Not found: ...{preview}...")
                 continue
             count = new_content.count(search)
-            if count > 1:
-                failures.append(f"  {i+1}. Found {count} matches — search text must be unique: ...{search[:60].replace(chr(10), chr(92)+'n')}...")
+            if count > 1 and not replace_all:
+                preview = search[:60].replace("\n", "\\n")
+                locs = _match_locations(new_content, search)
+                shown = "\n".join(f"     line {ln}: {lt[:70]}" for ln, lt in locs[:5])
+                more = f"\n     ... and {count - 5} more" if count > 5 else ""
+                failures.append(
+                    f"  {i+1}. Found {count} matches — search text must be unique: ...{preview}...\n"
+                    f"     Matches:\n{shown}{more}\n"
+                    f"     Fix: add surrounding context to make search unique, or set \"all\": true to replace every occurrence."
+                )
                 continue
-            new_content = new_content.replace(search, replace, 1)
+            new_content = new_content.replace(search, replace) if replace_all else new_content.replace(search, replace, 1)
             applied += 1
+            total_occurrences += count
 
         if not applied:
             return "Error: No replacements applied.\nFailures:\n" + "\n".join(failures)
+
+        occ = f", {total_occurrences} occurrence(s) replaced" if total_occurrences != applied else ""
 
         if failures:
             # Partial success — write what we can
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(new_content)
-            return f"Partially applied: {applied} replacement(s) applied, {len(failures)} failed.\nFailures:\n" + "\n".join(failures)
+            return f"Partially applied: {applied} replacement(s) applied{occ}, {len(failures)} failed.\nFailures:\n" + "\n".join(failures)
 
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(new_content)
         total_lines = new_content.count("\n") + 1
-        return f"Replaced: {path} ({applied} replacement(s) applied, {total_lines} lines)"
+        return f"Replaced: {path} ({applied} replacement(s) applied{occ}, {total_lines} lines)"
 
 
 class CopyFileTool(FilesystemTool):

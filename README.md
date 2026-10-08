@@ -671,7 +671,7 @@ Available when running with tools enabled (default):
 | `mkdir`           | Yes          | Create directories (cross-platform)                                                                                    |
 | `py_compile`      | Yes          | Check Python syntax, imports, run expressions                                                                          |
 | `write_file`      | No           | Create/overwrite/append files                                                                                          |
-| `replace_in_file` | No           | Surgical search/replace edits in files                                                                                 |
+| `replace_in_file` | No           | Surgical search/replace edits in files (optional `"all": true` per replacement to replace every occurrence)            |
 | `copy_file`       | No           | Copy files or directories                                                                                              |
 | `move_file`       | No           | Move/rename files or directories                                                                                       |
 | `run_command`     | No           | Execute shell commands with structured output                                                                          |
