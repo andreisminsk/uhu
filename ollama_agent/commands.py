@@ -77,7 +77,15 @@ class CommandMixin:
         filled = int(bar_len * pct / 100)
         bar = "█" * filled + "░" * (bar_len - filled)
         warning = " ⚠ Consider '/compact'" if pct >= 80 else ""
-        ctx_msg = f"[ctx: {bar} {source}{total_tokens}/{self.ctx_size} ({pct:.1f}%){warning}]"
+        # Cached-token (KV-cache) stats from the last model call, when the
+        # API reports them. % is relative to that call's prompt tokens —
+        # shown only with exact server stats, never with the ~ estimate.
+        cached_part = ""
+        backend = getattr(self, '_backend', None)
+        cached = getattr(backend, 'last_cached_tokens', None)
+        if cached and exact_tokens:
+            cached_part = f" | cached: {cached} ({cached / exact_tokens * 100:.0f}%)"
+        ctx_msg = f"[ctx: {bar} {source}{total_tokens}/{self.ctx_size} ({pct:.1f}%){cached_part}{warning}]"
         agent_print(ctx_msg)
         self._log("system", ctx_msg)
         # Show ollama balance indicator if using native Ollama API

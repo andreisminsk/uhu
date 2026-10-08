@@ -310,6 +310,8 @@ class LLMBackend(ABC):
         self._trimmer: Optional[HistoryTrimmer] = None
         self._retry: Optional[RetryHandler] = None
         self._tpm_tracker: Optional[TPMTracker] = None
+        # Cached-token (KV-cache) stats from the last call, if reported by the API
+        self.last_cached_tokens: Optional[int] = None
         # Instance-level timeout overrides (shadow the class constants).
         # The /timeout command can adjust these for the current session only;
         # the class constants remain the defaults for /timeout reset.
@@ -322,6 +324,8 @@ class LLMBackend(ABC):
         For Ollama (all components None), this is a direct passthrough
         to _call() with zero overhead.
         """
+        # Reset cached-token stats from any previous call
+        self.last_cached_tokens = None
         # 1. TPM check (only if --tpm is set)
         if self._tpm_tracker and self._token_counter:
             estimated = self._token_counter.count(messages)
@@ -374,6 +378,24 @@ class OllamaNativeBackend(LLMBackend):
         self.model = model
         self.ctx_size = ctx_size
         self.thinking = thinking
+        self._apply_cache_stats_patch()
+    
+    @staticmethod
+    def _apply_cache_stats_patch():
+        """Make ollama's pydantic ChatResponse keep unknown server fields.
+
+        The ollama library declares ChatResponse with extra='ignore', which
+        silently drops prompt_eval_cached_count (KV-cache hits) returned by
+        /api/chat. Switching to extra='allow' preserves it in model_extra.
+        See dev-docs/CACHE-STATS.md.
+        """
+        try:
+            from ollama._types import ChatResponse
+            if ChatResponse.model_config.get("extra") != "allow":
+                ChatResponse.model_config["extra"] = "allow"
+                ChatResponse.model_rebuild(force=True)
+        except Exception as e:
+            logger.debug("Cache-stats patch not applied: %s", e)
     
     def _build_options(self) -> Dict[str, Any]:
         return {"num_ctx": self.ctx_size, "temperature": MODEL_TEMPERATURE}
@@ -414,6 +436,7 @@ class OllamaNativeBackend(LLMBackend):
         spinner.start()
         msg = ""
         eval_count = None
+        cached_count = None
         first = True
         chunk_queue = _queue.Queue(maxsize=100)  # Bounded queue for backpressure
         stream_error = [None]
@@ -489,6 +512,8 @@ class OllamaNativeBackend(LLMBackend):
                 msg += token
                 if chunk.get("done"):
                     eval_count = chunk.get("prompt_eval_count")
+                    cached_count = chunk.get("prompt_eval_cached_count")
+                    self.last_cached_tokens = cached_count
         except KeyboardInterrupt:
             resp = active_response[0]
             if resp is not None:
@@ -551,6 +576,15 @@ class OllamaNativeBackend(LLMBackend):
         spinner.stop()
         msg = response["message"]["content"]
         eval_count = response.get("prompt_eval_count")
+        cached_count = None
+        try:
+            extra = getattr(response, "model_extra", None) or {}
+            cached_count = extra.get("prompt_eval_cached_count")
+            if cached_count is None:
+                cached_count = response.get("prompt_eval_cached_count")
+        except Exception:
+            pass
+        self.last_cached_tokens = cached_count
         _ai_color_on()
         sys.stdout.write("AI: ")
         sys.stdout.flush()
@@ -676,6 +710,11 @@ class OpenAIBackend(LLMBackend):
             "messages": messages,
             "stream": stream,
         }
+        if stream:
+            # Ask the provider to include usage in the final stream chunk
+            # (needed for prompt_tokens / cached_tokens stats). Providers
+            # that reject stream_options are handled in _call_create.
+            kwargs["stream_options"] = {"include_usage": True}
         # Provider-specific params from --openai-extra-body JSON file
         if self._extra_body:
             kwargs["extra_body"] = dict(self._extra_body)
@@ -693,6 +732,10 @@ class OpenAIBackend(LLMBackend):
             return self.client.chat.completions.create(**kwargs)
         except Exception as e:
             err_str = str(e).lower()
+            # Some providers reject stream_options — retry without it
+            if "stream_options" in err_str or "include_usage" in err_str:
+                kwargs.pop("stream_options", None)
+                return self.client.chat.completions.create(**kwargs)
             # Fall back to max_tokens if max_completion_tokens not supported
             if "max_completion_tokens" in err_str or "unrecognized" in err_str:
                 kwargs.pop("max_completion_tokens", None)
@@ -725,12 +768,20 @@ class OpenAIBackend(LLMBackend):
         spinner.start()
         msg = ""
         eval_count = None
+        cached_count = None
         first = True
         
         try:
             response = self._call_create(messages, stream=True)
             
             for chunk in response:
+                # Usage arrives in the final chunk (stream_options.include_usage)
+                if getattr(chunk, "usage", None):
+                    self._last_usage = chunk.usage
+                    eval_count = chunk.usage.prompt_tokens
+                    details = getattr(chunk.usage, "prompt_tokens_details", None)
+                    if details is not None:
+                        cached_count = getattr(details, "cached_tokens", None)
                 if not chunk.choices:
                     continue
                     
@@ -751,6 +802,7 @@ class OpenAIBackend(LLMBackend):
             if hasattr(response, 'usage') and response.usage:
                 self._last_usage = response.usage
                 eval_count = response.usage.prompt_tokens
+            self.last_cached_tokens = cached_count
             
         except KeyboardInterrupt:
             spinner.stop()
@@ -779,6 +831,12 @@ class OpenAIBackend(LLMBackend):
             content = response.choices[0].message.content or ""
             self._last_usage = response.usage
             eval_count = response.usage.prompt_tokens if response.usage else None
+            cached_count = None
+            if response.usage:
+                details = getattr(response.usage, "prompt_tokens_details", None)
+                if details is not None:
+                    cached_count = getattr(details, "cached_tokens", None)
+            self.last_cached_tokens = cached_count
             
             spinner.stop()
             _ai_color_on()
