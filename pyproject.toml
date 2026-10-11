@@ -45,3 +45,6 @@ version = {file = "uhu-ver.txt"}
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["ollama_agent*"]
+
+[tool.setuptools.package-data]
+ollama_agent = ["uhu-appicon.txt", "templates/*", "templates/skills/*"]

@@ -32,7 +32,7 @@ DEFAULT_CONFIG = {
             "timeout": 120
         },
         "google_calendar": {
-            "credentials_path": "~/.ollama_gcal/gs-cred.json",
+            "credentials_path": "~/.uhu/.secrets/gs-cred.json",
             "calendar_id": "primary",
             "timezone": "UTC"
         },
@@ -42,7 +42,7 @@ DEFAULT_CONFIG = {
             "cx": ""
         },
         "ollama_balance": {
-            "cookie_path": "",
+            "cookie_path": "~/.uhu/.secrets/.cookies/ollama.com_cookies.txt",
             "ttl": 300
         },
         "browser": {
@@ -87,7 +87,10 @@ DEFAULT_CONFIG = {
         "timeout": 60,
         "api_type": "ollama",
         "api_key": "ollama"
-    }
+    },
+    # Extra skill directories (list of paths, in order) — mercury-compatible.
+    # Loaded after workdir .skills/ and ~/.uhu/skills/ (see session.py).
+    "extra_skills_dirs": []
 }
 
 CONFIG_FILENAME = ".ollama_agent.json"
@@ -103,31 +106,58 @@ def _agent_dir():
     return os.path.dirname(os.path.dirname(this_dir))
 
 
+def _config_search_paths(workdir=None):
+    """Config file paths in precedence order (highest first). All layers merge.
+
+    Layered merge (see dev-docs/UHU-HOME-ARCH.md):
+      1. <workdir>/.ollama_agent.json   — project overrides
+      2. ~/.uhu/.ollama_agent.json      — user-global home
+      3. Legacy: agent install dir, then ~/.ollama_agent.json (backward compat)
+    """
+    from ..home import uhu_home
+    paths = []
+    if workdir:
+        paths.append(os.path.join(workdir, CONFIG_FILENAME))
+    paths.append(os.path.join(uhu_home(), CONFIG_FILENAME))
+    # Legacy locations (backward compat): agent install dir, then home dir
+    paths.append(os.path.join(_agent_dir(), CONFIG_FILENAME))
+    paths.append(os.path.join(os.path.expanduser("~"), CONFIG_FILENAME))
+    # Dedupe (UHU_HOME may coincide with workdir or install dir)
+    seen = set()
+    unique = []
+    for p in paths:
+        rp = os.path.normpath(os.path.abspath(p))
+        if rp not in seen:
+            seen.add(rp)
+            unique.append(p)
+    return unique
+
+
 def load_config(workdir=None):
     """Load tool configuration from .ollama_agent.json.
 
-    Search order: workdir first, then agent installation dir, then home directory.
-    Falls back to built-in defaults if no config file is found.
+    All existing layers are deep-merged over DEFAULT_CONFIG in precedence
+    order (lists replace, dicts merge) — a workdir config setting only
+    user_name inherits global MCP/tools config from ~/.uhu.
     Caches the result for subsequent get_config() calls.
     """
     global _config
     config = json.loads(json.dumps(DEFAULT_CONFIG))  # deep copy
-    paths = []
-    if workdir:
-        paths.append(os.path.join(workdir, CONFIG_FILENAME))
-    paths.append(os.path.join(_agent_dir(), CONFIG_FILENAME))
-    paths.append(os.path.join(os.path.expanduser("~"), CONFIG_FILENAME))
-    for path in paths:
+    # Merge lowest-precedence first so higher layers override:
+    # _config_search_paths returns highest-first, so iterate reversed.
+    for path in reversed(_config_search_paths(workdir)):
         if os.path.isfile(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:
                     user_config = json.load(f)
                 _deep_merge(config, user_config)
-                break  # first found wins
             except json.JSONDecodeError as e:
-                logger.warning("Invalid JSON in %s: %s — using defaults", path, e)
+                logger.warning("Invalid JSON in %s: %s — skipping layer", path, e)
             except Exception as e:
-                logger.warning("Failed to load config from %s: %s — using defaults", path, e)
+                logger.warning("Failed to load config from %s: %s — skipping layer", path, e)
+    # Expand ${VAR} in secret-bearing fields (see secrets.py / UHU-HOME-ARCH.md)
+    from ..secrets import resolve_config_secrets
+    resolve_config_secrets(config)
     _config = config
     return config
 

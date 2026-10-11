@@ -147,6 +147,16 @@ class GoogleCalendarTool:
         calendar_id = cal_config.get("calendar_id", "primary")
         timezone = cal_config.get("timezone", "UTC")
 
+        # Legacy fallback: if the configured credentials file doesn't exist,
+        # try <workdir>/gs-cred.json (old layout) with a one-time migration hint.
+        resolved = os.path.expanduser(creds_path)
+        if not os.path.isfile(resolved) and workdir:
+            legacy = os.path.join(workdir, "gs-cred.json")
+            if os.path.isfile(legacy):
+                from ..secrets import migration_hint
+                migration_hint(legacy, resolved)
+                creds_path = legacy
+
         # Try to authenticate
         service, error = _get_calendar_service(creds_path, calendar_id)
         if error:

@@ -660,21 +660,48 @@ class MCPManager:
 
         return self.tools
 
+    def _resolve_auth(self, name, config):
+        """Resolve an auth token for an MCP server (mercury pattern).
+
+        Precedence: auth_token_env (env var NAME) > auth_token (inline, deprecated).
+        Returns (token, warning) — token may be None.
+        """
+        env_name = config.get("auth_token_env")
+        if env_name:
+            token = os.environ.get(env_name)
+            if not token:
+                return None, (f"[MCP] {name}: env var '{env_name}' not set "
+                              f"(add it to ~/.uhu/.secrets/.env) — server may fail to authenticate")
+            return token, None
+        token = config.get("auth_token")
+        if token:
+            return token, (f"[MCP] {name}: inline 'auth_token' is deprecated — "
+                           f"use \"auth_token_env\": \"<ENV_VAR_NAME>\" instead")
+        return None, None
+
     def _create_transport(self, name, config):
         """Create the appropriate transport for a server config."""
         if "url" in config:
             url = config["url"]
+            auth_token, warn = self._resolve_auth(name, config)
+            if warn and not self.quiet:
+                agent_print(warn)
+            headers = dict(config.get("headers") or {})
+            # StreamableHTTP has no auth_token param — inject as Bearer header
+            if auth_token and "Authorization" not in headers and not url.rstrip("/").endswith("/sse"):
+                headers["Authorization"] = f"Bearer {auth_token}"
+                auth_token = None
             if url.rstrip("/").endswith("/sse"):
                 return SSETransport(
                     url=config["url"], name=name,
                     timeout=config.get("timeout", 120), quiet=self.quiet,
-                    auth_token=config.get("auth_token"), headers=config.get("headers"),
+                    auth_token=auth_token, headers=headers,
                 )
             else:
                 return StreamableHTTPTransport(
                     url=config["url"], name=name,
                     timeout=config.get("timeout", 120), quiet=self.quiet,
-                    headers=config.get("headers"),
+                    headers=headers,
                 )
         elif "command" in config:
             return StdioTransport(

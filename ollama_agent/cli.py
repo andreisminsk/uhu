@@ -24,7 +24,13 @@ def print_logo():
     """
     if shutil.get_terminal_size().columns < 47:
         return
-    logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "uhu-appicon.txt")
+    # Resolve logo: package data first (pip installs), repo root fallback (git checkout)
+    _pkg_dir = os.path.dirname(os.path.abspath(__file__))
+    _logo_candidates = [
+        os.path.join(_pkg_dir, "uhu-appicon.txt"),
+        os.path.join(_pkg_dir, "..", "uhu-appicon.txt"),
+    ]
+    logo_path = next((p for p in _logo_candidates if os.path.isfile(p)), _logo_candidates[0])
     try:
         with open(logo_path, "r", encoding="utf-8") as f:
             logo = f.read()
@@ -114,6 +120,15 @@ def main():
         (workdir.startswith("'") and workdir.endswith("'"))
     ):
         workdir = workdir[1:-1]
+
+    # Bootstrap ~/.uhu skeleton (idempotent; respects UHU_HOME) — see dev-docs/UHU-HOME-ARCH.md
+    from .home import bootstrap
+    bootstrap(quiet=bool(args.prompt))
+
+    # Load ~/.uhu/.secrets/.env into os.environ (OS env wins) before any
+    # config resolution — enables auth_token_env / ${VAR} secrets.
+    from .secrets import load_dotenv
+    load_dotenv()
 
     sessions_dir = args.sessions_dir or os.path.join(os.path.abspath(workdir), ".uhu", ".sessions")
     # Compute default log path: <workdir>/.uhu/uhu-<workdir-basename>.log

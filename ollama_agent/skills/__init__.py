@@ -551,7 +551,21 @@ def _parse_parameters_section(text):
 
 # ── Skill loader ───────────────────────────────────────────────────────
 
-def load_skills_from_dir(skills_dir, workdir=None):
+def _register_skill(skill, errors, label, skip_duplicates=False):
+    """Register a skill, optionally skipping duplicates (first loaded wins).
+
+    Used for multi-directory loading where precedence order matters:
+    a skill loaded from a higher-precedence directory is kept and later
+    duplicates are reported as warnings.
+    """
+    if skip_duplicates and skill.name in _registry:
+        errors.append(f"{label}: duplicate skill '{skill.name}' — keeping previously loaded")
+        return False
+    register(skill)
+    return True
+
+
+def load_skills_from_dir(skills_dir, workdir=None, skip_duplicates=False):
     """Load skill definitions from a directory.
 
     Supports three formats:
@@ -563,6 +577,8 @@ def load_skills_from_dir(skills_dir, workdir=None):
 
     If workdir is provided, hardcoded absolute paths in SKILL.md content
     are rewritten to use the workdir, making skills portable across machines.
+    If skip_duplicates is True, skills whose name is already registered are
+    skipped with a warning (first loaded wins — multi-dir precedence).
 
     Returns:
         Tuple of (loaded_count, errors_list)
@@ -598,13 +614,13 @@ def load_skills_from_dir(skills_dir, workdir=None):
                 skill = _parse_skill_md(skill_md)
                 if skill and skill.name:
                     _finalize_skill(skill)
-                    register(skill)
-                    loaded += 1
+                    if _register_skill(skill, errors, entry, skip_duplicates):
+                        loaded += 1
                 else:
                     errors.append(f"{entry}/SKILL.md: could not parse skill name or instructions")
             else:
                 # Category directory — scan for skill subdirectories
-                loaded_cat, errors_cat = _load_category_dir(entry_path, entry, workdir)
+                loaded_cat, errors_cat = _load_category_dir(entry_path, entry, workdir, skip_duplicates)
                 loaded += loaded_cat
                 errors.extend(errors_cat)
 
@@ -626,8 +642,8 @@ def load_skills_from_dir(skills_dir, workdir=None):
                     parameters=data.get("parameters", {}),
                 )
                 _finalize_skill(skill)
-                register(skill)
-                loaded += 1
+                if _register_skill(skill, errors, entry, skip_duplicates):
+                    loaded += 1
             except Exception as e:
                 errors.append(f"{entry}: {e}")
 
@@ -647,10 +663,11 @@ def load_skills_from_dir(skills_dir, workdir=None):
                             and attr is not MarkdownSkill
                             and hasattr(attr, 'name')
                             and attr.name):
-                        _finalize_skill(attr())
-                        register(attr())
-                        found += 1
-                        loaded += 1
+                        instance = attr()
+                        _finalize_skill(instance)
+                        if _register_skill(instance, errors, entry, skip_duplicates):
+                            found += 1
+                            loaded += 1
                 if found == 0:
                     errors.append(f"{entry}: no Skill subclasses with a 'name' attribute found")
             except Exception as e:
@@ -659,7 +676,7 @@ def load_skills_from_dir(skills_dir, workdir=None):
     return loaded, errors
 
 
-def _load_category_dir(category_path, category_name, workdir=None):
+def _load_category_dir(category_path, category_name, workdir=None, skip_duplicates=False):
     """Load skills from a category directory.
 
     A category directory contains skill subdirectories, each with a SKILL.md.
@@ -695,8 +712,8 @@ def _load_category_dir(category_path, category_name, workdir=None):
             skill = _parse_skill_md(skill_md)
             if skill and skill.name:
                 _finalize_skill(skill)
-                register(skill)
-                loaded += 1
+                if _register_skill(skill, errors, f"{category_name}/{entry}", skip_duplicates):
+                    loaded += 1
             else:
                 errors.append(f"{category_name}/{entry}/SKILL.md: could not parse skill name or instructions")
         else:

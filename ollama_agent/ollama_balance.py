@@ -163,20 +163,32 @@ def get_balance_indicator(workdir=None):
             return _balance_instance
 
         from .tools._config import load_config, _agent_dir
+        from .secrets import secrets_dir, migration_hint
         config = load_config(workdir)
         balance_cfg = config.get("tools", {}).get("ollama_balance", {})
         cookie_path = balance_cfg.get("cookie_path")
 
-        if not cookie_path:
-            # Fallback: look for cookies file in workdir or agent dir
-            candidates = [
-                os.path.join(workdir or ".", "ollama.com_cookies.txt"),
-                os.path.join(_agent_dir(), "ollama.com_cookies.txt"),
-            ]
-            for c in candidates:
-                if os.path.isfile(c):
-                    cookie_path = c
-                    break
+        # Candidate order (first existing wins):
+        #   1. configured cookie_path (explicit override, e.g. browser profile export)
+        #   2. ~/.uhu/.secrets/.cookies/ollama.com_cookies.txt (new default)
+        #   3. <workdir>/ollama.com_cookies.txt (legacy, migration hint)
+        #   4. <agent_dir>/ollama.com_cookies.txt (legacy)
+        home_cookies = os.path.join(secrets_dir(), ".cookies", "ollama.com_cookies.txt")
+        candidates = []
+        if cookie_path:
+            candidates.append((os.path.expanduser(cookie_path), None))
+        candidates += [
+            (home_cookies, None),
+            (os.path.join(workdir or ".", "ollama.com_cookies.txt"), home_cookies),
+            (os.path.join(_agent_dir(), "ollama.com_cookies.txt"), home_cookies),
+        ]
+        cookie_path = None
+        for c, hint_target in candidates:
+            if c and os.path.isfile(c):
+                cookie_path = c
+                if hint_target:
+                    migration_hint(c, hint_target)
+                break
 
         if not cookie_path or not os.path.isfile(cookie_path):
             return None

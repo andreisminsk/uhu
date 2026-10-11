@@ -122,23 +122,35 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                         self.always_runs.add(tool.name)
             agent_print(f"[MCP] {len(mcp_tools)} tool(s) registered from {len(self._mcp_manager.transports)} server(s)")
 
-        # Load custom skills from skills_dir BEFORE building system prompt
+        # Load custom skills from multiple directories BEFORE building system prompt.
+        # Precedence (first match wins on name collision — see dev-docs/UHU-HOME-ARCH.md):
+        #   1. workdir skills_dir (default ./.skills) — project-specific
+        #   2. ~/.uhu/skills — user-global
+        #   3. extra_skills_dirs from config — external skill repos
         if self.skills:
             from .skills import load_skills_from_dir
-            skills_dir_abs = os.path.join(self.workdir, self.skills_dir) if not os.path.isabs(self.skills_dir) else self.skills_dir
-            if os.path.isdir(skills_dir_abs):
-                loaded, errors = load_skills_from_dir(skills_dir_abs, workdir=self.workdir)
-                if loaded:
-                    if not self.quiet:
-                        agent_print(f"[Loaded {loaded} custom skill(s) from {self.skills_dir}]")
-                if errors:
-                    if not self.quiet:
-                        for err in errors:
-                            agent_print(f"[Skill load warning: {err}]")
-                        agent_print()
-                elif loaded:
-                    if not self.quiet:
-                        agent_print()
+            from .home import uhu_home
+            skill_sources = []
+            sd = os.path.join(self.workdir, self.skills_dir) if not os.path.isabs(self.skills_dir) else self.skills_dir
+            skill_sources.append((sd, self.skills_dir))
+            skill_sources.append((os.path.join(uhu_home(), "skills"), "~/.uhu/skills"))
+            for extra in (_cfg.get("extra_skills_dirs") or []):
+                skill_sources.append((os.path.expanduser(extra), extra))
+
+            total_loaded = 0
+            all_errors = []
+            for skills_dir_abs, label in skill_sources:
+                if not os.path.isdir(skills_dir_abs):
+                    continue
+                loaded, errors = load_skills_from_dir(skills_dir_abs, workdir=self.workdir, skip_duplicates=True)
+                total_loaded += loaded
+                all_errors.extend(errors)
+                if loaded and not self.quiet:
+                    agent_print(f"[Loaded {loaded} custom skill(s) from {label}]")
+            if all_errors and not self.quiet:
+                for err in all_errors:
+                    agent_print(f"[Skill load warning: {err}]")
+                agent_print()
 
         # Build system prompt via centralized builder
         from .system_prompt import build_system_prompt, get_memory_warnings

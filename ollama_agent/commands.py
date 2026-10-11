@@ -149,6 +149,7 @@ class CommandMixin:
             "  /pid                         Show current and parent process IDs\n"
             "  /workdir [path]              Show or switch working directory (resets context)\n"
             "  /memorize [project|agent] <text>  Add entry to permanent memory\n"
+            "  /migrate                     Copy workdir config/secrets to ~/.uhu (copy, never move)\n"
             "\n"
             "  /m, /multiline               Enter multiline mode (empty line or /end to submit)\n"
             "  /attach <path|glob|dir> [L<start>-<end>]\n"
@@ -962,6 +963,83 @@ class CommandMixin:
         agent_print(f"  Config: {self._coder_config_path()}")
         agent_print()
 
+    def do_migrate(self):
+        """Migrate workdir config/secrets to ~/.uhu — copy, never move.
+
+        Copies (refusing to overwrite): .ollama_agent.json → ~/.uhu/,
+        gs-cred.json → ~/.uhu/.secrets/, ollama.com_cookies.txt →
+        ~/.uhu/.secrets/.cookies/. Creates a starter .env if missing.
+        Scans config for inline tokens and prints env-var hints.
+        """
+        import shutil
+        from .home import uhu_home
+        from .secrets import secrets_dir, dotenv_path
+        home = uhu_home()
+        sec = secrets_dir()
+        cookies_dir = os.path.join(sec, ".cookies")
+        os.makedirs(cookies_dir, exist_ok=True)
+        os.makedirs(os.path.join(home, "skills"), exist_ok=True)
+
+        plan = [
+            (os.path.join(self.workdir, ".ollama_agent.json"),
+             os.path.join(home, ".ollama_agent.json"), "config"),
+            (os.path.join(self.workdir, "gs-cred.json"),
+             os.path.join(sec, "gs-cred.json"), "Google Calendar credentials"),
+            (os.path.join(self.workdir, "ollama.com_cookies.txt"),
+             os.path.join(cookies_dir, "ollama.com_cookies.txt"), "ollama.com cookies"),
+        ]
+        copied, skipped = [], []
+        for src, dst, label in plan:
+            if not os.path.isfile(src):
+                continue
+            if os.path.isfile(dst):
+                skipped.append(f"  {label}: {dst} already exists — NOT overwritten")
+                continue
+            try:
+                shutil.copy2(src, dst)
+                copied.append(f"  {label}: {src} → {dst}")
+            except OSError as e:
+                agent_print(f"[Error copying {label}: {e}]")
+        if not copied and not skipped:
+            agent_print("[Nothing to migrate — no config/secrets found in workdir]")
+        for line in copied:
+            agent_print(f"[Copied]{line}")
+        for line in skipped:
+            agent_print(f"[Skipped]{line}")
+
+        # Starter .env — never overwrite, never auto-copy inline tokens into it
+        env_path = dotenv_path()
+        if not os.path.isfile(env_path):
+            try:
+                with open(env_path, "w", encoding="utf-8") as f:
+                    f.write(
+                        "# uhu secrets environment — KEY=VALUE pairs\n"
+                        "# Loaded at startup; OS environment variables take precedence.\n"
+                        "# Example:\n"
+                        "# GITHUB_MCP_TOKEN=ghp_xxx\n"
+                    )
+                agent_print(f"[Created starter .env: {env_path}]")
+            except OSError as e:
+                agent_print(f"[Could not create .env: {e}]")
+
+        # Scan config for inline tokens that look like real secrets
+        try:
+            from .tools._config import load_config
+            cfg = load_config(self.workdir)
+            for name, server in (cfg.get("mcpServers") or {}).items():
+                if not isinstance(server, dict):
+                    continue
+                auth = (server.get("headers") or {}).get("Authorization", "")
+                if (isinstance(auth, str) and auth.startswith("Bearer ")
+                        and len(auth) > 20 and "YOUR_" not in auth and "${" not in auth):
+                    agent_print(
+                        f"[⚠ mcpServers.{name}.headers.Authorization contains an inline token — "
+                        f'consider "auth_token_env": "<ENV_VAR>" + entry in {env_path}]'
+                    )
+        except Exception:
+            pass
+        agent_print()
+
     # ── Command dispatch table ──────────────────────────────────────────
     # Replaces the if-elif chain in session.run() with a declarative table.
     # Exact matches are checked first, then prefix matches (sorted by prefix
@@ -975,6 +1053,7 @@ class CommandMixin:
         "/sober": "_cmd_sober", "/diff": "_cmd_diff", "/help": "_cmd_help",
         "/m": "_cmd_multiline", "/multiline": "_cmd_multiline",
         "/sessions": "_cmd_sessions", "/skills": "_cmd_skills", "/jobs": "_cmd_jobs",
+        "/migrate": "_cmd_migrate",
         "/compact": "_cmd_compact",
         "/pid": "_cmd_pid",
          "/timeout": "_cmd_timeout",
@@ -1223,6 +1302,10 @@ class CommandMixin:
 
     def _cmd_memorize(self, args):
         self.do_memorize(args.strip())
+        return DISPATCH_CONTINUE
+
+    def _cmd_migrate(self, args):
+        self.do_migrate()
         return DISPATCH_CONTINUE
 
     def _cmd_embed_bin(self, args):
