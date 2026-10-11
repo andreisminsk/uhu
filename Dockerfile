@@ -57,6 +57,35 @@ RUN echo 'export PATH="/opt/venv/bin:/usr/local/bin:/usr/bin:/bin:$PATH"' >> /ro
 # ── SANDBOX workspace ────────────────────────────────────────────
 RUN mkdir -p /SANDBOX
 
+# ── UHU.md: quick reference + full uhu README in the workspace ──
+RUN { \
+      echo '# uhu — Quick Reference (auto-generated at image build)'; \
+      echo; \
+      echo 'This file combines a container quick reference with the full uhu README (appended below).'; \
+      echo; \
+      echo '## Locations in this container'; \
+      echo; \
+      echo '| What | Where |'; \
+      echo '|---|---|'; \
+      echo '| uhu source code | /opt/uhu (git clone; cd /opt/uhu && git pull to update) |'; \
+      echo '| LLM / GGUF / RunPod experiment notes | /opt/uhu/llama-huggingface (start with its README.md) |'; \
+      echo '| Python venv (uhu installed with all extras) | /opt/venv (already on PATH) |'; \
+      echo '| Your workspace | /SANDBOX (you are here) |'; \
+      echo '| Ollama server | http://localhost:11434 (log: /tmp/ollama.log) |'; \
+      echo; \
+      echo '## Run uhu'; \
+      echo; \
+      echo '    mkdir my-project && cd my-project'; \
+      echo '    uhu'; \
+      echo '    uhu --model glm-5.2:cloud --ctx 202752'; \
+      echo; \
+      echo '---'; \
+      echo; \
+      echo '# uhu — Full README (from /opt/uhu/README.md)'; \
+      echo; \
+      cat /opt/uhu/README.md; \
+    } > /SANDBOX/UHU.md
+
 # ── Entrypoint ──────────────────────────────────────────────────
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

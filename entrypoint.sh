@@ -52,6 +52,7 @@ cat <<'BANNER'
   ║                                                              ║
   ║   uhu source:  /opt/uhu  (git pull to update)                ║
   ║   Workspace:  /SANDBOX  (you are here)                       ║
+  ║   Quick ref:  /SANDBOX/UHU.md (info + full README)           ║
   ║                                                              ║
   ╠══════════════════════════════════════════════════════════════╣
   ║                                                              ║
