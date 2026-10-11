@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gemma 4 31B — Available Quantizations</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Comic+Neue:wght@400;700&family=Crimson+Pro:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d2b4a;
+    font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    overflow: auto;
+    min-width: fit-content;
+    padding: 20px;
+  }
+  .diagram-container {
+    position: relative;
+    width: 3616px;
+    height: 386px;
+    flex-shrink: 0;
+  }
+    .diagram-container::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image:
+        linear-gradient(#1a4a7a 1px, transparent 1px),
+        linear-gradient(90deg, #1a4a7a 1px, transparent 1px),
+        linear-gradient(#153d65 1px, transparent 1px),
+        linear-gradient(90deg, #153d65 1px, transparent 1px);
+      background-size: 50px 50px, 50px 50px, 10px 10px, 10px 10px;
+      z-index: 0;
+    }
+
+  .node {
+    position: absolute;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #4a90d9;
+    background: #14375a;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #c8e0f4;
+    padding: 4px 10px;
+    box-shadow: 2px 2px 6px rgba(74,144,217,0.15);
+    cursor: default;
+    transition: box-shadow 0.2s, transform 0.15s, opacity 0.2s;
+    z-index: 2;
+    line-height: 1.3;
+    user-select: none;
+  }
+  .node:hover {
+    box-shadow: 3px 3px 12px rgba(74,144,217,0.35);
+    transform: translateY(-1px);
+    z-index: 10;
+  }
+  .node.focus {
+    background: #1a5276;
+    border-color: #7ec8e3;
+    border-width: 3px;
+    color: #7ec8e3;
+    font-weight: 600;
+  }
+  .node.focus::before {
+    content: '\2605 ';
+    color: #7ec8e3;
+  }
+  .arrows-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .arrow-line {
+    transition: opacity 0.2s, stroke-width 0.2s;
+  }
+  .title {
+    position: absolute;
+    top: 12px; right: 20px;
+    font-size: 15px;
+    color: #4a90d9;
+    opacity: 0.6;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .toolbar {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+  .toolbar button {
+    padding: 8px 16px;
+    border: 1px solid #4a90d9;
+    border-radius: 6px;
+    background: #14375a;
+    color: #c8e0f4;
+    font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 1px 1px 4px rgba(74,144,217,0.15);
+    transition: background 0.2s, transform 0.1s;
+  }
+  .toolbar button:hover {
+    background: #1a5276;
+    transform: translateY(-1px);
+  }
+  .toolbar button:active {
+    transform: translateY(0);
+  }
+  .toolbar button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button id="btn-copy" onclick="copyToClipboard()">&#128203; Copy Image</button>
+  <button id="btn-download" onclick="downloadPNG()">&#11015; Download PNG</button>
+</div>
+<div class="diagram-container">
+  <svg class="arrows-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="0" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="0 0, 12 4, 0 8" fill="#4a90d9" />
+      </marker>
+      <marker id="free-arrowhead" markerWidth="12" markerHeight="8" refX="0" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="0 0, 12 4, 0 8" fill="#7ec8e3" />
+      </marker>
+    </defs>
+    <path class="arrow-line" data-from="GEMMA4" data-to="GOOGLE" data-width="2" d="M1808.0,106.0 C1808.0,137.0 384.0,137.0 384.0,156.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GEMMA4" data-to="UNSLOTH_STD" data-width="2" d="M1808.0,106.0 C1808.0,137.0 1786.0,137.0 1786.0,156.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GEMMA4" data-to="UNSLOTH_UD" data-width="2" d="M1808.0,106.0 C1808.0,137.0 2551.0,137.0 2551.0,156.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GEMMA4" data-to="UNSLOTH_QAT" data-width="2" d="M1808.0,106.0 C1808.0,137.0 1264.0,137.0 1264.0,156.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GEMMA4" data-to="VRAM" data-width="2" d="M1808.0,106.0 C1808.0,137.0 3231.0,137.0 3231.0,156.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GEMMA4" data-to="OLLAMA" data-width="2" d="M1808.0,106.0 C1808.0,137.0 945.0,137.0 945.0,156.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GOOGLE" data-to="G_Q4_0" data-width="2" d="M384.0,218.0 C384.0,249.0 138.0,249.0 138.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GOOGLE" data-to="G_W4A16" data-width="2" d="M384.0,218.0 C384.0,249.0 594.0,249.0 594.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GOOGLE" data-to="G_UNQUANT" data-width="2" d="M384.0,218.0 C384.0,249.0 348.0,249.0 348.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_STD" data-to="U_Q3KS" data-width="2" d="M1786.0,218.0 C1786.0,249.0 1446.0,249.0 1446.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_STD" data-to="U_Q4KM" data-width="2" d="M1786.0,218.0 C1786.0,249.0 1616.0,249.0 1616.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_STD" data-to="U_Q5KM" data-width="2" d="M1786.0,218.0 C1786.0,249.0 1786.0,249.0 1786.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_STD" data-to="U_Q6K" data-width="2" d="M1786.0,218.0 C1786.0,249.0 1956.0,249.0 1956.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_STD" data-to="U_Q8_0" data-width="2" d="M1786.0,218.0 C1786.0,249.0 2126.0,249.0 2126.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_UD" data-to="U_UD_IQ2XXS" data-width="2" d="M2551.0,218.0 C2551.0,249.0 2296.0,249.0 2296.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_UD" data-to="U_UD_Q4KXL" data-width="2" d="M2551.0,218.0 C2551.0,249.0 2466.0,249.0 2466.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_UD" data-to="U_UD_Q5KXL" data-width="2" d="M2551.0,218.0 C2551.0,249.0 2636.0,249.0 2636.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_UD" data-to="U_UD_Q8KXL" data-width="2" d="M2551.0,218.0 C2551.0,249.0 2806.0,249.0 2806.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="UNSLOTH_QAT" data-to="U_QAT" data-width="2" d="M1264.0,218.0 C1264.0,249.0 1264.0,249.0 1264.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="VRAM" data-to="V_8GB" data-width="2" d="M3231.0,218.0 C3231.0,249.0 3486.0,249.0 3486.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="VRAM" data-to="V_16GB" data-width="2" d="M3231.0,218.0 C3231.0,249.0 2976.0,249.0 2976.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="VRAM" data-to="V_24GB" data-width="2" d="M3231.0,218.0 C3231.0,249.0 3146.0,249.0 3146.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="VRAM" data-to="V_32GB" data-width="2" d="M3231.0,218.0 C3231.0,249.0 3316.0,249.0 3316.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="OLLAMA" data-to="O_DEFAULT" data-width="2" d="M945.0,218.0 C945.0,249.0 832.0,249.0 832.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="OLLAMA" data-to="O_HF" data-width="2" d="M945.0,218.0 C945.0,249.0 1054.0,249.0 1054.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="G_Q4_0" data-to="U_Q4KM" data-width="2" d="M220.0,305.0 L1530.0,305.0" stroke="#7ec8e3" stroke-width="2" fill="none" stroke-dasharray="8,5" marker-end="url(#free-arrowhead)" />
+<path class="arrow-line" data-from="U_Q4KM" data-to="U_UD_Q4KXL" data-width="2" d="M1690.0,305.0 L2380.0,305.0" stroke="#7ec8e3" stroke-width="2" fill="none" stroke-dasharray="8,5" marker-end="url(#free-arrowhead)" />
+<path class="arrow-line" data-from="U_Q5KM" data-to="U_UD_Q5KXL" data-width="2" d="M1860.0,305.0 L2550.0,305.0" stroke="#7ec8e3" stroke-width="2" fill="none" stroke-dasharray="8,5" marker-end="url(#free-arrowhead)" />
+<path class="arrow-line" data-from="O_DEFAULT" data-to="U_Q4KM" data-width="2" d="M930.0,305.0 L1530.0,305.0" stroke="#7ec8e3" stroke-width="2" fill="none" stroke-dasharray="8,5" marker-end="url(#free-arrowhead)" />
+<path class="arrow-line" data-from="O_HF" data-to="UNSLOTH_STD" data-width="2" d="M1156.0,289.4 L1652.1,213.5" stroke="#7ec8e3" stroke-width="2" fill="none" stroke-dasharray="8,5" marker-end="url(#free-arrowhead)" />
+<path class="arrow-line" data-from="O_HF" data-to="UNSLOTH_UD" data-width="2" d="M1156.0,297.4 L2429.0,202.1" stroke="#7ec8e3" stroke-width="2" fill="none" stroke-dasharray="8,5" marker-end="url(#free-arrowhead)" />
+<path class="arrow-line" data-from="O_HF" data-to="UNSLOTH_QAT" data-width="2" d="M1100.9,280.0 L1206.5,223.6" stroke="#7ec8e3" stroke-width="2" fill="none" stroke-dasharray="8,5" marker-end="url(#free-arrowhead)" />
+  </svg>
+  <div class="node" data-id="GEMMA4" style="left:1690.0px; top:60.0px; width:236px; height:42px;">Gemma 4 31B Quantizations</div>
+<div class="node" data-id="GOOGLE" style="left:306.0px; top:172.0px; width:156px; height:42px;">Google Official</div>
+<div class="node" data-id="G_Q4_0" title="~17.65 GB — only GGUF from Google; includes mmproj (~1.2 GB); QAT-trained for better Q4 quality" style="left:60.0px; top:284.0px; width:156px; height:42px;">Q4_0 GGUF (QAT)</div>
+<div class="node" data-id="G_W4A16" title="~21.67 GB — safetensors for vLLM/transformers; 4-bit weights, 16-bit activations" style="left:480.0px; top:284.0px; width:228px; height:42px;">W4A16 compressed-tensors</div>
+<div class="node" data-id="G_UNQUANT" title="~65–67 GB — full-precision QAT weights; not GGUF; base + assistant-tuned variants" style="left:246.0px; top:284.0px; width:204px; height:42px;">Unquantized FP16/BF16</div>
+<div class="node" data-id="UNSLOTH_STD" style="left:1668.0px; top:172.0px; width:236px; height:42px;">Unsloth Standard K-Quants</div>
+<div class="node" data-id="U_Q3KS" title="12.30 GB — smallest standard; uniform bit allocation across layers" style="left:1376.0px; top:284.0px; width:140px; height:42px;">Q3_K_S</div>
+<div class="node" data-id="U_Q4KM" title="17.07 GB — popular quality/size balance; mixed-precision K-quant" style="left:1546.0px; top:284.0px; width:140px; height:42px;">Q4_K_M</div>
+<div class="node" data-id="U_Q5KM" title="20.17 GB — good quality; 5-bit mixed-precision" style="left:1716.0px; top:284.0px; width:140px; height:42px;">Q5_K_M</div>
+<div class="node" data-id="U_Q6K" title="23.47 GB — near-lossless" style="left:1886.0px; top:284.0px; width:140px; height:42px;">Q6_K</div>
+<div class="node" data-id="U_Q8_0" title="30.39 GB — essentially lossless" style="left:2056.0px; top:284.0px; width:140px; height:42px;">Q8_0</div>
+<div class="node" data-id="UNSLOTH_UD" style="left:2445.0px; top:172.0px; width:212px; height:42px;">Unsloth Dynamic (UD) ⭐</div>
+<div class="node" data-id="U_UD_IQ2XXS" title="7.95 GB — smallest overall; fits 8 GB VRAM with quality loss" style="left:2226.0px; top:284.0px; width:140px; height:42px;">UD-IQ2_XXS</div>
+<div class="node focus" data-id="U_UD_Q4KXL" title="17.53 GB — best quality/size trade-off; imatrix-optimized dynamic bit allocation" style="left:2396.0px; top:284.0px; width:140px; height:42px;">UD-Q4_K_XL ⭐</div>
+<div class="node" data-id="U_UD_Q5KXL" title="20.39 GB — great for 24 GB VRAM" style="left:2566.0px; top:284.0px; width:140px; height:42px;">UD-Q5_K_XL</div>
+<div class="node" data-id="U_UD_Q8KXL" title="32.60 GB — highest quality UD variant" style="left:2736.0px; top:284.0px; width:140px; height:42px;">UD-Q8_K_XL</div>
+<div class="node" data-id="UNSLOTH_QAT" style="left:1194.0px; top:172.0px; width:140px; height:42px;">Unsloth QAT</div>
+<div class="node" data-id="U_QAT" title="~17.29 GB — QAT-trained weights; best Q4 quality; includes mmproj + MTP draft model" style="left:1182.0px; top:284.0px; width:164px; height:42px;">UD-Q4_K_XL (QAT)</div>
+<div class="node" data-id="VRAM" style="left:3133.0px; top:172.0px; width:196px; height:42px;">VRAM Recommendations</div>
+<div class="node" data-id="V_8GB" title="UD-IQ2_XXS + mmproj-F16 — tight fit, quality loss" style="left:3416.0px; top:284.0px; width:140px; height:42px;">8 GB</div>
+<div class="node" data-id="V_16GB" title="UD-Q4_K_XL + mmproj — best quality/size trade-off" style="left:2906.0px; top:284.0px; width:140px; height:42px;">16 GB</div>
+<div class="node" data-id="V_24GB" title="Q5_K_M or UD-Q5_K_XL + mmproj — great quality" style="left:3076.0px; top:284.0px; width:140px; height:42px;">24 GB</div>
+<div class="node" data-id="V_32GB" title="Q6_K or Q8_0 — near-original quality" style="left:3246.0px; top:284.0px; width:140px; height:42px;">32+ GB</div>
+<div class="node" data-id="OLLAMA" style="left:875.0px; top:172.0px; width:140px; height:42px;">Ollama</div>
+<div class="node" data-id="O_DEFAULT" title="~20 GB default pull; includes mmproj; limited quantizations in official library" style="left:738.0px; top:284.0px; width:188px; height:42px;">gemma4:31b (Q4_K_M)</div>
+<div class="node" data-id="O_HF" title="Pull any GGUF quant directly; tag must match filename suffix (e.g., Q5_K_M, UD-Q4_K_XL); only GGUF format works" style="left:956.0px; top:284.0px; width:196px; height:42px;">hf.co/unsloth/… tags</div>
+  <div class="title">Gemma 4 31B — Available Quantizations</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+  const connections = {"GEMMA4": ["VRAM", "UNSLOTH_QAT", "OLLAMA", "GOOGLE", "UNSLOTH_STD", "UNSLOTH_UD"], "GOOGLE": ["G_W4A16", "G_Q4_0", "G_UNQUANT", "GEMMA4"], "G_Q4_0": ["GOOGLE", "U_Q4KM"], "G_W4A16": ["GOOGLE"], "G_UNQUANT": ["GOOGLE"], "UNSLOTH_STD": ["U_Q3KS", "U_Q5KM", "O_HF", "U_Q4KM", "U_Q8_0", "U_Q6K", "GEMMA4"], "U_Q3KS": ["UNSLOTH_STD"], "U_Q4KM": ["U_UD_Q4KXL", "O_DEFAULT", "G_Q4_0", "UNSLOTH_STD"], "U_Q5KM": ["U_UD_Q5KXL", "UNSLOTH_STD"], "U_Q6K": ["UNSLOTH_STD"], "U_Q8_0": ["UNSLOTH_STD"], "UNSLOTH_UD": ["U_UD_Q8KXL", "U_UD_IQ2XXS", "O_HF", "U_UD_Q5KXL", "U_UD_Q4KXL", "GEMMA4"], "U_UD_IQ2XXS": ["UNSLOTH_UD"], "U_UD_Q4KXL": ["U_Q4KM", "UNSLOTH_UD"], "U_UD_Q5KXL": ["U_Q5KM", "UNSLOTH_UD"], "U_UD_Q8KXL": ["UNSLOTH_UD"], "UNSLOTH_QAT": ["O_HF", "U_QAT", "GEMMA4"], "U_QAT": ["UNSLOTH_QAT"], "VRAM": ["V_8GB", "V_16GB", "V_32GB", "V_24GB", "GEMMA4"], "V_8GB": ["VRAM"], "V_16GB": ["VRAM"], "V_24GB": ["VRAM"], "V_32GB": ["VRAM"], "OLLAMA": ["O_HF", "O_DEFAULT", "GEMMA4"], "O_DEFAULT": ["OLLAMA", "U_Q4KM"], "O_HF": ["OLLAMA", "UNSLOTH_UD", "UNSLOTH_QAT", "UNSLOTH_STD"]};
+  document.querySelectorAll('.node').forEach(node => {
+    node.addEventListener('mouseenter', () => {
+      const id = node.dataset.id;
+      const connected = new Set(connections[id] || []);
+      connected.add(id);
+      document.querySelectorAll('.node').forEach(n => {
+        if (!connected.has(n.dataset.id)) {
+          n.style.opacity = '0.25';
+        }
+      });
+      document.querySelectorAll('.arrow-line').forEach(line => {
+        const from = line.dataset.from;
+        const to = line.dataset.to;
+        if (from !== id && to !== id) {
+          line.style.opacity = '0.15';
+        } else {
+          line.style.strokeWidth = '3';
+        }
+      });
+    });
+    node.addEventListener('mouseleave', () => {
+      document.querySelectorAll('.node').forEach(n => {
+        n.style.opacity = '1';
+      });
+      document.querySelectorAll('.arrow-line').forEach(line => {
+        line.style.strokeWidth = line.dataset.width;
+        line.style.opacity = '1';
+      });
+    });
+  });
+
+  async function captureDiagram() {
+    const container = document.querySelector('.diagram-container');
+    document.querySelectorAll('.node').forEach(n => n.style.opacity = '1');
+    document.querySelectorAll('.arrow-line').forEach(l => {
+      l.style.strokeWidth = l.dataset.width;
+      l.style.opacity = '1';
+    });
+    const canvas = await html2canvas(container, {
+      backgroundColor: '#0d2b4a',
+      scale: 2,
+      useCORS: true,
+      logging: false
+    });
+    return canvas;
+  }
+
+  async function copyToClipboard() {
+    const btn = document.getElementById('btn-copy');
+    btn.disabled = true;
+    btn.textContent = 'Copying...';
+    try {
+      const canvas = await captureDiagram();
+      canvas.toBlob(async (blob) => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+          btn.textContent = '✓ Copied!';
+        } catch (e) {
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
+          btn.textContent = 'Opened in tab';
+        }
+        setTimeout(() => { btn.textContent = '📋 Copy Image'; btn.disabled = false; }, 2000);
+      });
+    } catch (e) {
+      console.error(e);
+      btn.textContent = '✗ Failed';
+      setTimeout(() => { btn.textContent = '📋 Copy Image'; btn.disabled = false; }, 2000);
+    }
+  }
+
+  async function downloadPNG() {
+    const btn = document.getElementById('btn-download');
+    btn.disabled = true;
+    btn.textContent = 'Rendering...';
+    try {
+      const canvas = await captureDiagram();
+      const link = document.createElement('a');
+      link.download = 'quant.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      btn.textContent = '✓ Downloaded!';
+    } catch (e) {
+      console.error(e);
+      btn.textContent = '✗ Failed';
+    }
+    setTimeout(() => { btn.textContent = '⬇ Download PNG'; btn.disabled = false; }, 2000);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gemma 4 31B Architecture & Parameter Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Comic+Neue:wght@400;700&family=Crimson+Pro:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d2b4a;
+    font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    overflow: auto;
+    min-width: fit-content;
+    padding: 20px;
+  }
+  .diagram-container {
+    position: relative;
+    width: 3316px;
+    height: 610px;
+    flex-shrink: 0;
+  }
+    .diagram-container::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image:
+        linear-gradient(#1a4a7a 1px, transparent 1px),
+        linear-gradient(90deg, #1a4a7a 1px, transparent 1px),
+        linear-gradient(#153d65 1px, transparent 1px),
+        linear-gradient(90deg, #153d65 1px, transparent 1px);
+      background-size: 50px 50px, 50px 50px, 10px 10px, 10px 10px;
+      z-index: 0;
+    }
+
+  .node {
+    position: absolute;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #4a90d9;
+    background: #14375a;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #c8e0f4;
+    padding: 4px 10px;
+    box-shadow: 2px 2px 6px rgba(74,144,217,0.15);
+    cursor: default;
+    transition: box-shadow 0.2s, transform 0.15s, opacity 0.2s;
+    z-index: 2;
+    line-height: 1.3;
+    user-select: none;
+  }
+  .node:hover {
+    box-shadow: 3px 3px 12px rgba(74,144,217,0.35);
+    transform: translateY(-1px);
+    z-index: 10;
+  }
+  .node.focus {
+    background: #1a5276;
+    border-color: #7ec8e3;
+    border-width: 3px;
+    color: #7ec8e3;
+    font-weight: 600;
+  }
+  .node.focus::before {
+    content: '\2605 ';
+    color: #7ec8e3;
+  }
+  .arrows-svg {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+    pointer-events: none;
+  }
+  .arrow-line {
+    transition: opacity 0.2s, stroke-width 0.2s;
+  }
+  .title {
+    position: absolute;
+    top: 12px; right: 20px;
+    font-size: 15px;
+    color: #4a90d9;
+    opacity: 0.6;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .toolbar {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+  .toolbar button {
+    padding: 8px 16px;
+    border: 1px solid #4a90d9;
+    border-radius: 6px;
+    background: #14375a;
+    color: #c8e0f4;
+    font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 1px 1px 4px rgba(74,144,217,0.15);
+    transition: background 0.2s, transform 0.1s;
+  }
+  .toolbar button:hover {
+    background: #1a5276;
+    transform: translateY(-1px);
+  }
+  .toolbar button:active {
+    transform: translateY(0);
+  }
+  .toolbar button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button id="btn-copy" onclick="copyToClipboard()">&#128203; Copy Image</button>
+  <button id="btn-download" onclick="downloadPNG()">&#11015; Download PNG</button>
+</div>
+<div class="diagram-container">
+  <svg class="arrows-svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="0" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="0 0, 12 4, 0 8" fill="#4a90d9" />
+      </marker>
+      <marker id="free-arrowhead" markerWidth="12" markerHeight="8" refX="0" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="0 0, 12 4, 0 8" fill="#7ec8e3" />
+      </marker>
+    </defs>
+    <path class="arrow-line" data-from="GEMMA4" data-to="EMBED" data-width="2" d="M1658.0,106.0 C1658.0,137.0 146.0,137.0 146.0,156.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GEMMA4" data-to="TRANSFORMER" data-width="2" d="M1658.0,106.0 C1658.0,137.0 1638.0,137.0 1638.0,156.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="GEMMA4" data-to="VISION" data-width="2" d="M1658.0,106.0 C1658.0,137.0 3150.0,137.0 3150.0,156.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="TRANSFORMER" data-to="SLIDE_LAYERS" data-width="2" d="M1638.0,218.0 C1638.0,249.0 2289.0,249.0 2289.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="TRANSFORMER" data-to="FULL_LAYERS" data-width="2" d="M1638.0,218.0 C1638.0,249.0 898.0,249.0 898.0,268.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_LAYERS" data-to="SLIDE_ATTN" data-width="2" d="M2289.0,330.0 C2289.0,361.0 1905.0,361.0 1905.0,380.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_LAYERS" data-to="SLIDE_FFN" data-width="2" d="M2289.0,330.0 C2289.0,361.0 2556.0,361.0 2556.0,380.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_LAYERS" data-to="SLIDE_NORMS" data-width="2" d="M2289.0,330.0 C2289.0,361.0 2940.0,361.0 2940.0,380.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_ATTN" data-to="SLIDE_Q" data-width="2" d="M1905.0,442.0 C1905.0,473.0 1994.0,473.0 1994.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_ATTN" data-to="SLIDE_K" data-width="2" d="M1905.0,442.0 C1905.0,473.0 1638.0,473.0 1638.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_ATTN" data-to="SLIDE_V" data-width="2" d="M1905.0,442.0 C1905.0,473.0 2172.0,473.0 2172.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_ATTN" data-to="SLIDE_O" data-width="2" d="M1905.0,442.0 C1905.0,473.0 1816.0,473.0 1816.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_FFN" data-to="SLIDE_UP" data-width="2" d="M2556.0,442.0 C2556.0,473.0 2758.0,473.0 2758.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_FFN" data-to="SLIDE_GATE" data-width="2" d="M2556.0,442.0 C2556.0,473.0 2564.0,473.0 2564.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="SLIDE_FFN" data-to="SLIDE_DOWN" data-width="2" d="M2556.0,442.0 C2556.0,473.0 2362.0,473.0 2362.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="FULL_LAYERS" data-to="FULL_ATTN" data-width="2" d="M898.0,330.0 C898.0,361.0 514.0,361.0 514.0,380.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="FULL_LAYERS" data-to="FULL_FFN" data-width="2" d="M898.0,330.0 C898.0,361.0 1076.0,361.0 1076.0,380.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="FULL_LAYERS" data-to="FULL_NORMS" data-width="2" d="M898.0,330.0 C898.0,361.0 1460.0,361.0 1460.0,380.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="FULL_ATTN" data-to="FULL_Q" data-width="2" d="M514.0,442.0 C514.0,473.0 692.0,473.0 692.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="FULL_ATTN" data-to="FULL_K" data-width="2" d="M514.0,442.0 C514.0,473.0 336.0,473.0 336.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="FULL_ATTN" data-to="FULL_O" data-width="2" d="M514.0,442.0 C514.0,473.0 514.0,473.0 514.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="FULL_FFN" data-to="FULL_UP" data-width="2" d="M1076.0,442.0 C1076.0,473.0 1278.0,473.0 1278.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="FULL_FFN" data-to="FULL_GATE" data-width="2" d="M1076.0,442.0 C1076.0,473.0 1084.0,473.0 1084.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="FULL_FFN" data-to="FULL_DOWN" data-width="2" d="M1076.0,442.0 C1076.0,473.0 882.0,473.0 882.0,492.0" stroke="#4a90d9" stroke-width="2" fill="none" marker-end="url(#arrowhead)" />
+<path class="arrow-line" data-from="EMBED" data-to="TRANSFORMER" data-width="2" d="M236.0,193.0 L1484.0,193.0" stroke="#7ec8e3" stroke-width="2" fill="none" stroke-dasharray="8,5" marker-end="url(#free-arrowhead)" />
+<path class="arrow-line" data-from="VISION" data-to="TRANSFORMER" data-width="2" d="M3040.0,193.0 L1792.0,193.0" stroke="#7ec8e3" stroke-width="2" fill="none" stroke-dasharray="8,5" marker-end="url(#free-arrowhead)" />
+  </svg>
+  <div class="node focus" data-id="GEMMA4" style="left:1556.0px; top:60.0px; width:204px; height:42px;">Gemma 4 31B (~31.25B)</div>
+<div class="node" data-id="EMBED" title="262,144 × 5,376; token IDs → ℝ⁵³⁷⁶" style="left:60.0px; top:172.0px; width:172px; height:42px;">Embedding (1.41B)</div>
+<div class="node" data-id="TRANSFORMER" title="Context: 256K tokens; all params are rank ≤ 2 tensors" style="left:1500.0px; top:172.0px; width:276px; height:42px;">60 Transformer Layers (29.29B)</div>
+<div class="node" data-id="SLIDE_LAYERS" style="left:2175.0px; top:284.0px; width:228px; height:42px;">50 Sliding Attn (23.95B)</div>
+<div class="node" data-id="SLIDE_ATTN" style="left:1787.0px; top:396.0px; width:236px; height:42px;">Sliding Attention (~132M)</div>
+<div class="node" data-id="SLIDE_Q" title="5,376 × 8,192; ℝ⁵³⁷⁶ → ℝ⁸¹⁹²; 32 heads × 256 dim" style="left:1920.0px; top:508.0px; width:148px; height:42px;">Q proj (44.0M)</div>
+<div class="node" data-id="SLIDE_K" title="5,376 × 4,096; ℝ⁵³⁷⁶ → ℝ⁴⁰⁹⁶; 16 KV heads" style="left:1564.0px; top:508.0px; width:148px; height:42px;">K proj (22.0M)</div>
+<div class="node" data-id="SLIDE_V" title="5,376 × 4,096; ℝ⁵³⁷⁶ → ℝ⁴⁰⁹⁶" style="left:2098.0px; top:508.0px; width:148px; height:42px;">V proj (22.0M)</div>
+<div class="node" data-id="SLIDE_O" title="8,192 × 5,376; ℝ⁸¹⁹² → ℝ⁵³⁷⁶" style="left:1742.0px; top:508.0px; width:148px; height:42px;">O proj (44.0M)</div>
+<div class="node" data-id="SLIDE_FFN" style="left:2486.0px; top:396.0px; width:140px; height:42px;">FFN (~346.8M)</div>
+<div class="node" data-id="SLIDE_UP" title="5,376 × 21,504; ℝ⁵³⁷⁶ → ℝ²¹⁵⁰⁴; 4× expansion" style="left:2680.0px; top:508.0px; width:156px; height:42px;">FFN up (115.6M)</div>
+<div class="node" data-id="SLIDE_GATE" title="5,376 × 21,504; ℝ⁵³⁷⁶ → ℝ²¹⁵⁰⁴" style="left:2478.0px; top:508.0px; width:172px; height:42px;">FFN gate (115.6M)</div>
+<div class="node" data-id="SLIDE_DOWN" title="21,504 × 5,376; ℝ²¹⁵⁰⁴ → ℝ⁵³⁷⁶" style="left:2276.0px; top:508.0px; width:172px; height:42px;">FFN down (115.6M)</div>
+<div class="node" data-id="SLIDE_NORMS" title="Sliding window: 1,024 tokens" style="left:2866.0px; top:396.0px; width:148px; height:42px;">Norms (~0.02M)</div>
+<div class="node" data-id="FULL_LAYERS" style="left:800.0px; top:284.0px; width:196px; height:42px;">10 Full Attn (5.34B)</div>
+<div class="node" data-id="FULL_ATTN" style="left:400.0px; top:396.0px; width:228px; height:42px;">Full Attention (~187.2M)</div>
+<div class="node" data-id="FULL_Q" title="5,376 × 16,384; ℝ⁵³⁷⁶ → ℝ¹⁶³⁸⁴; 32 heads × 512 dim" style="left:618.0px; top:508.0px; width:148px; height:42px;">Q proj (88.1M)</div>
+<div class="node" data-id="FULL_K" title="5,376 × 2,048; ℝ⁵³⁷⁶ → ℝ²⁰⁴⁸; 4 KV heads" style="left:262.0px; top:508.0px; width:148px; height:42px;">K proj (11.0M)</div>
+<div class="node" data-id="FULL_O" title="16,384 × 5,376; ℝ¹⁶³⁸⁴ → ℝ⁵³⁷⁶" style="left:440.0px; top:508.0px; width:148px; height:42px;">O proj (88.1M)</div>
+<div class="node" data-id="FULL_FFN" style="left:1006.0px; top:396.0px; width:140px; height:42px;">FFN (~346.8M)</div>
+<div class="node" data-id="FULL_UP" title="5,376 × 21,504; ℝ⁵³⁷⁶ → ℝ²¹⁵⁰⁴" style="left:1200.0px; top:508.0px; width:156px; height:42px;">FFN up (115.6M)</div>
+<div class="node" data-id="FULL_GATE" title="5,376 × 21,504; ℝ⁵³⁷⁶ → ℝ²¹⁵⁰⁴" style="left:998.0px; top:508.0px; width:172px; height:42px;">FFN gate (115.6M)</div>
+<div class="node" data-id="FULL_DOWN" title="21,504 × 5,376; ℝ²¹⁵⁰⁴ → ℝ⁵³⁷⁶" style="left:796.0px; top:508.0px; width:172px; height:42px;">FFN down (115.6M)</div>
+<div class="node" data-id="FULL_NORMS" style="left:1386.0px; top:396.0px; width:148px; height:42px;">Norms (~0.02M)</div>
+<div class="node" data-id="VISION" title="mmproj; projects vision features → ℝ⁵³⁷⁶" style="left:3044.0px; top:172.0px; width:212px; height:42px;">Vision Encoder (0.55B)</div>
+  <div class="title">Gemma 4 31B Architecture & Parameter Flow</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+  const connections = {"GEMMA4": ["EMBED", "TRANSFORMER", "VISION"], "EMBED": ["TRANSFORMER", "GEMMA4"], "TRANSFORMER": ["VISION", "FULL_LAYERS", "SLIDE_LAYERS", "EMBED", "GEMMA4"], "SLIDE_LAYERS": ["SLIDE_ATTN", "TRANSFORMER", "SLIDE_FFN", "SLIDE_NORMS"], "SLIDE_ATTN": ["SLIDE_K", "SLIDE_Q", "SLIDE_V", "SLIDE_O", "SLIDE_LAYERS"], "SLIDE_Q": ["SLIDE_ATTN"], "SLIDE_K": ["SLIDE_ATTN"], "SLIDE_V": ["SLIDE_ATTN"], "SLIDE_O": ["SLIDE_ATTN"], "SLIDE_FFN": ["SLIDE_GATE", "SLIDE_UP", "SLIDE_LAYERS", "SLIDE_DOWN"], "SLIDE_UP": ["SLIDE_FFN"], "SLIDE_GATE": ["SLIDE_FFN"], "SLIDE_DOWN": ["SLIDE_FFN"], "SLIDE_NORMS": ["SLIDE_LAYERS"], "FULL_LAYERS": ["TRANSFORMER", "FULL_ATTN", "FULL_NORMS", "FULL_FFN"], "FULL_ATTN": ["FULL_K", "FULL_Q", "FULL_O", "FULL_LAYERS"], "FULL_Q": ["FULL_ATTN"], "FULL_K": ["FULL_ATTN"], "FULL_O": ["FULL_ATTN"], "FULL_FFN": ["FULL_GATE", "FULL_UP", "FULL_LAYERS", "FULL_DOWN"], "FULL_UP": ["FULL_FFN"], "FULL_GATE": ["FULL_FFN"], "FULL_DOWN": ["FULL_FFN"], "FULL_NORMS": ["FULL_LAYERS"], "VISION": ["TRANSFORMER", "GEMMA4"]};
+  document.querySelectorAll('.node').forEach(node => {
+    node.addEventListener('mouseenter', () => {
+      const id = node.dataset.id;
+      const connected = new Set(connections[id] || []);
+      connected.add(id);
+      document.querySelectorAll('.node').forEach(n => {
+        if (!connected.has(n.dataset.id)) {
+          n.style.opacity = '0.25';
+        }
+      });
+      document.querySelectorAll('.arrow-line').forEach(line => {
+        const from = line.dataset.from;
+        const to = line.dataset.to;
+        if (from !== id && to !== id) {
+          line.style.opacity = '0.15';
+        } else {
+          line.style.strokeWidth = '3';
+        }
+      });
+    });
+    node.addEventListener('mouseleave', () => {
+      document.querySelectorAll('.node').forEach(n => {
+        n.style.opacity = '1';
+      });
+      document.querySelectorAll('.arrow-line').forEach(line => {
+        line.style.strokeWidth = line.dataset.width;
+        line.style.opacity = '1';
+      });
+    });
+  });
+
+  async function captureDiagram() {
+    const container = document.querySelector('.diagram-container');
+    document.querySelectorAll('.node').forEach(n => n.style.opacity = '1');
+    document.querySelectorAll('.arrow-line').forEach(l => {
+      l.style.strokeWidth = l.dataset.width;
+      l.style.opacity = '1';
+    });
+    const canvas = await html2canvas(container, {
+      backgroundColor: '#0d2b4a',
+      scale: 2,
+      useCORS: true,
+      logging: false
+    });
+    return canvas;
+  }
+
+  async function copyToClipboard() {
+    const btn = document.getElementById('btn-copy');
+    btn.disabled = true;
+    btn.textContent = 'Copying...';
+    try {
+      const canvas = await captureDiagram();
+      canvas.toBlob(async (blob) => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
+          btn.textContent = '✓ Copied!';
+        } catch (e) {
+          const url = URL.createObjectURL(blob);
+          window.open(url, '_blank');
+          btn.textContent = 'Opened in tab';
+        }
+        setTimeout(() => { btn.textContent = '📋 Copy Image'; btn.disabled = false; }, 2000);
+      });
+    } catch (e) {
+      console.error(e);
+      btn.textContent = '✗ Failed';
+      setTimeout(() => { btn.textContent = '📋 Copy Image'; btn.disabled = false; }, 2000);
+    }
+  }
+
+  async function downloadPNG() {
+    const btn = document.getElementById('btn-download');
+    btn.disabled = true;
+    btn.textContent = 'Rendering...';
+    try {
+      const canvas = await captureDiagram();
+      const link = document.createElement('a');
+      link.download = 'gemma4-31b-architecture.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      btn.textContent = '✓ Downloaded!';
+    } catch (e) {
+      console.error(e);
+      btn.textContent = '✗ Failed';
+    }
+    setTimeout(() => { btn.textContent = '⬇ Download PNG'; btn.disabled = false; }, 2000);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,964 @@
+Downloading gemma-4-31B-it-UD-Q8_K_XL.gguf from unsloth/gemma-4-31B-it-GGUF...
+File size: ~35 GB for UD-Q8_K_XL, may take a while.
+
+/usr/local/lib/python3.12/dist-packages/huggingface_hub/utils/_validators.py:189: UserWarning: The `resume_download` argument is deprecated and ignored in `hf_hub_download`. Downloads always resume whenever possible.
+  warnings.warn(
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Downloaded to: /workspace/hf_cache/models--unsloth--gemma-4-31B-it-GGUF/snapshots/8906b3db2e669a0b1d6293c315d3f9fbf934a86d/gemma-4-31B-it-UD-Q8_K_XL.gguf
+
+Inspecting: /workspace/hf_cache/models--unsloth--gemma-4-31B-it-GGUF/snapshots/8906b3db2e669a0b1d6293c315d3f9fbf934a86d/gemma-4-31B-it-UD-Q8_K_XL.gguf
+File size: 32.61 GB
+
+================================================================================
+MODEL METADATA
+================================================================================
+  general.architecture: [20]
+  general.name: [12]
+  gemma4.block_count: [18]
+  gemma4.context_length: [21]
+  gemma4.embedding_length: [23]
+  gemma4.feed_forward_length: [26]
+  gemma4.attention.head_count: [27]
+  gemma4.attention.head_count_kv: [30]
+  gemma4.attention.layer_norm_rms_epsilon: [39]
+
+================================================================================
+PER-TENSOR QUANTIZATION
+================================================================================
+
+Tensor Name                                             Type       Shape                      Size (MB)
+---------------------------------------------------------------------------------------------------------
+blk.0.attn_k.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.0.attn_k_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.0.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.0.attn_output.weight                                Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.0.attn_q.weight                                     Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.0.attn_q_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.0.attn_v.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.0.ffn_down.weight                                   Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.0.ffn_gate.weight                                   Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.0.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.0.ffn_up.weight                                     Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.0.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.0.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.0.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+blk.1.attn_k.weight                                     F16        [np.uint64(5376), np.uint64(4096)]      42.00
+blk.1.attn_k_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.1.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.1.attn_output.weight                                Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.1.attn_q.weight                                     F16        [np.uint64(5376), np.uint64(8192)]      84.00
+blk.1.attn_q_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.1.attn_v.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.1.ffn_down.weight                                   F16        [np.uint64(21504), np.uint64(5376)]     220.50
+blk.1.ffn_gate.weight                                   F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.1.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.1.ffn_up.weight                                     F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.1.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.1.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.1.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+blk.10.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.10.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.10.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.10.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.10.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.10.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.10.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.10.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.10.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.10.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.10.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.10.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.10.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.10.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.11.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(2048)]      11.16
+blk.11.attn_k_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.11.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.11.attn_output.weight                               Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.11.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(16384)]      89.25
+blk.11.attn_q_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.11.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.11.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.11.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.11.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.11.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.11.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.11.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.12.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.12.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.12.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.12.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.12.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.12.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.12.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.12.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.12.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.12.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.12.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.12.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.12.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.12.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.13.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.13.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.13.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.13.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.13.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.13.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.13.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.13.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.13.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.13.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.13.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.13.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.13.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.13.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.14.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.14.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.14.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.14.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.14.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.14.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.14.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.14.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.14.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.14.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.14.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.14.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.14.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.14.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.15.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.15.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.15.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.15.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.15.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.15.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.15.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.15.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.15.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.15.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.15.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.15.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.15.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.15.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.16.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.16.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.16.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.16.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.16.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.16.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.16.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.16.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.16.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.16.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.16.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.16.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.16.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.16.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.17.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(2048)]      11.16
+blk.17.attn_k_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.17.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.17.attn_output.weight                               Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.17.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(16384)]      89.25
+blk.17.attn_q_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.17.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.17.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.17.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.17.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.17.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.17.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.17.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.18.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.18.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.18.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.18.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.18.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.18.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.18.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.18.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.18.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.18.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.18.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.18.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.18.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.18.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.19.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.19.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.19.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.19.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.19.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.19.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.19.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.19.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.19.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.19.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.19.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.19.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.19.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.19.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.2.attn_k.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.2.attn_k_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.2.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.2.attn_output.weight                                Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.2.attn_q.weight                                     Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.2.attn_q_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.2.attn_v.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.2.ffn_down.weight                                   Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.2.ffn_gate.weight                                   Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.2.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.2.ffn_up.weight                                     Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.2.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.2.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.2.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+blk.20.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.20.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.20.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.20.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.20.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.20.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.20.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.20.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.20.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.20.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.20.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.20.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.20.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.20.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.21.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.21.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.21.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.21.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.21.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.21.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.21.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.21.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.21.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.21.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.21.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.21.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.21.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.21.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.22.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.22.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.22.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.22.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.22.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.22.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.22.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.22.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.22.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.22.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.22.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.22.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.22.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.22.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.23.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(2048)]      11.16
+blk.23.attn_k_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.23.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.23.attn_output.weight                               Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.23.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(16384)]      89.25
+blk.23.attn_q_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.23.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.23.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.23.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.23.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.23.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.23.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.23.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.24.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.24.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.24.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.24.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.24.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.24.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.24.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.24.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.24.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.24.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.24.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.24.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.24.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.24.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.25.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.25.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.25.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.25.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.25.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.25.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.25.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.25.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.25.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.25.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.25.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.25.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.25.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.25.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.26.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.26.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.26.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.26.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.26.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.26.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.26.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.26.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.26.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.26.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.26.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.26.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.26.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.26.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.27.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.27.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.27.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.27.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.27.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.27.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.27.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.27.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.27.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.27.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.27.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.27.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.27.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.27.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.28.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.28.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.28.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.28.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.28.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.28.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.28.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.28.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.28.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.28.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.28.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.28.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.28.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.28.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.29.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(2048)]      11.16
+blk.29.attn_k_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.29.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.29.attn_output.weight                               Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.29.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(16384)]      89.25
+blk.29.attn_q_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.29.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.29.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.29.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.29.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.29.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.29.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.29.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.3.attn_k.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.3.attn_k_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.3.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.3.attn_output.weight                                Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.3.attn_q.weight                                     Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.3.attn_q_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.3.attn_v.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.3.ffn_down.weight                                   Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.3.ffn_gate.weight                                   Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.3.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.3.ffn_up.weight                                     Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.3.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.3.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.3.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+blk.30.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.30.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.30.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.30.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.30.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.30.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.30.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.30.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.30.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.30.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.30.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.30.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.30.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.30.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.31.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.31.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.31.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.31.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.31.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.31.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.31.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.31.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.31.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.31.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.31.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.31.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.31.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.31.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.32.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.32.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.32.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.32.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.32.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.32.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.32.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.32.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.32.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.32.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.32.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.32.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.32.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.32.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.33.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.33.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.33.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.33.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.33.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.33.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.33.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.33.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.33.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.33.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.33.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.33.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.33.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.33.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.34.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.34.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.34.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.34.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.34.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.34.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.34.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.34.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.34.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.34.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.34.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.34.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.34.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.34.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.35.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(2048)]      11.16
+blk.35.attn_k_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.35.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.35.attn_output.weight                               Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.35.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(16384)]      89.25
+blk.35.attn_q_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.35.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.35.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.35.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.35.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.35.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.35.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.35.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.36.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.36.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.36.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.36.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.36.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.36.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.36.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.36.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.36.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.36.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.36.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.36.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.36.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.36.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.37.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.37.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.37.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.37.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.37.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.37.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.37.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.37.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.37.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.37.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.37.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.37.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.37.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.37.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.38.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.38.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.38.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.38.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.38.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.38.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.38.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.38.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.38.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.38.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.38.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.38.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.38.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.38.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.39.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.39.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.39.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.39.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.39.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.39.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.39.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.39.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.39.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.39.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.39.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.39.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.39.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.39.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.4.attn_k.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.4.attn_k_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.4.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.4.attn_output.weight                                Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.4.attn_q.weight                                     Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.4.attn_q_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.4.attn_v.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.4.ffn_down.weight                                   Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.4.ffn_gate.weight                                   Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.4.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.4.ffn_up.weight                                     Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.4.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.4.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.4.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+blk.40.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.40.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.40.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.40.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.40.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.40.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.40.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.40.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.40.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.40.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.40.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.40.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.40.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.40.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.41.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(2048)]      11.16
+blk.41.attn_k_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.41.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.41.attn_output.weight                               Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.41.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(16384)]      89.25
+blk.41.attn_q_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.41.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.41.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.41.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.41.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.41.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.41.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.41.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.42.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.42.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.42.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.42.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.42.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.42.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.42.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.42.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.42.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.42.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.42.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.42.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.42.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.42.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.43.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.43.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.43.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.43.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.43.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.43.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.43.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.43.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.43.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.43.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.43.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.43.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.43.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.43.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.44.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.44.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.44.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.44.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.44.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.44.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.44.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.44.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.44.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.44.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.44.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.44.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.44.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.44.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.45.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.45.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.45.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.45.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.45.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.45.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.45.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.45.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.45.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.45.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.45.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.45.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.45.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.45.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.46.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.46.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.46.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.46.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.46.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.46.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.46.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.46.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.46.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.46.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.46.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.46.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.46.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.46.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.47.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(2048)]      11.16
+blk.47.attn_k_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.47.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.47.attn_output.weight                               Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.47.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(16384)]      89.25
+blk.47.attn_q_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.47.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.47.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.47.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.47.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.47.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.47.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.47.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.48.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.48.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.48.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.48.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.48.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.48.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.48.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.48.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.48.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.48.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.48.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.48.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.48.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.48.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.49.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.49.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.49.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.49.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.49.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.49.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.49.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.49.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.49.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.49.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.49.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.49.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.49.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.49.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.5.attn_k.weight                                     Q8_0       [np.uint64(5376), np.uint64(2048)]      11.16
+blk.5.attn_k_norm.weight                                F32        [np.uint64(512)]                0.00
+blk.5.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.5.attn_output.weight                                Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.5.attn_q.weight                                     Q8_0       [np.uint64(5376), np.uint64(16384)]      89.25
+blk.5.attn_q_norm.weight                                F32        [np.uint64(512)]                0.00
+blk.5.ffn_down.weight                                   Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.5.ffn_gate.weight                                   Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.5.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.5.ffn_up.weight                                     Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.5.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.5.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.5.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+blk.50.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.50.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.50.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.50.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.50.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.50.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.50.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.50.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.50.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.50.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.50.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.50.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.50.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.50.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.51.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.51.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.51.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.51.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.51.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.51.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.51.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.51.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.51.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.51.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.51.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.51.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.51.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.51.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.52.attn_k.weight                                    F16        [np.uint64(5376), np.uint64(4096)]      42.00
+blk.52.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.52.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.52.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.52.attn_q.weight                                    F16        [np.uint64(5376), np.uint64(8192)]      84.00
+blk.52.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.52.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.52.ffn_down.weight                                  F16        [np.uint64(21504), np.uint64(5376)]     220.50
+blk.52.ffn_gate.weight                                  F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.52.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.52.ffn_up.weight                                    F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.52.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.52.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.52.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.53.attn_k.weight                                    F16        [np.uint64(5376), np.uint64(2048)]      21.00
+blk.53.attn_k_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.53.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.53.attn_output.weight                               Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.53.attn_q.weight                                    F16        [np.uint64(5376), np.uint64(16384)]     168.00
+blk.53.attn_q_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.53.ffn_down.weight                                  F16        [np.uint64(21504), np.uint64(5376)]     220.50
+blk.53.ffn_gate.weight                                  F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.53.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.53.ffn_up.weight                                    F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.53.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.53.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.53.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.54.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.54.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.54.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.54.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.54.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.54.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.54.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.54.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.54.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.54.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.54.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.54.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.54.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.54.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.55.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.55.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.55.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.55.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.55.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.55.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.55.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.55.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.55.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.55.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.55.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.55.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.55.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.55.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.56.attn_k.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.56.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.56.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.56.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.56.attn_q.weight                                    Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.56.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.56.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.56.ffn_down.weight                                  Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.56.ffn_gate.weight                                  Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.56.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.56.ffn_up.weight                                    Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.56.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.56.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.56.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.57.attn_k.weight                                    F16        [np.uint64(5376), np.uint64(4096)]      42.00
+blk.57.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.57.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.57.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.57.attn_q.weight                                    F16        [np.uint64(5376), np.uint64(8192)]      84.00
+blk.57.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.57.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.57.ffn_down.weight                                  F16        [np.uint64(21504), np.uint64(5376)]     220.50
+blk.57.ffn_gate.weight                                  F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.57.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.57.ffn_up.weight                                    F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.57.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.57.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.57.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.58.attn_k.weight                                    F16        [np.uint64(5376), np.uint64(4096)]      42.00
+blk.58.attn_k_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.58.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.58.attn_output.weight                               Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.58.attn_q.weight                                    F16        [np.uint64(5376), np.uint64(8192)]      84.00
+blk.58.attn_q_norm.weight                               F32        [np.uint64(256)]                0.00
+blk.58.attn_v.weight                                    Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.58.ffn_down.weight                                  F16        [np.uint64(21504), np.uint64(5376)]     220.50
+blk.58.ffn_gate.weight                                  F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.58.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.58.ffn_up.weight                                    F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.58.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.58.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.58.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.59.attn_k.weight                                    F16        [np.uint64(5376), np.uint64(2048)]      21.00
+blk.59.attn_k_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.59.attn_norm.weight                                 F32        [np.uint64(5376)]               0.02
+blk.59.attn_output.weight                               Q8_0       [np.uint64(16384), np.uint64(5376)]      89.25
+blk.59.attn_q.weight                                    F16        [np.uint64(5376), np.uint64(16384)]     168.00
+blk.59.attn_q_norm.weight                               F32        [np.uint64(512)]                0.00
+blk.59.ffn_down.weight                                  F16        [np.uint64(21504), np.uint64(5376)]     220.50
+blk.59.ffn_gate.weight                                  F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.59.ffn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.59.ffn_up.weight                                    F16        [np.uint64(5376), np.uint64(21504)]     220.50
+blk.59.layer_output_scale.weight                        F32        [np.uint64(1)]                  0.00
+blk.59.post_attention_norm.weight                       F32        [np.uint64(5376)]               0.02
+blk.59.post_ffw_norm.weight                             F32        [np.uint64(5376)]               0.02
+blk.6.attn_k.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.6.attn_k_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.6.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.6.attn_output.weight                                Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.6.attn_q.weight                                     Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.6.attn_q_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.6.attn_v.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.6.ffn_down.weight                                   Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.6.ffn_gate.weight                                   Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.6.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.6.ffn_up.weight                                     Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.6.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.6.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.6.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+blk.7.attn_k.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.7.attn_k_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.7.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.7.attn_output.weight                                Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.7.attn_q.weight                                     Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.7.attn_q_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.7.attn_v.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.7.ffn_down.weight                                   Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.7.ffn_gate.weight                                   Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.7.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.7.ffn_up.weight                                     Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.7.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.7.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.7.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+blk.8.attn_k.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.8.attn_k_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.8.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.8.attn_output.weight                                Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.8.attn_q.weight                                     Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.8.attn_q_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.8.attn_v.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.8.ffn_down.weight                                   Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.8.ffn_gate.weight                                   Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.8.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.8.ffn_up.weight                                     Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.8.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.8.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.8.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+blk.9.attn_k.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.9.attn_k_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.9.attn_norm.weight                                  F32        [np.uint64(5376)]               0.02
+blk.9.attn_output.weight                                Q8_0       [np.uint64(8192), np.uint64(5376)]      44.62
+blk.9.attn_q.weight                                     Q8_0       [np.uint64(5376), np.uint64(8192)]      44.62
+blk.9.attn_q_norm.weight                                F32        [np.uint64(256)]                0.00
+blk.9.attn_v.weight                                     Q8_0       [np.uint64(5376), np.uint64(4096)]      22.31
+blk.9.ffn_down.weight                                   Q8_0       [np.uint64(21504), np.uint64(5376)]     117.14
+blk.9.ffn_gate.weight                                   Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.9.ffn_norm.weight                                   F32        [np.uint64(5376)]               0.02
+blk.9.ffn_up.weight                                     Q8_0       [np.uint64(5376), np.uint64(21504)]     117.14
+blk.9.layer_output_scale.weight                         F32        [np.uint64(1)]                  0.00
+blk.9.post_attention_norm.weight                        F32        [np.uint64(5376)]               0.02
+blk.9.post_ffw_norm.weight                              F32        [np.uint64(5376)]               0.02
+output_norm.weight                                      F32        [np.uint64(5376)]               0.02
+rope_freqs.weight                                       F32        [np.uint64(256)]                0.00
+token_embd.weight                                       Q8_0       [np.uint64(5376), np.uint64(262144)]    1428.00
+---------------------------------------------------------------------------------------------------------
+TOTAL                                                                                          33382.61
+
+================================================================================
+SUMMARY BY QUANTIZATION TYPE
+================================================================================
+
+Type             Count   Total (GB)   % of Model
+--------------------------------------------------
+Q8_0               381       27.858        85.5%
+F16                 30        4.737        14.5%
+F32                422        0.005         0.0%
+--------------------------------------------------
+TOTAL              833       32.600       100.0%
+
+================================================================================
+PER-LAYER QUANTIZATION (attention + MLP per decoder layer)
+================================================================================
+
+Layer Type                    Q    K    V    O   FFN_up FFN_gate FFN_down
+--------------------------------------------------------------------------------
+    0 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+    1 sliding_attention     F16  F16 Q8_0 Q8_0      F16      F16      F16
+    2 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+    3 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+    4 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+    5 full_attention       Q8_0 Q8_0    — Q8_0     Q8_0     Q8_0     Q8_0
+    6 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+    7 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+    8 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+    9 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   10 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   11 full_attention       Q8_0 Q8_0    — Q8_0     Q8_0     Q8_0     Q8_0
+   12 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   13 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   14 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   15 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   16 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   17 full_attention       Q8_0 Q8_0    — Q8_0     Q8_0     Q8_0     Q8_0
+   18 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   19 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   20 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   21 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   22 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   23 full_attention       Q8_0 Q8_0    — Q8_0     Q8_0     Q8_0     Q8_0
+   24 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   25 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   26 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   27 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   28 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   29 full_attention       Q8_0 Q8_0    — Q8_0     Q8_0     Q8_0     Q8_0
+   30 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   31 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   32 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   33 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   34 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   35 full_attention       Q8_0 Q8_0    — Q8_0     Q8_0     Q8_0     Q8_0
+   36 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   37 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   38 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   39 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   40 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   41 full_attention       Q8_0 Q8_0    — Q8_0     Q8_0     Q8_0     Q8_0
+   42 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   43 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   44 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   45 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   46 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   47 full_attention       Q8_0 Q8_0    — Q8_0     Q8_0     Q8_0     Q8_0
+   48 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   49 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   50 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   51 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   52 sliding_attention     F16  F16 Q8_0 Q8_0      F16      F16      F16
+   53 full_attention        F16  F16    — Q8_0      F16      F16      F16
+   54 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   55 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   56 sliding_attention    Q8_0 Q8_0 Q8_0 Q8_0     Q8_0     Q8_0     Q8_0
+   57 sliding_attention     F16  F16 Q8_0 Q8_0      F16      F16      F16
+   58 sliding_attention     F16  F16 Q8_0 Q8_0      F16      F16      F16
+   59 full_attention        F16  F16    — Q8_0      F16      F16      F16
+
+================================================================================
+NOTES
+================================================================================
+
+Compare with another quantization by running this script again with a different --quant flag.
+For example:
+    python inspect_gguf.py --model unsloth/gemma-4-31B-it-GGUF --quant Q8_0
+    python inspect_gguf.py --model unsloth/gemma-4-31B-it-GGUF --quant UD-Q4_K_XL
+
+Key quantization types:
+    F32      — 32-bit float (uncompressed)
+    F16      — 16-bit float (half precision)
+    Q8_0     — 8-bit quantization (essentially lossless)
+    Q6_K     — 6-bit K-quant (near-lossless)
+    Q5_K     — 5-bit K-quant (good quality)
+    Q4_K     — 4-bit K-quant (balanced)
+    Q3_K     — 3-bit K-quant (aggressive compression)
+    IQ types — Importance-matrix variants with non-linear quantization
+

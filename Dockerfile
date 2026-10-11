@@ -35,6 +35,10 @@ RUN set -eux; \
 # ── Clone uhu (git clone so users can `git pull` later) ──────────
 RUN git clone https://github.com/andreisminsk/uhu.git /opt/uhu
 
+# ── Include llama-huggingface experiment folder (untracked in git,
+#    so it must be COPY-ed from the build context) ─────────────────
+COPY llama-huggingface /opt/uhu/llama-huggingface
+
 # ── Create venv, install uhu (editable, all extras), and pre-download ─
 # Chromium for the browser tool. Base install now includes playwright;
 # `playwright install --with-deps chromium` fetches the browser binary
