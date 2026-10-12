@@ -136,6 +136,7 @@ class CommandMixin:
             "  /v, /ver, /version           Show version\n"
             "  /sober                       Re-inject system prompt to refocus the model\n"
             "  /compact                     Summarize history into a compact briefing\n"
+            "  /compact force               Force compaction even if all messages fit the recent budget\n"
             "  /compact memory [project|agent]   Compact memory file using LLM\n"
             "  /auto                        Toggle auto-all mode / show approval settings\n"
             "  /auto reset                  Clear session auto-approvals\n"
@@ -293,7 +294,14 @@ class CommandMixin:
 
     def do_compact(self, args_str=""):
         # Handle memory compaction: /compact memory [project|agent]
+        # /compact force — compact even when every message fits the recent
+        # budget (huge-context models may need compaction far below the
+        # 30%-of-ctx budget threshold).
         args = (args_str or "").strip().lower()
+        force = False
+        if args.startswith("force"):
+            force = True
+            args = args[len("force"):].strip()
         if args.startswith("memory"):
             scope = "project"
             remainder = args[len("memory"):].strip()
@@ -343,10 +351,16 @@ class CommandMixin:
         sys_msgs = [m for m in self.history if m["role"] == "system"]
 
         if not older_msgs:
-            # No older messages to summarize — just keep what we have
-            agent_print("[Context is already compact — no older messages to compress]\n")
-            self.show_ctx()
-            return
+            if not force:
+                # No older messages to summarize — just keep what we have
+                agent_print("[Context is already compact — no older messages to compress]\n")
+                self.show_ctx()
+                return
+            # Forced compaction: summarize the whole conversation, keep no
+            # verbatim tail — the proportional budget is exactly what
+            # force overrides.
+            older_msgs = msgs
+            recent_msgs = []
 
         # Try to summarize older messages
         summary = None

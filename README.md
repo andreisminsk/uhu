@@ -16,7 +16,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 - **Skills mode** (`--skills` - off by default): Invoke development skills (code-review, test-gen, doc-gen, plan, md2pdf, docx2md, what-if, root-cause, problem-solving, architect, medicine, business-coach, pro-bidder, text-writer, graph-ai, svg2png, git-uncommitted) and custom skills
 - **Streaming support** (`--stream`): Token-by-token output
 - **Session persistence**: Save/restore conversations with `/save` and `/restore`
-- **Auto-compaction**: `/compact` summarizes history to free context
+- **Auto-compaction**: `/compact` summarizes history to free context (`/compact force` for huge-context models; auto-compacts at 95% usage, warns at 85%)
 - **Permanent memory**: `/memorize` saves instructions/facts across sessions via PROJ-MEMORY.md and AGENT-MEMORY.md
 - **File caching**: Previous versions saved to `.uhu/.cache/` for diff review
 - **In-memory rollback**: Auto-restore files on WRITE/EDIT failures
@@ -516,7 +516,8 @@ uhu --no-autosave --no-cache
 | `/v`, `/ver`, `/version`           | Show version (also `-v` CLI flag)                                                                                                                            |
 | `/history`                         | Show context usage bar                                                                                                                                       |
 | `/sober`                           | Re-inject system prompt to refocus the model. Use it when you see that model becomes inadequate, but you want to preserve context and continue conversation. |
-| `/compact`                         | Summarize history into a compact briefing                                                                                                                    |
+| `/compact`                         | Summarize history into a compact briefing. Keeps recent messages verbatim (30% of context budget) and summarizes older ones.                                 |
+| `/compact force`                   | Force compaction even when all messages fit the recent budget — useful for huge-context models (e.g. 1M tokens) where the proportional budget is too generous. Summarizes the whole conversation, keeping no verbatim tail. |
 | `/compact memory [project\|agent]` | Compact memory file using LLM deduplication                                                                                                                  |
 | `/memorize <text>`                 | Add entry to project memory (auto-classified)                                                                                                                |
 | `/memorize project <text>`         | Add entry to project memory (PROJ-MEMORY.md)                                                                                                                 |
