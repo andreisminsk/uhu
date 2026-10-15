@@ -5,7 +5,8 @@ Actions:
 - capture: bring a window to foreground (optional), optionally send keystrokes,
   then capture the screen / window / region to a PNG file
 - keys: bring a window to foreground and send keystrokes (no capture)
-- click: bring a window to foreground and click (window center or coordinates)
+- click: click a point — window-relative (process + x/y), screen-absolute (x/y only),
+  or window center (process only)
 
 Windows backend uses a one-shot PowerShell script (proven pattern from the
 build-screenshots session: Get-Process → SetForegroundWindow → SendKeys →
@@ -17,6 +18,7 @@ images itself.
 """
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -52,7 +54,8 @@ Actions:
 - capture: focus a window (optional), optionally send keystrokes, then capture
   screen / window / region to a PNG. Auto-safe without keys; requires approval with keys.
 - keys: focus a window and send keystrokes (no capture). Requires approval.
-- click: focus a window and click (window center or x/y coordinates). Requires approval.
+- click: click a point — window-relative ({process, x, y}), screen-absolute ({x, y}),
+  or window center ({process}). Requires approval. See COORDINATE SPACES below.
 
 Typical flow: list_windows → capture (with optional keys) → image_analysis on the PNG.
 The capture action supports an optional `keys` param so focus → type → settle → capture
@@ -74,26 +77,45 @@ Parameters (JSON object):
 - process (string, optional): process name to focus (e.g. "mm"). Required for window-targeted actions.
 - keys (string, optional): keystrokes to send after focusing. SendKeys syntax on Windows
   (e.g. "hello", "{ENTER}", "{INS}", "^s" for Ctrl+S). Max 200 chars.
-- click (object, optional): {"x": int, "y": int, "button": "left"|"right"|"middle"} or
-  {"process": "name", "button": "left"} — click window center or absolute coordinates.
+- click (object, optional): click spec — three coordinate modes, NEVER mix them:
+  1. {"process": "name", "x": int, "y": int, "button": "left"|"right"|"middle"} —
+     WINDOW-RELATIVE click: x,y are offsets from the window's top-left corner.
+     Use this for points located in a target=window / target=foreground capture.
+  2. {"x": int, "y": int, "button": ...} — SCREEN-ABSOLUTE click: x,y are full-screen
+     coordinates. Use ONLY for points located in a target=screen / target=region capture
+     or a full-screen (macOS/Linux) capture.
+  3. {"process": "name", "button": ...} — click the window CENTER (no coordinates needed).
 - delay_ms (integer, optional, default 800): settle delay after focus and after keys.
 - region (object, optional): {"x": int, "y": int, "width": int, "height": int} for target=region.
+  Screen-absolute coordinates (origin = screen top-left).
 - path (string, optional): output PNG path. Defaults to .uhu/.cache/ui_automation_<ts>.png
+
+COORDINATE SPACES — the #1 source of misclicks:
+- Windows: target=window and target=foreground PNGs have their origin at the captured
+  window's top-left corner → coordinates read from them are WINDOW-RELATIVE. Click such
+  points with click={"process": ..., "x": ..., "y": ...}.
+- Windows: target=screen and target=region PNGs use screen coordinates (origin = screen
+  top-left, 0,0). Click such points with click={"x": ..., "y": ...}.
+- macOS/Linux: captures are ALWAYS full-screen → coordinates are screen-absolute.
+- Every capture result message states which space the PNG uses — check it before clicking.
+- Never guess coordinates: locate the point with image_analysis on a fresh capture first.
 
 Examples:
 - {"action": "list_windows"}
 - {"action": "capture", "target": "window", "process": "mm"}
 - {"action": "capture", "target": "window", "process": "mm", "keys": "hello{ENTER}world"}
 - {"action": "keys", "process": "mm", "keys": "^s"}
-- {"action": "click", "click": {"process": "mm", "button": "left"}}"""
+- {"action": "click", "click": {"process": "mm", "x": 1360, "y": 218}} (window-relative)
+- {"action": "click", "click": {"x": 1360, "y": 218}} (screen-absolute)
+- {"action": "click", "click": {"process": "mm", "button": "left"}} (window center)"""
     parameters = {
         "action": {"type": "string", "required": False, "description": "list_windows | capture | keys | click"},
-        "target": {"type": "string", "required": False, "description": "screen | window | region (capture only)"},
+        "target": {"type": "string", "required": False, "description": "screen | window | region | foreground (capture only)"},
         "process": {"type": "string", "required": False, "description": "Process name to focus"},
         "keys": {"type": "string", "required": False, "description": "Keystrokes to send after focusing"},
-        "click": {"type": "object", "required": False, "description": "Click spec: {x,y,button} or {process,button}"},
+        "click": {"type": "object", "required": False, "description": "Click spec: {process,x,y,button}=window-relative | {x,y,button}=screen-absolute | {process,button}=window center"},
         "delay_ms": {"type": "integer", "required": False, "description": "Settle delay in ms (default 800)"},
-        "region": {"type": "object", "required": False, "description": "Region spec: {x,y,width,height}"},
+        "region": {"type": "object", "required": False, "description": "Region spec: {x,y,width,height} — screen-absolute coordinates"},
         "path": {"type": "string", "required": False, "description": "Output PNG path"},
     }
 
@@ -112,8 +134,16 @@ Examples:
             return None, f"Error: unknown action '{action}'. Use list_windows, capture, keys, or click."
         if action == "keys" and not params.get("keys"):
             return None, "Error: 'keys' action requires a 'keys' parameter."
-        if action == "click" and not params.get("click"):
-            return None, "Error: 'click' action requires a 'click' parameter."
+        if action == "click":
+            click = params.get("click")
+            if not click:
+                return None, "Error: 'click' action requires a 'click' parameter."
+            if not isinstance(click, dict):
+                return None, ("Error: 'click' must be an object: {process,x,y,button} "
+                              "(window-relative), {x,y,button} (screen-absolute), "
+                              "or {process,button} (window center).")
+            if click.get("button") and click.get("button") not in ("left", "right", "middle"):
+                return None, "Error: click 'button' must be left, right, or middle."
         if action == "capture":
             target = params.get("target", "screen")
             if target not in ("screen", "window", "region", "foreground"):
@@ -145,6 +175,26 @@ Examples:
         os.makedirs(out_dir, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         return os.path.join(out_dir, f"ui_automation_{ts}.png")
+
+    def _capture_message(self, out_path, target, ps_output=None, full_screen=False):
+        """Build the capture result message, explicitly stating the PNG's coordinate space."""
+        if full_screen:
+            # macOS/Linux backends always capture the full screen regardless of target
+            return (f"Captured to {out_path} (full-screen, coordinates: screen-absolute, "
+                    f"origin = screen top-left). Use image_analysis to analyze the PNG.")
+        dims = ""
+        if ps_output:
+            m = re.search(r"captured (\d+)x(\d+)", ps_output)
+            if m:
+                dims = f", {m.group(1)}x{m.group(2)} px"
+        if target in ("window", "foreground"):
+            space = ("window-relative — PNG origin = captured window's top-left corner; "
+                     'click such points with click={"process": ..., "x": ..., "y": ...}')
+        else:
+            space = ("screen-absolute — PNG origin = screen top-left (0,0); "
+                     'click such points with click={"x": ..., "y": ...}')
+        return (f"Captured to {out_path} (target: {target}{dims}, coordinates: {space}). "
+                f"Use image_analysis to analyze the PNG.")
 
     # ── Windows backend ────────────────────────────────────────────────
     def _ps_script(self, params, out_path, include_capture):
@@ -205,18 +255,34 @@ Examples:
                 f"Start-Sleep -Milliseconds {delay_ms}",
             ]
         if click:
+            has_xy = ("x" in click) or ("y" in click)
             if click.get("process"):
+                # Focus the target window first, then resolve coordinates in its space
                 lines += [
                     f"$cp = Get-Process -Name '{psq(click['process'])}' -ErrorAction SilentlyContinue | Where-Object {{ $_.MainWindowHandle -ne 0 }} | Select-Object -First 1",
                     "if (-not $cp) { Write-Output 'NOT RUNNING'; exit 1 }",
                     "$ch = $cp.MainWindowHandle",
                     "if ($ch -eq [IntPtr]::Zero) { Write-Output 'NO WINDOW HANDLE'; exit 1 }",
+                    "if ([W32]::IsIconic($ch)) { [W32]::ShowWindow($ch, 9) | Out-Null }",
+                    "[W32]::SetForegroundWindow($ch) | Out-Null",
+                    "Start-Sleep -Milliseconds 300",
                     "$r = New-Object W32+RECT",
                     "[W32]::GetWindowRect($ch, [ref]$r) | Out-Null",
-                    "$cx = [int](($r.Left + $r.Right) / 2)",
-                    "$cy = [int](($r.Top + $r.Bottom) / 2)",
                 ]
+                if has_xy:
+                    # Window-relative coords — same space as target=window captures
+                    lines += [
+                        f"$cx = $r.Left + {int(click.get('x', 0))}",
+                        f"$cy = $r.Top + {int(click.get('y', 0))}",
+                    ]
+                else:
+                    # Window center
+                    lines += [
+                        "$cx = [int](($r.Left + $r.Right) / 2)",
+                        "$cy = [int](($r.Top + $r.Bottom) / 2)",
+                    ]
             else:
+                # Screen-absolute coordinates — no focus, click exactly where told
                 lines += [
                     f"$cx = {int(click.get('x', 0))}",
                     f"$cy = {int(click.get('y', 0))}",
@@ -246,6 +312,8 @@ Examples:
                     "$hdc = $g.GetHdc()",
                     "[void][W32]::PrintWindow($fh, $hdc, 2)",
                     "$g.ReleaseHdc($hdc)",
+                    "$cw = $w",
+                    "$cht = $ht",
                 ]
             elif target == "region":
                 lines += [
@@ -257,6 +325,8 @@ Examples:
                     "$bmp = New-Object System.Drawing.Bitmap $rw, $rh",
                     "$g = [System.Drawing.Graphics]::FromImage($bmp)",
                     "$g.CopyFromScreen($rx, $ry, [System.Drawing.Point]::Empty, (New-Object System.Drawing.Size $rw, $rh), [System.Drawing.CopyPixelOperation]::SourceCopy)",
+                    "$cw = $rw",
+                    "$cht = $rh",
                 ]
             elif target == "window" and process:
                 lines += [
@@ -271,6 +341,8 @@ Examples:
                     "$hdc = $g.GetHdc()",
                     "[void][W32]::PrintWindow($h, $hdc, 2)",
                     "$g.ReleaseHdc($hdc)",
+                    "$cw = $w",
+                    "$cht = $ht",
                 ]
             else:  # screen
                 lines += [
@@ -278,11 +350,13 @@ Examples:
                     "$bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height",
                     "$g = [System.Drawing.Graphics]::FromImage($bmp)",
                     "$g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size, [System.Drawing.CopyPixelOperation]::SourceCopy)",
+                    "$cw = $b.Width",
+                    "$cht = $b.Height",
                 ]
             lines += [
                 f"$bmp.Save('{psq(out_path)}')",
                 "$g.Dispose(); $bmp.Dispose()",
-                "Write-Output 'captured'",
+                'Write-Output ("captured {0}x{1}" -f $cw, $cht)',
             ]
         else:
             lines.append("Write-Output 'done'")
@@ -420,15 +494,39 @@ Examples:
                 return err
         return self._macos_send_keys(keys, delay_ms, timeout)
 
+    def _macos_window_geo(self, process, timeout):
+        """Return [x, y, w, h] of the process's front window, or error string."""
+        script = (f'tell application "System Events" to get {{position, size}} '
+                  f'of front window of process "{process}"')
+        rc, out, err = self._run_osascript(script, timeout)
+        if rc != 0:
+            return None, f"Error getting window geometry (may need Accessibility permission): {err or out}"
+        try:
+            return [int(p.strip()) for p in out.split(",")], None
+        except ValueError:
+            return None, f"Error parsing window geometry: {out}"
+
     def _macos_click(self, params, timeout):
         click = params.get("click") or {}
         delay_ms = int(params.get("delay_ms", self._cfg("default_delay_ms", 800)))
-        if click.get("process"):
-            err = self._macos_focus(click["process"], delay_ms, timeout)
+        process = click.get("process")
+        has_xy = ("x" in click) or ("y" in click)
+        if process:
+            err = self._macos_focus(process, delay_ms, timeout)
             if err:
                 return err
-        x = int(click.get("x", 0))
-        y = int(click.get("y", 0))
+            geo, err = self._macos_window_geo(process, timeout)
+            if err:
+                return err
+            if has_xy:
+                # Window-relative (offset from the window's top-left)
+                x, y = geo[0] + int(click.get("x", 0)), geo[1] + int(click.get("y", 0))
+            else:
+                # Window center
+                x, y = geo[0] + geo[2] // 2, geo[1] + geo[3] // 2
+        else:
+            # Screen-absolute
+            x, y = int(click.get("x", 0)), int(click.get("y", 0))
         rc, out, err = self._run_osascript(f"tell application \"System Events\" to click at {{{x}, {y}}}", timeout)
         if rc != 0:
             return f"Error clicking (may need Accessibility permission): {err or out}"
@@ -529,11 +627,31 @@ Examples:
             return "Error: xdotool not found."
         return None
 
+    _X11_BUTTONS = {"left": "1", "middle": "2", "right": "3"}
+
+    def _linux_window_geo(self, wid, timeout):
+        """Return (x, y, w, h) of a window via xdotool, or error string."""
+        try:
+            proc = subprocess.run(["xdotool", "getwindowgeometry", "--shell", wid],
+                                  capture_output=True, timeout=timeout)
+        except FileNotFoundError:
+            return None, "Error: xdotool not found."
+        geo = {}
+        for line in proc.stdout.decode().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                geo[k.strip()] = int(v.strip())
+        if not all(k in geo for k in ("X", "Y", "WIDTH", "HEIGHT")):
+            return None, f"Error parsing window geometry for {wid}."
+        return (geo["X"], geo["Y"], geo["WIDTH"], geo["HEIGHT"]), None
+
     def _linux_click(self, params, timeout):
         if os.environ.get("WAYLAND_DISPLAY"):
             return self._linux_wayland_error()
         click = params.get("click") or {}
         delay_ms = int(params.get("delay_ms", self._cfg("default_delay_ms", 800)))
+        button = self._X11_BUTTONS.get(click.get("button", "left"), "1")
+        has_xy = ("x" in click) or ("y" in click)
         try:
             if click.get("process"):
                 wid, err = self._linux_find_window(click["process"], timeout)
@@ -541,12 +659,23 @@ Examples:
                     return err
                 subprocess.run(["xdotool", "windowactivate", "--sync", wid], capture_output=True, timeout=timeout)
                 time.sleep(delay_ms / 1000.0)
-                subprocess.run(["xdotool", "click", "--window", wid, "1"], capture_output=True, timeout=timeout)
+                geo, err = self._linux_window_geo(wid, timeout)
+                if err:
+                    return err
+                if has_xy:
+                    # Window-relative (offset from the window's top-left)
+                    x, y = geo[0] + int(click.get("x", 0)), geo[1] + int(click.get("y", 0))
+                else:
+                    # Window center
+                    x, y = geo[0] + geo[2] // 2, geo[1] + geo[3] // 2
+                subprocess.run(["xdotool", "mousemove", str(x), str(y)], capture_output=True, timeout=timeout)
+                subprocess.run(["xdotool", "click", button], capture_output=True, timeout=timeout)
             else:
+                # Screen-absolute
                 x = int(click.get("x", 0))
                 y = int(click.get("y", 0))
                 subprocess.run(["xdotool", "mousemove", str(x), str(y)], capture_output=True, timeout=timeout)
-                subprocess.run(["xdotool", "click", "1"], capture_output=True, timeout=timeout)
+                subprocess.run(["xdotool", "click", button], capture_output=True, timeout=timeout)
         except FileNotFoundError:
             return "Error: xdotool not found."
         return None
@@ -576,16 +705,16 @@ Examples:
                     return f"Error: capture failed: {out or err}"
                 if not os.path.isfile(out_path):
                     return f"Error: capture did not produce {out_path}: {err or out}"
-                return f"Captured to {out_path} (target: {params.get('target', 'screen')}). Use image_analysis to analyze the PNG."
+                return self._capture_message(out_path, params.get("target", "screen"), ps_output=out)
             if platform == "macos":
                 err = self._macos_capture(params, out_path, timeout)
                 if err:
                     return err
-                return f"Captured to {out_path} (target: {params.get('target', 'screen')}). Use image_analysis to analyze the PNG."
+                return self._capture_message(out_path, "screen", full_screen=True)
             err = self._linux_capture(params, out_path, timeout)
             if err:
                 return err
-            return f"Captured to {out_path} (target: {params.get('target', 'screen')}). Use image_analysis to analyze the PNG."
+            return self._capture_message(out_path, "screen", full_screen=True)
 
         if action == "keys":
             if platform == "windows":
@@ -605,7 +734,14 @@ Examples:
 
         if action == "click":
             click = params.get("click") or {}
-            click_desc = click.get("process") or f"x={click.get('x', 0)}, y={click.get('y', 0)}"
+            has_xy = ("x" in click) or ("y" in click)
+            if click.get("process") and has_xy:
+                click_desc = (f"window-relative x={click.get('x', 0)}, y={click.get('y', 0)} "
+                              f"in '{click['process']}'")
+            elif click.get("process"):
+                click_desc = f"center of '{click['process']}' window"
+            else:
+                click_desc = f"screen-absolute x={click.get('x', 0)}, y={click.get('y', 0)}"
             if platform == "windows":
                 script = self._ps_script(params, "N/A", include_capture=False)
                 rc, out, err = self._run_ps(script, timeout)
