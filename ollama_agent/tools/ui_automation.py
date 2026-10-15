@@ -6,7 +6,8 @@ Actions:
   then capture the screen / window / region to a PNG file
 - keys: bring a window to foreground and send keystrokes (no capture)
 - click: click a point — window-relative (process + x/y), screen-absolute (x/y only),
-  or window center (process only)
+  or window center (process only); optional modifiers (ctrl/shift/alt/win) for
+  Ctrl+click and friends
 
 Windows backend uses a one-shot PowerShell script (proven pattern from the
 build-screenshots session: Get-Process → SetForegroundWindow → SendKeys →
@@ -38,6 +39,18 @@ def _platform():
 
 # mouse_event flags: left 0x0002/0x0004, right 0x0008/0x0010, middle 0x0020/0x0040
 _MOUSE_FLAGS = {"left": (0x0002, 0x0004), "right": (0x0008, 0x0010), "middle": (0x0020, 0x0040)}
+
+# keybd_event VK codes for click modifiers (KEYEVENTF_KEYUP = 0x0002)
+_VK_MODIFIERS = {"ctrl": 0x11, "shift": 0x10, "alt": 0x12, "win": 0x5B}
+
+
+def _normalize_modifiers(value):
+    """Normalize a click modifiers value to a list of known modifier names."""
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [m.lower() for m in value if isinstance(m, str) and m.lower() in _VK_MODIFIERS]
 
 
 class UiAutomationTool:
@@ -85,6 +98,8 @@ Parameters (JSON object):
      coordinates. Use ONLY for points located in a target=screen / target=region capture
      or a full-screen (macOS/Linux) capture.
   3. {"process": "name", "button": ...} — click the window CENTER (no coordinates needed).
+  Optional "modifiers": "ctrl"|"shift"|"alt"|"win" or a list — held down during the
+  click (e.g. Ctrl+click a link to open it in a new tab). Works with all three modes.
 - delay_ms (integer, optional, default 800): settle delay after focus and after keys.
 - region (object, optional): {"x": int, "y": int, "width": int, "height": int} for target=region.
   Screen-absolute coordinates (origin = screen top-left).
@@ -107,13 +122,14 @@ Examples:
 - {"action": "keys", "process": "mm", "keys": "^s"}
 - {"action": "click", "click": {"process": "mm", "x": 1360, "y": 218}} (window-relative)
 - {"action": "click", "click": {"x": 1360, "y": 218}} (screen-absolute)
-- {"action": "click", "click": {"process": "mm", "button": "left"}} (window center)"""
+- {"action": "click", "click": {"process": "mm", "button": "left"}} (window center)
+- {"action": "click", "click": {"process": "mm", "x": 270, "y": 137, "modifiers": ["ctrl"]}} (Ctrl+click)"""
     parameters = {
         "action": {"type": "string", "required": False, "description": "list_windows | capture | keys | click"},
         "target": {"type": "string", "required": False, "description": "screen | window | region | foreground (capture only)"},
         "process": {"type": "string", "required": False, "description": "Process name to focus"},
         "keys": {"type": "string", "required": False, "description": "Keystrokes to send after focusing"},
-        "click": {"type": "object", "required": False, "description": "Click spec: {process,x,y,button}=window-relative | {x,y,button}=screen-absolute | {process,button}=window center"},
+        "click": {"type": "object", "required": False, "description": "Click spec: {process,x,y,button}=window-relative | {x,y,button}=screen-absolute | {process,button}=window center; optional modifiers: ctrl/shift/alt/win (string or list)"},
         "delay_ms": {"type": "integer", "required": False, "description": "Settle delay in ms (default 800)"},
         "region": {"type": "object", "required": False, "description": "Region spec: {x,y,width,height} — screen-absolute coordinates"},
         "path": {"type": "string", "required": False, "description": "Output PNG path"},
@@ -144,6 +160,10 @@ Examples:
                               "or {process,button} (window center).")
             if click.get("button") and click.get("button") not in ("left", "right", "middle"):
                 return None, "Error: click 'button' must be left, right, or middle."
+            mods = click.get("modifiers")
+            if mods is not None and not _normalize_modifiers(mods):
+                return None, ("Error: click 'modifiers' must be 'ctrl', 'shift', 'alt', or 'win' "
+                              "(a single string or a list of them).")
         if action == "capture":
             target = params.get("target", "screen")
             if target not in ("screen", "window", "region", "foreground"):
@@ -224,6 +244,7 @@ Examples:
             "    [DllImport(\"user32.dll\")] public static extern bool GetWindowRect(IntPtr h, out RECT r);",
             "    [DllImport(\"user32.dll\")] public static extern bool SetCursorPos(int x, int y);",
             "    [DllImport(\"user32.dll\")] public static extern void mouse_event(uint f, uint dx, uint dy, uint d, UIntPtr e);",
+            "    [DllImport(\"user32.dll\")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr e);",
             "    [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();",
             "    [DllImport(\"user32.dll\")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);",
             "    public struct RECT { public int Left, Top, Right, Bottom; }",
@@ -289,13 +310,19 @@ Examples:
                 ]
             button = click.get("button", "left")
             down, up = _MOUSE_FLAGS.get(button, _MOUSE_FLAGS["left"])
+            mods = _normalize_modifiers(click.get("modifiers"))
+            lines.append("[W32]::SetCursorPos($cx, $cy) | Out-Null")
+            lines.append("Start-Sleep -Milliseconds 100")
+            # Hold modifier keys (Ctrl+click etc.): keybd_event down → click → up
+            for m in mods:
+                lines.append(f"[W32]::keybd_event({_VK_MODIFIERS[m]}, 0, 0, [UIntPtr]::Zero)")
             lines += [
-                "[W32]::SetCursorPos($cx, $cy) | Out-Null",
-                "Start-Sleep -Milliseconds 100",
                 f"[W32]::mouse_event({down}, 0, 0, 0, [UIntPtr]::Zero)",
                 f"[W32]::mouse_event({up}, 0, 0, 0, [UIntPtr]::Zero)",
-                f"Start-Sleep -Milliseconds {delay_ms}",
             ]
+            for m in reversed(mods):
+                lines.append(f"[W32]::keybd_event({_VK_MODIFIERS[m]}, 0, 2, [UIntPtr]::Zero)")
+            lines.append(f"Start-Sleep -Milliseconds {delay_ms}")
         if include_capture:
             if target == "foreground":
                 # Capture whatever window is currently on top (dialogs included)
@@ -527,7 +554,13 @@ Examples:
         else:
             # Screen-absolute
             x, y = int(click.get("x", 0)), int(click.get("y", 0))
+        mods = _normalize_modifiers(click.get("modifiers"))
+        key_names = {"ctrl": "control", "shift": "shift", "alt": "option", "win": "command"}
+        for m in mods:
+            self._run_osascript(f'tell application "System Events" to key down {key_names[m]}', timeout)
         rc, out, err = self._run_osascript(f"tell application \"System Events\" to click at {{{x}, {y}}}", timeout)
+        for m in reversed(mods):
+            self._run_osascript(f'tell application "System Events" to key up {key_names[m]}', timeout)
         if rc != 0:
             return f"Error clicking (may need Accessibility permission): {err or out}"
         return None
@@ -652,6 +685,8 @@ Examples:
         delay_ms = int(params.get("delay_ms", self._cfg("default_delay_ms", 800)))
         button = self._X11_BUTTONS.get(click.get("button", "left"), "1")
         has_xy = ("x" in click) or ("y" in click)
+        mods = _normalize_modifiers(click.get("modifiers"))
+        xdotool_mods = {"ctrl": "ctrl", "shift": "shift", "alt": "alt", "win": "super"}
         try:
             if click.get("process"):
                 wid, err = self._linux_find_window(click["process"], timeout)
@@ -668,14 +703,16 @@ Examples:
                 else:
                     # Window center
                     x, y = geo[0] + geo[2] // 2, geo[1] + geo[3] // 2
-                subprocess.run(["xdotool", "mousemove", str(x), str(y)], capture_output=True, timeout=timeout)
-                subprocess.run(["xdotool", "click", button], capture_output=True, timeout=timeout)
             else:
                 # Screen-absolute
                 x = int(click.get("x", 0))
                 y = int(click.get("y", 0))
-                subprocess.run(["xdotool", "mousemove", str(x), str(y)], capture_output=True, timeout=timeout)
-                subprocess.run(["xdotool", "click", button], capture_output=True, timeout=timeout)
+            subprocess.run(["xdotool", "mousemove", str(x), str(y)], capture_output=True, timeout=timeout)
+            for m in mods:
+                subprocess.run(["xdotool", "keydown", xdotool_mods[m]], capture_output=True, timeout=timeout)
+            subprocess.run(["xdotool", "click", button], capture_output=True, timeout=timeout)
+            for m in reversed(mods):
+                subprocess.run(["xdotool", "keyup", xdotool_mods[m]], capture_output=True, timeout=timeout)
         except FileNotFoundError:
             return "Error: xdotool not found."
         return None
@@ -735,13 +772,15 @@ Examples:
         if action == "click":
             click = params.get("click") or {}
             has_xy = ("x" in click) or ("y" in click)
+            mods = _normalize_modifiers(click.get("modifiers"))
+            mod_suffix = f" +{' +'.join(mods)}" if mods else ""
             if click.get("process") and has_xy:
                 click_desc = (f"window-relative x={click.get('x', 0)}, y={click.get('y', 0)} "
-                              f"in '{click['process']}'")
+                              f"in '{click['process']}'{mod_suffix}")
             elif click.get("process"):
-                click_desc = f"center of '{click['process']}' window"
+                click_desc = f"center of '{click['process']}' window{mod_suffix}"
             else:
-                click_desc = f"screen-absolute x={click.get('x', 0)}, y={click.get('y', 0)}"
+                click_desc = f"screen-absolute x={click.get('x', 0)}, y={click.get('y', 0)}{mod_suffix}"
             if platform == "windows":
                 script = self._ps_script(params, "N/A", include_capture=False)
                 rc, out, err = self._run_ps(script, timeout)
