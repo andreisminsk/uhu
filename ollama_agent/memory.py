@@ -269,7 +269,7 @@ def build_memory_prompt(workdir):
 def compact_memory(scope, workdir):
     """Compact a memory file using llm_query to summarize and deduplicate.
     Returns the new line count."""
-    from .tools._config import get_config
+    from .tools._config import load_config
     sections = load_memory(scope, workdir)
     if not sections:
         return 0
@@ -284,7 +284,7 @@ def compact_memory(scope, workdir):
         f"Current memory:\n{content}"
     )
 
-    cfg = get_config(workdir)
+    cfg = load_config(workdir)
     model = cfg.get("llm_query", {}).get("model", "glm-5.3-flash:cloud")
     api_url = cfg.get("llm_query", {}).get("api_url", "http://localhost:11434")
 
