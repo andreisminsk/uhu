@@ -12,6 +12,8 @@ with prefixed names: mcp_<server>_<tool>.
 
 import json
 import os
+import shutil
+import queue
 import subprocess
 from ..actions import agent_print
 import threading
@@ -22,6 +24,14 @@ try:
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
+
+
+class MCPError(RuntimeError):
+    """JSON-RPC error returned by an MCP server — reconnecting won't help."""
+
+
+class MCPConnectionError(RuntimeError):
+    """Transport/connection failure — a reconnect may restore the session."""
 
 
 # ── MCP Tool wrapper ────────────────────────────────────────────────────
@@ -120,13 +130,32 @@ class MCPTool:
             return ".md"
         return ".txt"
 
-    def execute(self, params, workdir=None):
-        """Invoke the MCP tool and return the result."""
+    def _invoke_with_reconnect(self, params):
+        """Call the tool; on connection loss, reconnect once and retry.
+
+        JSON-RPC errors from the server (MCPError) are not retried — the
+        transport is alive, the tool call itself simply failed.
+        """
         try:
-            result = self.transport.call_tool(
+            return self.transport.call_tool(
                 tool_name=self.original_name,
                 arguments=params or {},
             )
+        except MCPConnectionError as e:
+            try:
+                self.transport.reconnect()
+            except Exception as re_err:
+                raise MCPConnectionError(
+                    f"connection lost ({e}); reconnect failed: {re_err}")
+            return self.transport.call_tool(
+                tool_name=self.original_name,
+                arguments=params or {},
+            )
+
+    def execute(self, params, workdir=None):
+        """Invoke the MCP tool and return the result."""
+        try:
+            result = self._invoke_with_reconnect(params)
             if isinstance(result, dict):
                 content = result.get("content", [])
                 if content:
@@ -240,7 +269,7 @@ class SSETransport:
                 headers={"Accept": "text/event-stream"})
             self._sse_response.raise_for_status()
         except Exception as e:
-            raise RuntimeError(f"MCP SSE: failed to connect to {sse_url}: {e}")
+            raise MCPConnectionError(f"MCP SSE: failed to connect to {sse_url}: {e}")
 
         self._sse_thread = threading.Thread(target=self._sse_reader, daemon=True)
         self._sse_thread.start()
@@ -288,9 +317,10 @@ class SSETransport:
                         continue
                     try:
                         parsed = json.loads(data)
-                        self._response_queue.put(parsed)
                     except (json.JSONDecodeError, UnicodeDecodeError):
-                        pass
+                        parsed = None
+                    if parsed is not None and not self._handle_server_message(parsed):
+                        self._response_queue.put(parsed)
                     event_type = None
         except Exception:
             pass
@@ -311,7 +341,7 @@ class SSETransport:
             response = self._session.post(self.message_url, json=payload, timeout=self.timeout)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"MCP request failed: {e}")
+            raise MCPConnectionError(f"MCP request failed: {e}")
 
         try:
             data = response.json()
@@ -319,20 +349,21 @@ class SSETransport:
                 return data["result"]
             elif "error" in data:
                 error = data["error"]
-                raise RuntimeError(f"MCP error {error.get('code')}: {error.get('message')}")
+                raise MCPError(f"MCP error {error.get('code')}: {error.get('message')}")
         except (json.JSONDecodeError, ValueError):
             pass
 
         try:
             result = self._response_queue.get(timeout=self.timeout)
-            if "result" in result:
-                return result["result"]
-            elif "error" in result:
-                error = result["error"]
-                raise RuntimeError(f"MCP error {error.get('code')}: {error.get('message')}")
-            return result
-        except Exception:
-            return {}
+        except queue.Empty:
+            raise MCPConnectionError(
+                f"MCP server '{self.name}' did not respond within {self.timeout}s")
+        if "result" in result:
+            return result["result"]
+        elif "error" in result:
+            error = result["error"]
+            raise MCPError(f"MCP error {error.get('code')}: {error.get('message')}")
+        return result
 
     def _send_notification(self, method, params):
         payload = {"jsonrpc": "2.0", "method": method, "params": params}
@@ -340,6 +371,40 @@ class SSETransport:
             self._session.post(self.message_url, json=payload, timeout=self.timeout)
         except Exception:
             pass
+
+    def reconnect(self):
+        """Re-establish the SSE stream after a connection loss."""
+        self.close()
+        return self.connect()
+
+    def _handle_server_message(self, data):
+        """Gracefully handle server-initiated requests/notifications.
+
+        uhu implements no server→client features (sampling, roots,
+        elicitation): pings are answered, any other server request gets a
+        method-not-found error so the server can degrade gracefully, and
+        notifications are ignored. Returns True when the message was
+        server-initiated and must not be treated as a pending response.
+        """
+        method = data.get("method")
+        if not method:
+            return False
+        req_id = data.get("id")
+        if req_id is None:
+            return True  # notification — nothing to answer
+        if method == "ping":
+            response = {"jsonrpc": "2.0", "id": req_id, "result": {}}
+        else:
+            response = {"jsonrpc": "2.0", "id": req_id, "error": {
+                "code": -32601,
+                "message": f"Method '{method}' is not supported by the uhu client",
+            }}
+        if self.message_url:
+            try:
+                self._session.post(self.message_url, json=response, timeout=self.timeout)
+            except Exception:
+                pass
+        return True
 
     def close(self):
         if self._session:
@@ -393,7 +458,7 @@ class StreamableHTTPTransport:
             response = self._session.post(self.url, json=payload, timeout=self.timeout)
             if not response.ok:
                 body = response.text[:500] if response.text else "(empty)"
-                raise RuntimeError(f"HTTP {response.status_code} {response.reason} for url: {response.url}\nResponse: {body}")
+                raise MCPConnectionError(f"HTTP {response.status_code} {response.reason} for url: {response.url}\nResponse: {body}")
 
             # Capture session ID from response header
             session_id = response.headers.get("Mcp-Session-Id")
@@ -410,10 +475,10 @@ class StreamableHTTPTransport:
                 return data["result"]
             elif "error" in data:
                 error = data["error"]
-                raise RuntimeError(f"MCP error {error.get('code')}: {error.get('message')}")
+                raise MCPError(f"MCP error {error.get('code')}: {error.get('message')}")
             return data
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"MCP request failed: {e}")
+            raise MCPConnectionError(f"MCP request failed: {e}")
 
     def list_tools(self):
         result = self._send_request("tools/list", {})
@@ -432,7 +497,7 @@ class StreamableHTTPTransport:
             if not response.ok:
                 # Include response body in error for debugging
                 body = response.text[:500] if response.text else "(empty)"
-                raise RuntimeError(f"HTTP {response.status_code} {response.reason} for url: {response.url}\nResponse: {body}")
+                raise MCPConnectionError(f"HTTP {response.status_code} {response.reason} for url: {response.url}\nResponse: {body}")
             content_type = response.headers.get("Content-Type", "")
 
             if "text/event-stream" in content_type:
@@ -443,10 +508,10 @@ class StreamableHTTPTransport:
                 return data["result"]
             elif "error" in data:
                 error = data["error"]
-                raise RuntimeError(f"MCP error {error.get('code')}: {error.get('message')}")
+                raise MCPError(f"MCP error {error.get('code')}: {error.get('message')}")
             return data
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"MCP request failed: {e}")
+            raise MCPConnectionError(f"MCP request failed: {e}")
 
     def _parse_sse_response(self, text):
         result = None
@@ -456,13 +521,18 @@ class StreamableHTTPTransport:
                 if data:
                     try:
                         parsed = json.loads(data)
-                        if "result" in parsed:
-                            result = parsed["result"]
-                        elif "error" in parsed:
-                            error = parsed["error"]
-                            raise RuntimeError(f"MCP error {error.get('code')}: {error.get('message')}")
                     except json.JSONDecodeError:
-                        pass
+                        continue
+                    if "method" in parsed:
+                        # Server-initiated request/notification in the stream —
+                        # uhu supports no server→client features; skip it and
+                        # keep looking for our response.
+                        continue
+                    if "result" in parsed:
+                        result = parsed["result"]
+                    elif "error" in parsed:
+                        error = parsed["error"]
+                        raise MCPError(f"MCP error {error.get('code')}: {error.get('message')}")
         return result or {}
 
     def _send_notification(self, method, params):
@@ -471,6 +541,11 @@ class StreamableHTTPTransport:
             self._session.post(self.url, json=payload, timeout=self.timeout)
         except Exception:
             pass
+
+    def reconnect(self):
+        """Re-initialize the HTTP session (new Mcp-Session-Id is captured)."""
+        self.close()
+        return self.connect()
 
     def close(self):
         if self._session:
@@ -494,16 +569,32 @@ class StdioTransport:
         self._request_id = 0
         self._lock = threading.Lock()
 
+    def _resolve_command(self):
+        """Resolve the command via PATH (handles npx → npx.cmd on Windows)."""
+        if os.path.sep in self.command or os.path.isabs(self.command):
+            return self.command
+        return shutil.which(self.command) or self.command
+
     def connect(self):
         env = os.environ.copy()
         env.update(self.env)
         env["MCP_SERVER"] = self.name
 
-        cmd = [self.command] + self.args
-        # On Windows, use shell=True to find commands like npx in PATH
-        self._process = subprocess.Popen(
-            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
-            shell=os.name == 'nt')
+        # No shell=True: with list argv it makes quoting fragile on Windows.
+        # Resolve the command via PATH instead; .cmd/.bat shims (npx etc.) run
+        # through an explicit `cmd /c`, everything else via CreateProcess with
+        # proper list2cmdline quoting.
+        resolved = self._resolve_command()
+        cmd = [resolved] + self.args
+        if os.name == "nt" and os.path.splitext(resolved)[1].lower() in (".cmd", ".bat"):
+            cmd = ["cmd", "/c"] + cmd
+        try:
+            self._process = subprocess.Popen(
+                cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env,
+                shell=False)
+        except OSError as e:
+            raise MCPConnectionError(
+                f"failed to start MCP server '{self.name}': {resolved}: {e}")
 
         init_result = self._send_request("initialize", {
             "protocolVersion": "2025-03-26",
@@ -539,26 +630,34 @@ class StdioTransport:
 
     def _send_and_receive(self, payload):
         if not self._process or self._process.poll() is not None:
-            raise RuntimeError(f"MCP server '{self.name}' process is not running")
+            raise MCPConnectionError(f"MCP server '{self.name}' process is not running")
         self._write_line(json.dumps(payload))
-        response_line = self._process.stdout.readline()
-        if not response_line:
-            stderr = ""
+        # Read until the response to OUR request arrives. Server-initiated
+        # requests/notifications (sampling, roots, pings, log messages) are
+        # answered or ignored inline — uhu supports no server→client features.
+        for _ in range(64):
+            response_line = self._process.stdout.readline()
+            if not response_line:
+                stderr = ""
+                try:
+                    stderr = self._process.stderr.read().decode("utf-8", errors="replace")
+                except Exception:
+                    pass
+                raise MCPConnectionError(f"MCP server '{self.name}' closed connection. stderr: {stderr[:500]}")
             try:
-                stderr = self._process.stderr.read().decode("utf-8", errors="replace")
-            except Exception:
-                pass
-            raise RuntimeError(f"MCP server '{self.name}' closed connection. stderr: {stderr[:500]}")
-        try:
-            data = json.loads(response_line.decode("utf-8") if isinstance(response_line, bytes) else response_line)
-        except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            raise RuntimeError(f"MCP server '{self.name}' returned invalid JSON: {e}")
-        if "result" in data:
-            return data["result"]
-        elif "error" in data:
-            error = data["error"]
-            raise RuntimeError(f"MCP error {error.get('code')}: {error.get('message')}")
-        return data
+                data = json.loads(response_line.decode("utf-8") if isinstance(response_line, bytes) else response_line)
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                raise MCPConnectionError(f"MCP server '{self.name}' returned invalid JSON: {e}")
+            if self._handle_server_message(data):
+                continue
+            if "result" in data:
+                return data["result"]
+            elif "error" in data:
+                error = data["error"]
+                raise MCPError(f"MCP error {error.get('code')}: {error.get('message')}")
+            return data
+        raise MCPConnectionError(
+            f"MCP server '{self.name}' sent too many unsolicited messages")
 
     def _write_line(self, message):
         if self._process and self._process.stdin:
@@ -575,6 +674,47 @@ class StdioTransport:
                     self._process.kill()
                 except Exception:
                     pass
+        self._process = None
+
+    def reconnect(self):
+        """Restart the server process and re-initialize the session."""
+        self.close()
+        return self.connect()
+
+    def _handle_server_message(self, data):
+        """Gracefully handle server-initiated requests/notifications.
+
+        uhu implements no server→client features (sampling, roots,
+        elicitation): pings are answered, any other server request gets a
+        method-not-found error so the server can degrade gracefully, and
+        notifications are ignored. Returns True when the message was
+        server-initiated and must not be treated as the pending response.
+        """
+        method = data.get("method")
+        if not method:
+            return False
+        req_id = data.get("id")
+        if req_id is None:
+            return True  # notification — nothing to answer
+        if method == "ping":
+            self._write_response(req_id, result={})
+        else:
+            self._write_response(req_id, error={
+                "code": -32601,
+                "message": f"Method '{method}' is not supported by the uhu client",
+            })
+        return True
+
+    def _write_response(self, req_id, result=None, error=None):
+        payload = {"jsonrpc": "2.0", "id": req_id}
+        if error is not None:
+            payload["error"] = error
+        else:
+            payload["result"] = result if result is not None else {}
+        try:
+            self._write_line(json.dumps(payload))
+        except Exception:
+            pass
 
 
 # ── MCP Manager ─────────────────────────────────────────────────────────

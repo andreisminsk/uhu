@@ -706,7 +706,19 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         """
         # Auto-approve all actions for non-interactive mode
         self.auto_all = True
-        self._send(prompt, max_rounds=7)
+        try:
+            self._send(prompt, max_rounds=7)
+        finally:
+            self.shutdown_mcp()
+
+    def shutdown_mcp(self):
+        """Close MCP server connections (stdio subprocesses, HTTP sessions)."""
+        manager = getattr(self, '_mcp_manager', None)
+        if manager is not None:
+            try:
+                manager.close_all()
+            except Exception:
+                pass
 
     # ── Main loop ──────────────────────────────────────────────────────
 
@@ -823,6 +835,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             if hasattr(self, '_job_manager') and self._job_manager:
                 self._job_manager.shutdown()
                 self._job_manager.save_state()
+            self.shutdown_mcp()
             if self.log_file:
                 self.log_file.close()
             logger.info("Session ended")
