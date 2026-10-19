@@ -66,6 +66,22 @@ class CommandMixin:
         agent_print()
 
     def show_ctx(self, exact_tokens=None):
+        backend = getattr(self, '_backend', None)
+        # Output-token stats from the last model call, when reported by the API
+        # (Ollama: eval_count; OpenAI: usage.completion_tokens)
+        output_tokens = getattr(backend, 'last_output_tokens', None)
+        if output_tokens:
+            total_out = getattr(self, '_output_tokens_total', 0)
+            # Reasoning breakdown when the API reports it: (content|reasoning).
+            # `is not None` shows (58|0) when the model simply didn't reason —
+            # OpenAI always reports the field; Ollama leaves it None.
+            reasoning = getattr(backend, 'last_reasoning_tokens', None)
+            if reasoning is not None:
+                out_msg = f"[out: {output_tokens} tokens ({output_tokens - reasoning}|{reasoning}) | session: {total_out}]"
+            else:
+                out_msg = f"[out: {output_tokens} tokens | session: {total_out}]"
+            agent_print(out_msg)
+            self._log("system", out_msg)
         if exact_tokens is not None:
             total_tokens = exact_tokens
             source = ""
@@ -81,7 +97,6 @@ class CommandMixin:
         # API reports them. % is relative to that call's prompt tokens —
         # shown only with exact server stats, never with the ~ estimate.
         cached_part = ""
-        backend = getattr(self, '_backend', None)
         cached = getattr(backend, 'last_cached_tokens', None)
         if cached and exact_tokens:
             cached_part = f" | cached: {cached} ({cached / exact_tokens * 100:.0f}%)"
@@ -1161,6 +1176,7 @@ class CommandMixin:
         self.history.clear()
         self.history.extend(sys_msgs)
         self.pending_content.clear()
+        self._output_tokens_total = 0
         self._log("system", "[reset]")
         agent_print("[Context cleared]\n")
         return DISPATCH_CONTINUE

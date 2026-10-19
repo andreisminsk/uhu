@@ -58,6 +58,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.client = None  # Deprecated: use _backend instead
         self.model = model
         self.ctx_size = ctx_size
+        # Accumulated output tokens for the session (reset by /reset, /restore, /llm)
+        self._output_tokens_total = 0
         self.stream = stream
         self.agent = agent
         self.tools = tools
@@ -218,7 +220,12 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
 
     def _call_model(self):
         """Call the model. Delegates to backend."""
-        return self._backend.call(self.history, stream=self.stream)
+        result = self._backend.call(self.history, stream=self.stream)
+        # Accumulate session output-token total (reset by /reset, /restore, /llm)
+        out_tokens = getattr(self._backend, 'last_output_tokens', None)
+        if out_tokens:
+            self._output_tokens_total = getattr(self, '_output_tokens_total', 0) + out_tokens
+        return result
 
     def _rebuild_backend(self, api_type=None, model=None, ctx_size=None,
                          host=None, api_key=None, extra_body_path=None):
@@ -230,6 +237,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         host = host or self._host
         api_key = api_key or self._api_key
         # extra_body_path is used as-is: None = no extra body, path = load file
+
+        # Reset session output-token total — fresh backend, fresh stats
+        self._output_tokens_total = 0
 
         self._backend = create_backend(
             api_type=api_type, host=host, model=model, ctx_size=ctx_size,
