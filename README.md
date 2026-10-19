@@ -369,6 +369,22 @@ uhu --api-openai --host https://openrouter.ai/api/v1 --model z-ai/glm-5.3-flash 
 
 The file is loaded once at startup (missing file or invalid JSON → clean error and exit). Paths support `~` and environment variable expansion. To change it mid-session, use `/llm --extra-body <path>` — the file is validated before the backend is rebuilt. Note: `/llm` resets the extra body to none when the flag is absent, so include `--extra-body <path>` on every `/llm` invocation that should keep it. Fields in the extras file override code defaults (e.g. `temperature`), since the SDK merges `extra_body` over typed params.
 
+#### Reasoning Effort
+
+uhu does not set `reasoning_effort` natively — reasoning models run at the provider's default effort level. To control it, pass the parameter through the extras file:
+
+**OpenAI (o-series, gpt-5 family)** — `~/.uhu/reasoning.json`:
+```json
+{ "reasoning_effort": "medium" }
+```
+
+**OpenRouter** — nested format:
+```json
+{ "reasoning": { "enabled": true, "effort": "medium" } }
+```
+
+Launch with `--openai-extra-body ~/.uhu/reasoning.json`, or add the field to an existing extras file. Typical values are `low`, `medium`, `high` (provider-dependent; some models also accept `minimal`). To change effort mid-session, use `/llm --extra-body <path>` pointing to an updated file.
+
 ### OpenRouter Example
 
 [OpenRouter](https://openrouter.ai) aggregates many providers behind one OpenAI-compatible endpoint — useful for trying models like `z-ai/glm-5.3-flash` without running them locally. You need an API key from [openrouter.ai/keys](https://openrouter.ai/keys).
