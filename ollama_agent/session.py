@@ -255,6 +255,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._api_key = api_key
         self._extra_body_path = extra_body_path or None
         self._log("system", f"[Backend switched: api={api_type} model={model} ctx={ctx_size} host={host} extra_body={extra_body_path or 'off'}]")
+        self._log("system", f"[/llm model: {self.model} | ctx: {self.ctx_size}]")
 
     def _build_message(self, user_input):
         parts = self.pending_content[:]
