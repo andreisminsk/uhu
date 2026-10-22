@@ -277,6 +277,16 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         "i need to", "i want to", "let's ", "i can ", "going to ",
         "i'm going to", "i would ", "next, i", "now i'll", "now i will",
         "step 1", "step one", "first step",
+        # Action-oriented "let me ..." — intent to act. Conversational ones
+        # ("let me know/think/see") are excluded via _CONVERSATIONAL_LET_ME.
+        "let me check", "let me look", "let me read", "let me run",
+        "let me test", "let me verify", "let me fix", "let me write",
+        "let me create", "let me update", "let me search", "let me find",
+        "let me inspect", "let me analyze", "let me build", "let me implement",
+        "let me install", "let me execute", "let me try", "let me debug",
+        "let me review", "let me fetch", "let me generate", "let me compile",
+        "let me open", "let me download", "let me add", "let me remove",
+        "let me compare", "let me examine",
     )
 
     # "let me" phrases that are conversational, not intent to act

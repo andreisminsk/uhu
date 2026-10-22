@@ -363,6 +363,15 @@ class ActionMixin:
             msg = f"[TOOL {tool_name}]: {result}"
             tool_print(self._truncate_for_console(msg) + "\n")
             return msg
+        except SystemExit as e:
+            # Defense-in-depth: tools that exec user/model code (py_compile,
+            # llm tools) may trigger sys.exit() inside the executed code.
+            # SystemExit is a BaseException — without this handler it would
+            # terminate the whole agent process.
+            msg = (f"[TOOL FAILED: {tool_name} — SystemExit({e.code}) raised inside tool "
+                   f"(executed code called sys.exit). Converted to failure, session continues.]")
+            agent_print(msg + "\n")
+            return msg
         except Exception as e:
             msg = f"[TOOL FAILED: {tool_name}: {e}]"
             agent_print(msg + "\n")
@@ -440,6 +449,10 @@ class ActionMixin:
             tool_print(self._truncate_for_console(result))
             agent_print(f"{'─'*60}\n")
             msg = f"⚡ [SKILL {skill_name} ({skill_type})]: {result}"
+            return msg
+        except SystemExit as e:
+            msg = f"[SKILL FAILED: {skill_name} — SystemExit({e.code}) raised inside skill, session continues]"
+            agent_print(msg + "\n")
             return msg
         except Exception as e:
             agent_print(f"\n{'─'*60}")

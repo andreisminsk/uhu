@@ -90,14 +90,14 @@ class PyCompileTool:
                     try:
                         exec(mod)
                         results.append(f"[OK] import: {mod}")
-                    except Exception as e:
+                    except (Exception, SystemExit) as e:
                         results.append(f"[FAIL] import: {mod} - {type(e).__name__}: {e}")
                 else:
                     # Handle regular 'import module' style
                     try:
                         __import__(mod)
                         results.append(f"[OK] import {mod}: success")
-                    except Exception as e:
+                    except (Exception, SystemExit) as e:
                         results.append(f"[FAIL] import {mod}: {type(e).__name__}: {e}")
             
             return "\n".join(results)
@@ -151,6 +151,11 @@ class PyCompileTool:
                 except SyntaxError:
                     exec(code, namespace)
                     return output.getvalue().rstrip() or "[OK] (no output)"
+        except SystemExit as e:
+            # Executed code called sys.exit() — must NOT escape and kill the
+            # whole agent (SystemExit is a BaseException, invisible to the
+            # generic handler below).
+            return f"[FAIL] SystemExit: {e.code} (executed code called sys.exit)"
         except Exception:
             tb = traceback.format_exc()
             # Trim traceback to keep it concise
