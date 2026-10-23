@@ -205,6 +205,42 @@ def _ansi_sgr_to_ptk_color(ansi_code):
     return _ANSI_SGR_COLOR_MAP.get(m.group(1))
 
 
+def _app_is_exiting(app):
+    """True if the prompt_toolkit Application already has a result/exception set.
+
+    Checks attributes across prompt_toolkit versions (older versions expose
+    public ``return_value``/``exception`` attributes, newer ones use
+    _-prefixed internals). Any access failure is treated as 'unknown'.
+    """
+    for attr in ("_return_value", "return_value", "_exception", "exception"):
+        try:
+            if getattr(app, attr, None) is not None:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _safe_submit(event):
+    """Submit the current buffer exactly once, tolerating double-submit races.
+
+    Fixes the prompt_toolkit crash:
+        Exception: Return value already set. Application.exit() failed.
+    which occurs when a second submit arrives after the application already
+    exited — e.g. Enter queued behind a slow Alt+V image-paste submit, or
+    two rapid Enters processed from the same stdin read batch.
+    """
+    if _app_is_exiting(event.app):
+        return
+    try:
+        event.current_buffer.validate_and_handle()
+    except Exception as exc:
+        # The first submit already won — the app is exiting with that result.
+        if "Return value already set" in str(exc):
+            return
+        raise
+
+
 def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter", color=None):
     """Try reading input with prompt_toolkit.
 
@@ -277,7 +313,7 @@ def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter", color=N
                 # Inject reference text and submit
                 ref = f"[Pasted image: {saved}]"
                 buf.text = ref
-                buf.validate_and_handle()
+                _safe_submit(event)
                 return True
             except Exception:
                 return False
@@ -300,7 +336,7 @@ def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter", color=N
                 buf = event.current_buffer
                 text = buf.text.strip()
                 if text == "/end" or (text == "" and buf.text.count("\n") >= 1):
-                    buf.validate_and_handle()
+                    _safe_submit(event)
                 else:
                     buf.insert_text('\n')
 
@@ -334,7 +370,7 @@ def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter", color=N
                     buf.delete_before_cursor(count=1)
                     buf.insert_text('\n')
                 else:
-                    buf.validate_and_handle()
+                    _safe_submit(event)
 
         # Preserve the current SIGINT handler and restore it unconditionally
         # after the prompt returns, guarding against any residual mutation by
