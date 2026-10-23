@@ -922,3 +922,52 @@ This project is AI-assisted — code was produced with the help of large languag
 Full license text: [LICENSE](LICENSE) · https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 
 **Disclaimer:** This project is provided "as is", without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors be liable for any claim, damages, or other liability arising from the use of this software.
+
+## Appendix A — Fixing SSL errors on macOS (python.org Python)
+
+**Symptom:** tools that make HTTPS calls from Python (e.g. `web_search`, `web_fetch`) fail with:
+
+```
+[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain
+```
+
+while `curl` works fine.
+
+**Cause:** Python installed from [python.org](https://www.python.org/downloads/) uses its own OpenSSL and does **not** read the macOS system keychain. Its certificate directory is empty until "Install Certificates.command" is run — so any HTTPS request fails verification.
+
+**Diagnosis:**
+
+```bash
+# 1. Check which Python is in use
+python3 -c "import ssl, sys; print(sys.executable); print(ssl.OPENSSL_VERSION)"
+
+# 2. Check the framework cert directory — it is empty on a fresh install
+ls -la /Library/Frameworks/Python.framework/Versions/3.13/etc/openssl/
+
+# 3. Confirm curl works but Python's default context fails
+curl -sI https://duckduckgo.com -o /dev/null -w "%{http_code}\n"
+python3 -c "import urllib.request; urllib.request.urlopen('https://duckduckgo.com', timeout=10)"
+```
+
+**Fix (recommended):** run the certificate installer that ships with the framework:
+
+```bash
+bash "/Applications/Python 3.13/Install Certificates.command"
+```
+
+This pip-installs/upgrades `certifi` and symlinks its CA bundle into the framework's OpenSSL directory.
+
+**Fix (manual fallback):** if the command file is missing, copy the certifi bundle directly:
+
+```bash
+DEST="/Library/Frameworks/Python.framework/Versions/3.13/etc/openssl"
+cp "$(python3 -c 'import certifi; print(certifi.where())')" "$DEST/cert.pem"
+```
+
+**Verify:**
+
+```bash
+python3 -c "import urllib.request; urllib.request.urlopen('https://duckduckgo.com', timeout=10); print('SSL OK')"
+```
+
+> Note: if you are behind a corporate proxy with HTTPS inspection, the "self-signed certificate" may be the proxy's root CA — in that case add it to the system keychain and re-run the installer, or import it into certifi's bundle.
