@@ -52,6 +52,9 @@
       "auto_approve": false
     }
   },
+  "extra_skills_dirs": [
+    "~/my-skills"
+  ],
   "llm_query": {
     "api_url": "http://localhost:11434",
     "model": "glm-5.3-flash:cloud",

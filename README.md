@@ -899,6 +899,17 @@ Stores persistent auto-approval settings:
 
 Custom skill definitions - SKILL.md directories, Python (.py) or JSON (.json) files.
 
+Additional skill directories can be added via `extra_skills_dirs` in `.ollama_agent.json` (e.g. `~/.uhu/.ollama_agent.json`):
+
+    {
+      "extra_skills_dirs": [
+        "/Users/andreis/Projects/skills-repo",
+        "~/my-skills"
+      ]
+    }
+
+Precedence on name collision: workdir `.skills/` > `~/.uhu/skills/` > `extra_skills_dirs`. Paths support `~` expansion; loaded in list order when skills mode is enabled (`--skills`).
+
 ## Feedback
 
 We welcome feedback, bug reports, and suggestions:
