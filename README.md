@@ -633,7 +633,7 @@ The `/sober` command re-injects the system prompt to refocus a drifting model. I
 | ------------------------------ | ------- | ----------------------------------------- |
 | `MAX_OBSERVATION_CHARS`        | 4,000   | WRITE/EDIT/RUN status messages            |
 | `MAX_READ_OBSERVATION_CHARS`   | 70,000  | FILE: reads (agent needs full source)     |
-| `MAX_SKILL_OBSERVATION_CHARS`  | 1,500   | Skill/tool intermediate output            |
+| `MAX_TOOL_OBSERVATION_CHARS`   | 8,000   | Tool intermediate output                  |
 | `MAX_TOTAL_OBSERVATION_CHARS`  | 120,000 | Combined limit per action round           |
 | `MAX_BATCH_WRITES`             | 3       | Max file changes per round before pausing |
 | `MAX_FEEDBACK_ROUNDS`          | 3       | Max feedback loop iterations per message  |

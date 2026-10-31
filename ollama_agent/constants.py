@@ -276,11 +276,6 @@ MAX_OBSERVATION_CHARS = 4000
 # but the model must receive the full content to do its job effectively.
 MAX_READ_OBSERVATION_CHARS = 70000
 
-# Maximum characters for skill observations in context.
-# Skills are intermediate/automated workflows; their output is printed to the
-# terminal in full, so the context copy can be aggressively shortened.
-MAX_SKILL_OBSERVATION_CHARS = 8000
-
 # Maximum characters for tool observations in context.
 # Tools like image-analysis produce detailed output that the model needs in
 # full to reason accurately. Unlike skills, there is no way to re-fetch a tool
@@ -305,8 +300,8 @@ MAX_TOTAL_OBSERVATION_CHARS = 120000
 
 # Maximum characters printed to console for tool/skill results.
 # Tool output (especially web_fetch) can be huge — this prevents megabytes of
-# HTML/script from flooding the terminal. The full result still goes into the
-# observation (truncated for context by MAX_SKILL_OBSERVATION_CHARS), but only
+# HTML/script from flooding the terminal. The full skill result goes into the
+# observation untruncated (skills are lazy-loaded and needed in full), but only
 # this many chars are shown on screen.
 MAX_CONSOLE_DISPLAY_CHARS = 2000
 

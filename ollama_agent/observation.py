@@ -1,12 +1,15 @@
 """Observation truncation — extracted from actions.py process_actions.
 
 Centralizes per-observation and total truncation logic to prevent context bloat.
+Skill observations are never truncated: a skill is invoked only when genuinely
+needed, so its full content (instructions + references) must reach the model.
+Re-reading SKILL.md after a truncation costs more context than it saves.
+Safety net: MAX_TOTAL_OBSERVATION_CHARS still caps the whole round.
 """
 
 from .constants import (
     MAX_OBSERVATION_CHARS, MAX_READ_OBSERVATION_CHARS,
-    MAX_SKILL_OBSERVATION_CHARS, MAX_TOOL_OBSERVATION_CHARS,
-    MAX_TOTAL_OBSERVATION_CHARS,
+    MAX_TOOL_OBSERVATION_CHARS, MAX_TOTAL_OBSERVATION_CHARS,
 )
 from .display import agent_print
 
@@ -14,7 +17,8 @@ from .display import agent_print
 def truncate_observations(observations):
     """Truncate a list of observation strings to prevent context bloat.
 
-    Skill and tool observations get aggressive truncation (intermediate output).
+    Skill observations are never truncated (lazy-loaded content the model needs in full).
+    Tool observations get aggressive truncation (intermediate output).
     Read observations get a generous limit (agent needs full source code).
     Tools with `do_not_truncate_observations=True` are never truncated.
 
@@ -26,8 +30,8 @@ def truncate_observations(observations):
         is_tool = obs.startswith("[TOOL")
         is_read = obs.startswith("[File:")
 
-        no_truncate = False
-        if is_tool:
+        no_truncate = is_skill
+        if not no_truncate and is_tool:
             from .tools import get as get_tool
             import re
             _m = re.match(r"^\[TOOL\s+(\S+)\]", obs)
@@ -38,8 +42,6 @@ def truncate_observations(observations):
 
         if no_truncate:
             limit = None
-        elif is_skill:
-            limit = MAX_SKILL_OBSERVATION_CHARS
         elif is_tool:
             limit = MAX_TOOL_OBSERVATION_CHARS
         elif is_read:
