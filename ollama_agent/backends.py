@@ -379,13 +379,16 @@ class OllamaNativeBackend(LLMBackend):
     STREAM_CHUNK_TIMEOUT = 180
     NON_STREAM_TIMEOUT = 600
     
-    def __init__(self, host: str, model: str, ctx_size: int, thinking: bool = True):
+    def __init__(self, host: str, model: str, ctx_size: int, thinking: bool = True,
+                 temperature: Optional[float] = None):
         super().__init__()
         from ollama import Client
         self.client = Client(host=host)
         self.model = model
         self.ctx_size = ctx_size
         self.thinking = thinking
+        # Sampling temperature — None → MODEL_TEMPERATURE (0.0, greedy decoding default)
+        self.temperature = temperature if temperature is not None else MODEL_TEMPERATURE
         self._apply_cache_stats_patch()
     
     @staticmethod
@@ -406,7 +409,7 @@ class OllamaNativeBackend(LLMBackend):
             logger.debug("Cache-stats patch not applied: %s", e)
     
     def _build_options(self) -> Dict[str, Any]:
-        return {"num_ctx": self.ctx_size, "temperature": MODEL_TEMPERATURE}
+        return {"num_ctx": self.ctx_size, "temperature": self.temperature}
     
     @staticmethod
     def _sanitize_messages(messages: List[Dict]) -> List[Dict]:
@@ -612,7 +615,8 @@ class OpenAIBackend(LLMBackend):
     def __init__(self, base_url: str, api_key: str, model: str, ctx_size: int,
                  thinking: bool = True, tpm_limit: Optional[int] = None,
                  max_context: Optional[int] = None, quiet: bool = False,
-                 extra_body_path: Optional[str] = None):
+                 extra_body_path: Optional[str] = None,
+                 temperature: Optional[float] = None):
         super().__init__()
         try:
             from openai import OpenAI
@@ -623,6 +627,9 @@ class OpenAIBackend(LLMBackend):
         self.model = model
         self.ctx_size = ctx_size  # Used for context management, not passed to API
         self.thinking = thinking
+        # Sampling temperature — None = don't send the param (provider default;
+        # o1/o3-style reasoning models reject it). Set via --temperature / /temperature.
+        self.temperature = temperature
         self._last_usage = None
         self._quiet = quiet
         # Provider-specific request body params from JSON file (--openai-extra-body)
@@ -728,6 +735,10 @@ class OpenAIBackend(LLMBackend):
         # Provider-specific params from --openai-extra-body JSON file
         if self._extra_body:
             kwargs["extra_body"] = dict(self._extra_body)
+        # Sampling temperature — sent only when explicitly set; extra_body
+        # fields still override it per SDK merge order.
+        if self.temperature is not None:
+            kwargs["temperature"] = self.temperature
         # Some models (e.g. o1/o3 series) don't support temperature or max_tokens.
         # We try max_completion_tokens first (newer API), fall back to max_tokens,
         # and if both fail, retry without any max parameter.
@@ -742,6 +753,11 @@ class OpenAIBackend(LLMBackend):
             return self.client.chat.completions.create(**kwargs)
         except Exception as e:
             err_str = str(e).lower()
+            # Some models reject temperature (e.g. o1/o3 series) — retry without it
+            if self.temperature is not None and "temperature" in err_str:
+                logger.warning("OpenAI fallback: retrying without temperature (%s)", e)
+                kwargs.pop("temperature", None)
+                return self.client.chat.completions.create(**kwargs)
             # Some providers reject stream_options — retry without it
             if "stream_options" in err_str or "include_usage" in err_str:
                 logger.warning("OpenAI fallback: retrying without stream_options (%s)", e)
@@ -901,7 +917,8 @@ def create_backend(
     tpm_limit: Optional[int] = None,
     max_context: Optional[int] = None,
     quiet: bool = False,
-    extra_body_path: Optional[str] = None
+    extra_body_path: Optional[str] = None,
+    temperature: Optional[float] = None
 ) -> LLMBackend:
     """Factory function to create appropriate backend.
     
@@ -915,6 +932,7 @@ def create_backend(
         tpm_limit: Tokens-per-minute limit (OpenAI-compatible only, enables TPM tracking)
         max_context: Max context cap for trimming (OpenAI-compatible + --tpm only)
         extra_body_path: Path to JSON file with extra request body params (OpenAI-compatible only)
+        temperature: Sampling temperature 0.0-2.0 (None = backend default: 0.0 for Ollama, not sent for OpenAI)
         quiet: Suppress non-essential output
     
     Returns:
@@ -936,6 +954,7 @@ def create_backend(
             tpm_limit=tpm_limit,
             max_context=max_context,
             extra_body_path=extra_body_path,
+            temperature=temperature,
             quiet=quiet
         )
     else:
@@ -944,5 +963,6 @@ def create_backend(
             host=host,
             model=model,
             ctx_size=ctx_size,
-            thinking=thinking
+            thinking=thinking,
+            temperature=temperature
         )

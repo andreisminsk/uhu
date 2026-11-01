@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
 from .actions import agent_print, tool_print
 from .parser import parse_actions
+from . import sound
 from .input_utils import read_full_input, _reconfigure_stdout
 from .utils import check_for_update, get_local_version, get_last_check_error
 from .platform import terminal
@@ -28,7 +29,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 tools=True, skills=False, skills_dir="./.skills", cache_files=True,
                 thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
                 tpm_limit=None, max_context=None, no_llm_parsing=False,
-                openai_extra_body=None):
+                openai_extra_body=None, temperature=None):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -44,6 +45,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             tpm_limit=tpm_limit,
             max_context=max_context,
             extra_body_path=openai_extra_body,
+            temperature=temperature,
             quiet=quiet
         )
         self._api_type = api_type
@@ -54,6 +56,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._tpm_limit = tpm_limit
         self._max_context = max_context
         self._extra_body_path = openai_extra_body
+        # Sampling temperature — None = backend default (0.0 Ollama / not sent OpenAI)
+        self._temperature = temperature
 
         self.client = None  # Deprecated: use _backend instead
         self.model = model
@@ -246,6 +250,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             thinking=self._thinking, api_key=api_key,
             tpm_limit=self._tpm_limit, max_context=self._max_context,
             extra_body_path=extra_body_path,
+            temperature=self._temperature,
             quiet=self.quiet
         )
         self.model = model
@@ -597,6 +602,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     # Model is stuck on last round — skip to max rounds message
                     continue
                 else:
+                    sound.play("done")
                     agent_print("AGENT: Done — no more actions\n")
                     return
             self._log("system", obs)
@@ -610,6 +616,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 if consecutive_read_only >= max_consecutive_read_only:
                     # Too many consecutive read-only rounds — stop and nudge
                     self.history.append({"role": "assistant", "content": "Noted."})
+                    sound.play("done")
                     agent_print(f"⚠  Stopped after {consecutive_read_only} read-only rounds\n")
                     return
                 # Read-only observations — call model again so it can act on what it read
@@ -650,6 +657,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             self._log("system", obs)
             self.history.append({"role": "user", "content": obs})
         self.history.append({"role": "assistant", "content": "Noted."})
+        sound.play("done")
         agent_print(f"AGENT: Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
 
     def _send(self, message, images=None, max_rounds=MAX_FEEDBACK_ROUNDS):

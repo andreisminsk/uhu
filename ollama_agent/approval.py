@@ -12,6 +12,7 @@ import os
 from .constants import ANSI_AGENT
 from .display import agent_print, show_diff_colored
 from .input_utils import read_full_input
+from . import sound
 
 
 class ApprovalGate:
@@ -118,6 +119,7 @@ class ApprovalGate:
                         agent_print(f"[{source}-run: {prefix}] {prompt}")
                         return True
             try:
+                sound.play("question")
                 ans = read_full_input(f"{prompt} (y/N/auto/all/always/d): ", color=ANSI_AGENT).strip().lower()
             except EOFError:
                 return False

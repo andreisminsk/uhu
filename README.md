@@ -29,6 +29,8 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 - **Clipboard image paste** (`Alt+V`): Paste screenshots from clipboard — saves to `.uhu/.cache/` and references in context for analysis with the `image-analysis` tool (requires `Pillow` on Windows/macOS, `xclip`/`wl-paste` on Linux)
 - **Ollama balance indicator** (native API only): Shows session/weekly usage and remaining balance from ollama.com alongside the context indicator (requires `beautifulsoup4` + exported cookies in `ollama.com_cookies.txt`)
 - **LLM fallback parser** (off by default, `--no-llm-parsing` to disable): When the regex parser detects suspicious results (risky markers in fenced content, empty tool params, unclosed blocks), a configurable "Parser LLM" verifies and corrects the parse. Configured via the `llm_parser` section in `.ollama_agent.json` (`model`, `base_url`, `api_type`, `api_key`, `timeout`). Uses the main model by default.
+- **Sampling temperature** (`--temperature`, `/temperature`): Control model sampling temperature 0.0–2.0 — applies to both native Ollama (`options.temperature`, default 0.0/greedy) and OpenAI-compatible APIs (sent only when set, with auto-fallback if the model rejects it, e.g. o-series). Changeable mid-session with `/temperature`, resets per-API default with `/temperature reset`
+- **Event sounds** (`--no-sound`, `/sound`): Audio notifications — "done" when the agent finishes and needs your feedback, "question" on confirmation prompts. macOS: `afplay` + system sounds; Windows: `winsound` system scheme; Linux: `paplay`/`pw-play` + freedesktop sound theme; universal fallback: terminal bell. Fully guarded — headless systems degrade silently, never crash
 
 ## Installation
 
@@ -520,8 +522,10 @@ uhu --no-autosave --no-cache
 | `--mcp`           | off                        | Enable MCP server tools (configured in `.ollama_agent.json`)             |
 | `--no-cache`      | off                        | Disable file caching to `.uhu/.cache/` directory                         |
 | `--no-logo`       | off (logo on)              | Do not print the ASCII logo at startup (also auto-skipped in terminals narrower than 47 columns) |
+| `--no-sound`      | off (sound on)             | Disable event sounds — "done" when user feedback is needed, "question" on confirmation prompts. macOS: `afplay`; Windows: `winsound` system scheme; Linux: `paplay`/`pw-play` + freedesktop theme; fallback: terminal bell. Toggled mid-session with `/sound` |
 | `--tpm`           | —                          | TPM limit for OpenAI-compatible backends (enables proactive rate-limit tracking + aggressive 429 retry) |
 | `--max-context`   | `16384` (with `--tpm`)     | Max context cap for history trimming (OpenAI-compatible + `--tpm` only; without `--tpm`, uses `--ctx`) |
+| `--temperature`   | `0.0` (Ollama) / not sent (OpenAI-compat) | Sampling temperature 0.0–2.0 — applies to both API types; change mid-session with `/temperature` |
 
 ## Slash Commands
 
@@ -544,6 +548,8 @@ uhu --no-autosave --no-cache
 | `/auto reset all`                  | Clear both session and persistent approvals                                                                                                                  |
 | `/diff`                             | Toggle auto-diff for edits                                                                                                                                    |
 | `/timeout [sec\|reset]`             | Show or set the active model-call timeout for this session only (streaming idle gap or blocking total cap, depending on launch mode); no persistence |
+| `/temperature [val\|reset]`         | Show or set sampling temperature 0.0–2.0 for this session (applies to Ollama `options.temperature` and OpenAI-compatible `temperature` param); `reset` restores the per-API default; no persistence |
+| `/sound`                            | Toggle event sounds (done/question notifications) on/off for this session — overrides `--no-sound` |
 | `/llm`                              | Show current API type, model, context size, host, and extra-body path (if set)                                                                                     |
 | `/llm [--api-openai\|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>] [--extra-body <path>]` | Switch LLM backend at runtime — history and running jobs are preserved. Fails if new ctx is too small for current history. `--extra-body` loads a new JSON file with provider-specific request params (validated before switching); when the flag is absent, the extra body is reset to none. |
 | `/pid`                              | Show current and parent process IDs                                                                                                                               |

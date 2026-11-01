@@ -93,6 +93,10 @@ def main():
                         help="Tokens-per-minute limit for OpenAI-compatible backends (enables proactive TPM tracking and aggressive 429 retry)")
     parser.add_argument("--max-context", type=int, default=None,
                         help="Max context cap for history trimming (OpenAI-compatible + --tpm only, default: 16384)")
+    parser.add_argument("--temperature", type=float, default=None,
+                        help="Sampling temperature 0.0-2.0 (default: 0.0 for Ollama native API; provider default for OpenAI-compatible API). Change mid-session with /temperature")
+    parser.add_argument("--no-sound", action="store_true",
+                        help="Disable event sounds (done/question notifications). Toggled mid-session with /sound")
     parser.add_argument("--no-llm-parsing", action="store_true",
                         help="Disable LLM fallback parsing (configured via llm_parser section in .ollama_agent.json)")
     parser.add_argument("--no-logo", action="store_true",
@@ -136,6 +140,11 @@ def main():
         log_path = None
     else:
         log_path = os.path.join(os.path.abspath(workdir), ".uhu", f"uhu-{os.path.basename(os.path.abspath(workdir))}.log")
+    # Validate --temperature early (fail fast)
+    if args.temperature is not None and not (0.0 <= args.temperature <= 2.0):
+        print("[Error: --temperature must be between 0.0 and 2.0]")
+        sys.exit(1)
+
     # Determine API type
     api_type = "openai" if args.api_openai else "ollama"
     
@@ -176,7 +185,13 @@ def main():
         tpm_limit=args.tpm,
         max_context=args.max_context,
         no_llm_parsing=args.no_llm_parsing,
+        temperature=args.temperature,
     )
+
+    # Event sounds — single point of muting for all playback
+    if args.no_sound:
+        from .sound import set_enabled
+        set_enabled(False)
 
     if args.prompt:
         session.run_once(" ".join(args.prompt))

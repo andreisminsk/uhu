@@ -159,6 +159,8 @@ class CommandMixin:
             "  /auto reset all              Clear both session and persistent approvals\n"
              "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
             "  /timeout [sec|reset]         Show/set the active model-call timeout (this session only)\n"
+            "  /temperature [val|reset]     Show/set sampling temperature 0.0-2.0 (this session only)\n"
+            "  /sound                       Toggle event sounds (done/question) on/off\n"
             "  /llm                         Show current API, model, context, host\n"
             "  /llm [--api-openai|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>] [--extra-body <path>]\n"
             "                               Switch LLM backend at runtime (history preserved)\n"
@@ -935,6 +937,42 @@ class CommandMixin:
         setattr(backend, attr, val)
         agent_print(f"[timeout set to {val}s ({active} mode)]\n")
 
+    def do_temperature(self, args_str):
+        """Show or set the sampling temperature for this session.
+
+        Applies to both API types: native Ollama (options.temperature) and
+        OpenAI-compatible (top-level temperature param). No persistence.
+        """
+        backend = getattr(self, '_backend', None)
+        if backend is None:
+            agent_print("[No backend available]\n")
+            return
+        sub = args_str.strip()
+        current = getattr(backend, "temperature", None)
+        if sub == "":
+            shown = current if current is not None else "provider default"
+            agent_print(f"[temperature: {shown}]\n")
+            return
+        if sub.lower() == "reset":
+            default = MODEL_TEMPERATURE if self._api_type == "ollama" else None
+            self._temperature = default
+            backend.temperature = default
+            shown = default if default is not None else "provider default"
+            agent_print(f"[temperature reset to default: {shown}]\n")
+            return
+        try:
+            val = float(sub)
+        except ValueError:
+            agent_print(f"[Invalid temperature: {sub!r} — use a number between 0.0 and 2.0, or /temperature reset]\n")
+            return
+        if not (0.0 <= val <= 2.0):
+            agent_print("[Temperature must be between 0.0 and 2.0]\n")
+            return
+        val = round(val, 3)
+        self._temperature = val
+        backend.temperature = val
+        agent_print(f"[temperature set to {val}]\n")
+
     def do_auto(self, args_str):
         sub = args_str.strip().lower()
         if sub == "reset":
@@ -1086,12 +1124,15 @@ class CommandMixin:
         "/compact": "_cmd_compact",
         "/pid": "_cmd_pid",
          "/timeout": "_cmd_timeout",
+        "/temperature": "_cmd_temperature",
+        "/sound": "_cmd_sound",
         "/llm": "_cmd_llm",
         "workdir": "_cmd_workdir", "/workdir": "_cmd_workdir",
      }
     _PREFIX_COMMANDS = [
         ("/llm ", "_cmd_llm", 5),
         ("/timeout ", "_cmd_timeout", 8),
+        ("/temperature ", "_cmd_temperature", 13),
         ("/attach-bin", "_cmd_attach_bin", 11),
         ("/embed-bin", "_cmd_embed_bin", 10),
         ("/memorize", "_cmd_memorize", 9),
@@ -1233,6 +1274,17 @@ class CommandMixin:
         self.do_timeout(args)
         return DISPATCH_CONTINUE
 
+    def _cmd_temperature(self, args):
+        self.do_temperature(args)
+        return DISPATCH_CONTINUE
+
+    def _cmd_sound(self, args):
+        from .sound import set_enabled, is_enabled
+        set_enabled(not is_enabled())
+        status = "ON" if is_enabled() else "OFF"
+        agent_print(f"[event sounds: {status}]\n")
+        return DISPATCH_CONTINUE
+
     def _cmd_workdir(self, args):
         """Show or switch working directory.
 
@@ -1317,6 +1369,7 @@ class CommandMixin:
             tpm_limit=self._tpm_limit,
             max_context=self._max_context,
             no_llm_parsing=not self._llm_parser_enabled,
+            temperature=self._temperature,
         )
 
         self._workdir_switch_target = new_session
@@ -1397,7 +1450,9 @@ class CommandMixin:
         if not args:
             api_label = "OpenAI-compatible" if self._api_type == "openai" else "Ollama"
             extra = f" | Extra body: {self._extra_body_path}" if self._extra_body_path else ""
-            agent_print(f"[API: {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}{extra}]\n")
+            temp = getattr(self._backend, "temperature", None)
+            temp_part = f" | Temp: {temp}" if temp is not None else ""
+            agent_print(f"[API: {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}{extra}{temp_part}]\n")
             return DISPATCH_CONTINUE
 
         new_api = None
