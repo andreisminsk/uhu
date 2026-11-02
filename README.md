@@ -891,6 +891,10 @@ ollama_agent/
   tools/               Tool registry + 30 built-in tools, MCP client
 ```
 
+### Companion directory: `llama-huggingface/`
+
+Experimental scripts and analysis for large models, kept out of the core package: GEMMA4-31B quantization studies ([analysis](llama-huggingface/GEMMA4-31b-ANALYSIS.md), [RunPod setup](llama-huggingface/GEMMA4-31B-RUNPOD_SETUP.md), GGUF inspection via `inspect_gguf.py`), HuggingFace→RunPod experiments ([notes](llama-huggingface/HUGGINGFACE-RUNPOD-EXPERIMENT.md)), Z-Image Turbo tests, and llama.cpp integration scripts (`test_lcpp_gemma4_31b.py`). See [llama-huggingface/README.md](llama-huggingface/README.md).
+
 ### Test Coverage
 
 Tests are in `tests/` and run with `python -m pytest tests/ -v`:

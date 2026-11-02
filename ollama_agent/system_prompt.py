@@ -5,6 +5,7 @@ ChatSession.__init__ and PersistenceMixin.do_restore.
 """
 
 from datetime import date
+from pathlib import Path
 
 from .constants import (
     AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE,
@@ -55,6 +56,10 @@ def build_system_prompt(workdir, agent=True, tools=False, skills=False):
     if _user_name:
         parts.append(f"The user's name is '{_user_name}'. Address them by name when appropriate.")
 
+    # Self-help: teach the model to read its own manual when asked about uhu
+    if agent or tools:
+        parts.append(build_self_help_section())
+
     # Permanent memory (project + agent)
     from .memory import build_memory_prompt
     mem_prompt, _mem_warnings = build_memory_prompt(workdir)
@@ -62,6 +67,55 @@ def build_system_prompt(workdir, agent=True, tools=False, skills=False):
         parts.append(mem_prompt)
 
     return "\n\n".join(parts) if parts else ""
+
+
+def _find_self_help_doc():
+    """Locate uhu's own README.md (the app manual — NOT the user's project README).
+
+    The manual lives in the repo root next to the ollama_agent package, so this
+    works when running from source (pip install -e . / direct script) regardless
+    of workdir. Non-editable installs don't package it → return None and the
+    prompt falls back to the online docs.
+    """
+    candidate = Path(__file__).resolve().parent.parent / "README.md"
+    return str(candidate) if candidate.is_file() else None
+
+
+def build_self_help_section():
+    """Prompt section for answering questions about uhu itself.
+
+    Points the model at the manual's absolute path instead of duplicating the
+    manual into the system prompt (which would burn context in every session —
+    the file is read on demand via the normal FILE:/read_file flow).
+    """
+    readme = _find_self_help_doc()
+    if readme:
+        return (
+            "SELF-HELP — answering questions about uhu itself:\n"
+            f"- uhu's user manual (README.md) is at: {readme}\n"
+            "- When the user asks anything about how to use uhu (what it is, installation, "
+            "CLI options, slash commands, confirmation options, feedback loop, tools, "
+            "skills, troubleshooting), READ that file first with a **FILE:** block "
+            "(or the read_file tool), then answer from it. Never invent flags or "
+            "commands — quote the manual.\n"
+            "- Read the manual once per conversation; answer follow-up questions "
+            "from what you already read.\n"
+            "- DEFAULT TO WORKDIR: vague questions like \"tell me about this app\", "
+            "\"what is this?\", \"how does it work?\" are ambiguous — they may be about "
+            "uhu itself OR about the user's project in the working directory. By default, "
+            "assume the user means the workdir project and study it as usual. Add a brief "
+            "hint to your answer, e.g. \"(studying the project in the working directory — "
+            "if you meant uhu, the coding agent itself, just say so and I'll cover it)\", "
+            "so the user can disambiguate later. Only read uhu's manual when the user "
+            "clearly means uhu or confirms it after your hint."
+        )
+    return (
+        "SELF-HELP — answering questions about uhu itself:\n"
+        "- The local user manual (README.md) is unavailable in this installation. "
+        "If the user asks how to use uhu, point them to "
+        "https://github.com/andreisminsk/uhu#readme and offer to fetch it with "
+        "the web_fetch tool. Never invent flags or commands."
+    )
 
 
 def get_memory_warnings(workdir):
