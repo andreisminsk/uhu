@@ -232,7 +232,6 @@ class ActionMixin:
             agent_print(msg + "\n")
             return msg
         tool_name = action["name"]
-        tool_name = action["name"]
         params = action.get("params", {})
         json_error = action.get("json_error")
         if json_error:
@@ -662,8 +661,6 @@ class ActionMixin:
             )
         if write_count > MAX_BATCH_WRITES:
             note = f"[Note: {write_count} file changes in this round. Prefer {MAX_BATCH_WRITES} or fewer per round for reviewability.]"
-            agent_print(note + "\n")
-            observations.append(note)
             agent_print(note + "\n")
             observations.append(note)
         if placeholder_warnings:
