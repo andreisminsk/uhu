@@ -85,6 +85,8 @@ def main():
                         help="Disable automatic session saving after each model reply")
     parser.add_argument("--no-thinking", action="store_false", dest="thinking",
                         help="Disable thinking mode (enabled by default)")
+    parser.add_argument("--think-level", default=None, dest="think_level",
+                        help="Thinking effort for reasoning models: off, low, medium, high, max (default: model default). Ollama native API sends top-level 'think'; OpenAI-compatible API sends reasoning_effort. Change mid-session with /think")
     parser.add_argument("--no-cache", action="store_true",
                         help="Disable file caching to .uhu/.cache/ directory")
     parser.add_argument("--mcp", action="store_true",
@@ -223,6 +225,7 @@ def main():
         max_context=args.max_context,
         no_llm_parsing=args.no_llm_parsing,
         temperature=args.temperature,
+        think_level=args.think_level,
         max_rounds=args.max_rounds,
     )
 

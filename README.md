@@ -32,6 +32,7 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 
 The same section can also power the **`d` confirmation option**: adding `"explain": true` makes `d` (in confirmation prompts) send the action's command/details to the Parser LLM for an independent safety analysis — what the script does, its side effects, and a SAFE/CAUTION/DANGEROUS verdict — with no project context, instead of showing the raw diff. On LLM failure it falls back to raw details.
 - **Sampling temperature** (`--temperature`, `/temperature`): Control model sampling temperature 0.0–2.0 — applies to both native Ollama (`options.temperature`, default 0.0/greedy) and OpenAI-compatible APIs (sent only when set, with auto-fallback if the model rejects it, e.g. o-series). Changeable mid-session with `/temperature`, resets per-API default with `/temperature reset`
+- **Thinking levels** (`--think-level`, `/think`): Control reasoning effort for thinking models (e.g. `glm-5.3-flash:cloud` levels low/high/max) — native Ollama sends the top-level `think` param, OpenAI-compatible sends `reasoning_effort`; `off` fully disables thinking (saves output-token spend on billed cloud models). Default: omitted → model default
 - **Event sounds** (`--no-sound`, `/sound`): Audio notifications — "done" when the agent finishes and needs your feedback, "question" on confirmation prompts. macOS: `afplay` + system sounds; Windows: `winsound` system scheme; Linux: `paplay`/`pw-play` + freedesktop sound theme; universal fallback: terminal bell. Fully guarded — headless systems degrade silently, never crash
 
 ## Installation
@@ -373,21 +374,28 @@ uhu --api-openai --host https://openrouter.ai/api/v1 --model z-ai/glm-5.3-flash 
 
 The file is loaded once at startup (missing file or invalid JSON → clean error and exit). Paths support `~` and environment variable expansion. To change it mid-session, use `/llm --extra-body <path>` — the file is validated before the backend is rebuilt. Note: `/llm` resets the extra body to none when the flag is absent, so include `--extra-body <path>` on every `/llm` invocation that should keep it. Fields in the extras file override code defaults (e.g. `temperature`), since the SDK merges `extra_body` over typed params.
 
-#### Reasoning Effort
+#### Reasoning Effort (Thinking Levels)
 
-uhu does not set `reasoning_effort` natively — reasoning models run at the provider's default effort level. To control it, pass the parameter through the extras file:
+Reasoning models run at their default effort level unless told otherwise. Use `--think-level` (or `/think-level` mid-session) to control it:
 
-**OpenAI (o-series, gpt-5 family)** — `~/.uhu/reasoning.json`:
-```json
-{ "reasoning_effort": "medium" }
 ```
+uhu --model glm-5.3-flash:cloud --think-level high
+uhu --api-openai --model gpt-5.5 --think-level medium
+```
+
+Levels: `off`, `low`, `medium`, `high`, `max`. Omitting the option (default) sends no parameter — the model's default applies (e.g. `max` for glm-5.3-flash). `--think-level off` disables thinking entirely via `think: false` (Ollama) / `reasoning_effort: "none"` (OpenAI-compatible) — useful for cloud models billed by output tokens. Unknown level names resolve to the model default server-side; check supported values with `ollama show <model>` (look for `thinking levels`).
+
+| API | Wire format |
+|---|---|
+| Native Ollama (`--api-ollama`) | Top-level `think` param — level string, or `false` for `off` (streaming and blocking) |
+| OpenAI-compatible (`--api-openai`) | `reasoning_effort` param — level string, or `"none"` for `off` |
+
+Some providers reject the parameter or use non-standard formats. On OpenAI-compatible endpoints uhu auto-retries without `reasoning_effort` if a provider rejects it. For nested formats (e.g. OpenRouter), pass it through the extras file instead:
 
 **OpenRouter** — nested format:
 ```json
 { "reasoning": { "enabled": true, "effort": "medium" } }
 ```
-
-Launch with `--openai-extra-body ~/.uhu/reasoning.json`, or add the field to an existing extras file. Typical values are `low`, `medium`, `high` (provider-dependent; some models also accept `minimal`). To change effort mid-session, use `/llm --extra-body <path>` pointing to an updated file.
 
 ### OpenRouter Example
 
@@ -528,6 +536,7 @@ uhu --no-autosave --no-cache
 | `--tpm`           | —                          | TPM limit for OpenAI-compatible backends (enables proactive rate-limit tracking + aggressive 429 retry) |
 | `--max-context`   | `16384` (with `--tpm`)     | Max context cap for history trimming (OpenAI-compatible + `--tpm` only; without `--tpm`, uses `--ctx`) |
 | `--temperature`   | `0.0` (Ollama) / not sent (OpenAI-compat) | Sampling temperature 0.0–2.0 — applies to both API types; change mid-session with `/temperature` |
+| `--think-level`   | model default              | Thinking effort for reasoning models: `off`, `low`, `medium`, `high`, `max` — Ollama native sends top-level `think`, OpenAI-compatible sends `reasoning_effort`; change mid-session with `/think` |
 | `--max-rounds`   | `3` (interactive) / `7` (one-shot) | Max feedback-loop rounds per message — how many action→observation→model iterations the agent runs before handing back to you. Changeable mid-session with `/max-rounds` |
 
 ## Slash Commands
@@ -552,6 +561,7 @@ uhu --no-autosave --no-cache
 | `/diff`                             | Toggle auto-diff for edits                                                                                                                                    |
 | `/timeout [sec\|reset]`             | Show or set the active model-call timeout for this session only (streaming idle gap or blocking total cap, depending on launch mode); no persistence |
 | `/temperature [val\|reset]`         | Show or set sampling temperature 0.0–2.0 for this session (applies to Ollama `options.temperature` and OpenAI-compatible `temperature` param); `reset` restores the per-API default; no persistence |
+| `/think-level [lvl\|reset]`         | Show or set thinking effort (`off`, `low`, `medium`, `high`, `max`) for this session — Ollama native `think` param / OpenAI-compatible `reasoning_effort`; `reset` restores the model default; no persistence |
 | `/max-rounds [N\|reset]`         | Show or set max feedback-loop rounds per message (1–20) for this session; affects every subsequent message; `reset` restores per-mode defaults (3 interactive, 7 one-shot); no persistence |
 | `/sound`                            | Toggle event sounds (done/question notifications) on/off for this session — overrides `--no-sound` |
 | `/llm`                              | Show current API type, model, context size, host, and extra-body path (if set)                                                                                     |

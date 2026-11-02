@@ -164,6 +164,7 @@ class CommandMixin:
              "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
             "  /timeout [sec|reset]         Show/set the active model-call timeout (this session only)\n"
             "  /temperature [val|reset]     Show/set sampling temperature 0.0-2.0 (this session only)\n"
+            "  /think-level [lvl|reset]     Show/set thinking effort: off, low, medium, high, max (this session only)\n"
             "  /max-rounds [N|reset]        Show/set max feedback-loop rounds per message 1-20 (this session only)\n"
             "  /sound                       Toggle event sounds (done/question) on/off\n"
             "  /llm                         Show current API, model, context, host\n"
@@ -1008,6 +1009,36 @@ class CommandMixin:
         backend.temperature = val
         agent_print(f"[temperature set to {val}]\n")
 
+    def do_think_level(self, args_str):
+        """Show or set the thinking effort level for this session.
+
+        Applies to both API types: native Ollama (top-level think param —
+        bool False for "off", level string otherwise) and OpenAI-compatible
+        (reasoning_effort; "none" for "off"). None = omit → model default.
+        """
+        backend = getattr(self, '_backend', None)
+        if backend is None:
+            agent_print("[No backend available]\n")
+            return
+        sub = args_str.strip().lower()
+        current = getattr(backend, "think_level", None)
+        if sub == "":
+            shown = current if current is not None else "model default"
+            agent_print(f"[think level: {shown}]\n")
+            return
+        if sub == "reset":
+            self._think_level = None
+            backend.think_level = None
+            agent_print("[think level reset to model default]\n")
+            return
+        if sub not in ("off", "low", "medium", "high", "max"):
+            agent_print("[Invalid level: use off, low, medium, high, max, or /think-level reset]\n")
+            return
+        self._think_level = sub
+        backend.think_level = sub
+        api_note = "think" if self._api_type == "ollama" else "reasoning_effort"
+        agent_print(f"[think level set to {sub} (sends {api_note})]\n")
+
     def do_auto(self, args_str):
         sub = args_str.strip().lower()
         if sub == "reset":
@@ -1160,6 +1191,7 @@ class CommandMixin:
         "/pid": "_cmd_pid",
          "/timeout": "_cmd_timeout",
         "/temperature": "_cmd_temperature",
+        "/think-level": "_cmd_think_level",
         "/max-rounds": "_cmd_max_rounds",
         "/sound": "_cmd_sound",
         "/llm": "_cmd_llm",
@@ -1169,6 +1201,7 @@ class CommandMixin:
         ("/llm ", "_cmd_llm", 5),
         ("/timeout ", "_cmd_timeout", 8),
         ("/temperature ", "_cmd_temperature", 13),
+        ("/think-level ", "_cmd_think_level", 14),
         ("/max-rounds ", "_cmd_max_rounds", 12),
         ("/attach-bin", "_cmd_attach_bin", 11),
         ("/embed-bin", "_cmd_embed_bin", 10),
@@ -1313,6 +1346,10 @@ class CommandMixin:
         self.do_timeout(args)
         return DISPATCH_CONTINUE
 
+    def _cmd_think_level(self, args):
+        self.do_think_level(args)
+        return DISPATCH_CONTINUE
+
     def _cmd_temperature(self, args):
         self.do_temperature(args)
         return DISPATCH_CONTINUE
@@ -1415,6 +1452,7 @@ class CommandMixin:
             max_context=self._max_context,
             no_llm_parsing=not self._llm_parser_enabled,
             temperature=self._temperature,
+            think_level=getattr(self, "_think_level", None),
             max_rounds=getattr(self, "max_rounds", None),
         )
 

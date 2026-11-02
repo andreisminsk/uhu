@@ -29,7 +29,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 tools=True, skills=False, skills_dir="./.skills", cache_files=True,
                 thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
                 tpm_limit=None, max_context=None, no_llm_parsing=False,
-                openai_extra_body=None, temperature=None, max_rounds=None):
+                openai_extra_body=None, temperature=None, max_rounds=None,
+                think_level=None):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -46,6 +47,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             max_context=max_context,
             extra_body_path=openai_extra_body,
             temperature=temperature,
+            think_level=think_level,
             quiet=quiet
         )
         self._api_type = api_type
@@ -58,6 +60,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._extra_body_path = openai_extra_body
         # Sampling temperature — None = backend default (0.0 Ollama / not sent OpenAI)
         self._temperature = temperature
+        # Thinking effort — None = omit the param (model default)
+        self._think_level = think_level
 
         self.client = None  # Deprecated: use _backend instead
         self.model = model
@@ -259,7 +263,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         return result
 
     def _rebuild_backend(self, api_type=None, model=None, ctx_size=None,
-                         host=None, api_key=None, extra_body_path=None):
+                         host=None, api_key=None, extra_body_path=None,
+                         think_level=None):
         """Swap the LLM backend at runtime. History and running jobs are untouched."""
         from .backends import create_backend
         api_type = api_type or self._api_type
@@ -267,6 +272,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         ctx_size = ctx_size if ctx_size is not None else self.ctx_size
         host = host or self._host
         api_key = api_key or self._api_key
+        think_level = think_level if think_level is not None else self._think_level
         # extra_body_path is used as-is: None = no extra body, path = load file
 
         # Reset session output-token total — fresh backend, fresh stats
@@ -278,12 +284,14 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             tpm_limit=self._tpm_limit, max_context=self._max_context,
             extra_body_path=extra_body_path,
             temperature=self._temperature,
+            think_level=think_level,
             quiet=self.quiet
         )
         self.model = model
         self.ctx_size = ctx_size
         self._api_type = api_type
         self._host = host
+        self._think_level = think_level
         self._api_key = api_key
         self._extra_body_path = extra_body_path or None
         self._log("system", f"[Backend switched: api={api_type} model={model} ctx={ctx_size} host={host} extra_body={extra_body_path or 'off'}]")
@@ -819,8 +827,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         backend_info = f"API: {self._api_type}"
         if hasattr(self._backend, 'client') and hasattr(self._backend.client, '_client'):
             backend_info += f" | {self._backend.client._client.base_url}"
+        think_part = f" | Think: {self._think_level}" if getattr(self, '_think_level', None) else ""
         agent_print(f"Connected | {backend_info} | Model: {self.model} | "
-              f"Context: {self.ctx_size} | Stream: {self.stream} | Agent: {self.agent} | "
+              f"Context: {self.ctx_size}{think_part} | Stream: {self.stream} | Agent: {self.agent} | "
               f"Tools: {self.tools} | Skills: {self.skills} | Thinking: {self.thinking} | "
               f"Cache: {self.cache_files} | Autosave: {self.autosave}")
         agent_print(f"Platform: {info['platform_label']} | Shell: {info['shell_label']}")
