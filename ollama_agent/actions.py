@@ -503,6 +503,9 @@ class ActionMixin:
             return (None, False, False, False)
         modified = set()
         created = set()
+        # Scope rollback snapshots to this action round — a failure must
+        # never revert files further back than this round's starting state.
+        self._get_file_executor().rollback.begin_round()
         observations = []
         missing_eof_paths = []
         user_cancelled_run = False
@@ -651,6 +654,16 @@ class ActionMixin:
                         n_created = len(created)
                         self._rollback_edits(modified, created)
                         msg = f"[Rolled back {n_modified} modified, {n_created} created file(s) after {action['type']} failure]"
+                        # Surface nearest cached copies so recovery is one `cp`
+                        # instead of multi-round cache forensics.
+                        cache = self._get_file_executor().cache
+                        cache_hints = []
+                        for p in sorted(modified | created):
+                            uri = cache.latest_uri(p)
+                            if uri:
+                                cache_hints.append(f"{p} → {uri}")
+                        if cache_hints:
+                            msg += " Nearest cached copies: " + "; ".join(cache_hints)
                         agent_print(msg + "\n")
                         observations.append(msg)
                     break

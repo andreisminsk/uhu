@@ -61,6 +61,50 @@ class FileCache:
             return None
         return Path(cache_path).resolve().as_uri()
 
+    def latest_uri(self, path):
+        """Find the latest (highest-N) cached version of path.
+
+        Returns the file:// URI, or None when no cached copy exists.
+        Used after rollback failures to point the model at the nearest
+        recoverable version instead of leaving it to rediscover the cache.
+        """
+        cache_dir = os.path.join(self.workdir, ".uhu", ".cache")
+        try:
+            if not os.path.isdir(cache_dir):
+                return None
+            if os.path.isabs(path):
+                try:
+                    rel_path = os.path.relpath(path, self.workdir)
+                except ValueError:
+                    rel_path = os.path.basename(path)
+            else:
+                rel_path = path
+            base, ext = os.path.splitext(rel_path)
+            # Cached copies keep the file's relative directory layout
+            # (cache() writes to cache_dir/<rel_path> with numeric suffix),
+            # so search inside the file's subdirectory, not the cache root.
+            sub = os.path.dirname(base)
+            search_dir = os.path.join(cache_dir, sub) if sub else cache_dir
+            prefix = os.path.basename(base) + "."
+            suffix = ext if ext else ""
+            best_n = None
+            if not os.path.isdir(search_dir):
+                return None
+            for name in os.listdir(search_dir):
+                if not name.startswith(prefix) or not name.endswith(suffix):
+                    continue
+                mid = name[len(prefix):len(name) - len(suffix)] if suffix else name[len(prefix):]
+                if mid.isdigit():
+                    n = int(mid)
+                    if best_n is None or n > best_n:
+                        best_n = n
+            if best_n is None:
+                return None
+            cache_path = os.path.join(cache_dir, f"{prefix}{best_n}{suffix}")
+            return Path(cache_path).resolve().as_uri()
+        except Exception:
+            return None
+
 
 class RollbackManager:
     """Tracks pre-edit file snapshots and rolls back on failure."""
@@ -69,8 +113,19 @@ class RollbackManager:
         self.workdir = workdir
         self._snapshots = {}
 
+    def begin_round(self):
+        """Drop snapshots from previous action rounds.
+
+        Scoped per round: a failure rollback reverts files to this round's
+        starting state and never further back (prevents the "rolled back
+        past a whole day of edits to the P0 stub" cascade — see tennis-
+        diorama log incident at grounds.js).
+        """
+        self._snapshots = {}
+
     def save(self, path, content):
-        """Save file content before modification. Only saves the first version."""
+        """Save file content before modification. Only saves the first
+        version within the current round."""
         if path not in self._snapshots:
             self._snapshots[path] = content
 

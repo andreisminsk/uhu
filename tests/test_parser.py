@@ -13,59 +13,59 @@ class TestParseParams(unittest.TestCase):
     """Tests for _parse_params helper."""
 
     def test_empty_input(self):
-        self.assertEqual(_parse_params(""), {})
-        self.assertEqual(_parse_params("  "), {})
+        self.assertEqual(_parse_params(""), ({}, None))
+        self.assertEqual(_parse_params("  "), ({}, None))
 
     def test_valid_json(self):
-        self.assertEqual(_parse_params('{"path": "src/app.py"}'), {"path": "src/app.py"})
+        self.assertEqual(_parse_params('{"path": "src/app.py"}'), ({"path": "src/app.py"}, None))
 
     def test_valid_json_multiple_keys(self):
         self.assertEqual(
             _parse_params('{"path": "src/app.py", "limit": 10}'),
-            {"path": "src/app.py", "limit": 10}
+            ({"path": "src/app.py", "limit": 10}, None)
         )
 
     def test_json_with_boolean(self):
         self.assertEqual(
             _parse_params('{"recursive": true, "overwrite": false}'),
-            {"recursive": True, "overwrite": False}
+            ({"recursive": True, "overwrite": False}, None)
         )
 
     def test_curly_double_quotes_in_json(self):
         """Curly/smart double quotes in JSON should be normalized to straight quotes."""
         curly_json = '{\u201cpath\u201d: \u201csrc/app.py\u201d}'
         result = _parse_params(curly_json)
-        self.assertEqual(result, {"path": "src/app.py"})
+        self.assertEqual(result, ({"path": "src/app.py"}, None))
 
     def test_curly_single_quotes_inside_json_string(self):
         """Curly single quotes inside a JSON string value should be normalized."""
         result = _parse_params('{"pattern": "\u2018hello\u2019"}')
-        self.assertEqual(result, {"pattern": "'hello'"})
+        self.assertEqual(result, ({"pattern": "'hello'"}, None))
 
     def test_fallback_key_value(self):
         result = _parse_params('path: src/app.py\nlimit: 10')
-        self.assertEqual(result, {"path": "src/app.py", "limit": 10})
+        self.assertEqual(result, ({"path": "src/app.py", "limit": 10}, None))
 
     def test_fallback_key_value_quoted(self):
         result = _parse_params('pattern: "hello.*world"')
-        self.assertEqual(result, {"pattern": "hello.*world"})
+        self.assertEqual(result, ({"pattern": "hello.*world"}, None))
 
     def test_fallback_boolean(self):
         result = _parse_params('recursive: true')
-        self.assertEqual(result, {"recursive": True})
+        self.assertEqual(result, ({"recursive": True}, None))
 
     def test_fallback_numeric(self):
         result = _parse_params('limit: 42')
-        self.assertEqual(result, {"limit": 42})
+        self.assertEqual(result, ({"limit": 42}, None))
 
     def test_fallback_float(self):
         result = _parse_params('rate: 3.14')
-        self.assertEqual(result, {"rate": 3.14})
+        self.assertEqual(result, ({"rate": 3.14}, None))
 
     def test_non_dict_json_returns_empty(self):
         """JSON that parses to a non-dict should fall back."""
         result = _parse_params('[1, 2, 3]')
-        self.assertEqual(result, {})
+        self.assertEqual(result, ({}, None))
 
 
 class TestParseEditContent(unittest.TestCase):
