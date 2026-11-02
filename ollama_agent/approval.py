@@ -15,6 +15,43 @@ from .input_utils import read_full_input
 from . import sound
 
 
+def _extract_run_code(diff_text):
+    """Extract the runnable command/script text from a RUN-style diff_text.
+
+    CommandRunner passes diff_text as "[Command details]\\n  cwd: ...\\n  cmd: <cmd>".
+    Returns the raw command string, or the full text if the format doesn't match.
+    """
+    for line in diff_text.splitlines():
+        if line.strip().startswith("cmd: "):
+            return line.strip()[len("cmd: "):]
+    return diff_text
+
+
+def _llm_explain_from_gate(gate, title, diff_text):
+    """Explain action details via the Parser LLM, with independent judgement.
+
+    Called AFTER the raw diff/details are already displayed — this only adds
+    the LLM's analysis on top. Returns True if an explanation was shown,
+    False if the explainer is not configured.
+    """
+    cfg = getattr(gate, "_explain_cfg", None)
+    if not cfg or not cfg.get("enabled"):
+        return False
+    from .llm_parser import _llm_explain
+    model = cfg.get("model", "")
+    base_url = cfg.get("base_url", "")
+    timeout = cfg.get("timeout", 60)
+    api_type = cfg.get("api_type", "ollama")
+    api_key = cfg.get("api_key", "ollama")
+    agent_print(f"[LLM explainer: asking {model or 'main model'} for independent analysis...]")
+    explanation, error = _llm_explain(base_url, model, title + "\n\n" + diff_text, timeout=timeout, api_type=api_type, api_key=api_key)
+    if error:
+        agent_print(f"[LLM explainer unavailable: {error}]\n")
+        return True
+    agent_print("\n" + explanation + "\n")
+    return True
+
+
 class ApprovalGate:
     """Manages auto-approval state and user confirmation prompts.
 
@@ -37,6 +74,10 @@ class ApprovalGate:
         self.always_runs = set()
         self._skill_auto_approve = False
         self._config_loaded = False
+        # Config for the optional 'd' → LLM explainer (independent action analysis).
+        # Populated by ChatSession.__init__ from the llm_parser section of
+        # .ollama_agent.json; 'explain' key enables it (see README).
+        self._explain_cfg = None
 
     # ── Config persistence ────────────────────────────────────────────────
 
@@ -156,8 +197,16 @@ class ApprovalGate:
                 agent_print("[Auto-all enabled — all actions auto-approved this session]\n")
                 return True
             elif ans in ("d", "diff"):
+                # Always show the raw details/diff first; then, when enabled
+                # via llm_parser.explain in .ollama_agent.json, append the
+                # LLM explainer's independent (context-free) analysis.
                 if diff_text:
                     show_diff_colored(diff_text)
+                    _llm_explain_from_gate(
+                        self,
+                        prompt,
+                        _extract_run_code(diff_text) if cmd else diff_text,
+                    )
                 else:
                     agent_print("[No details available for this action]\n")
                 continue

@@ -97,8 +97,12 @@ def main():
                         help="Sampling temperature 0.0-2.0 (default: 0.0 for Ollama native API; provider default for OpenAI-compatible API). Change mid-session with /temperature")
     parser.add_argument("--no-sound", action="store_true",
                         help="Disable event sounds (done/question notifications). Toggled mid-session with /sound")
+    parser.add_argument("--max-rounds", type=int, default=None, dest="max_rounds",
+                        help="Max feedback-loop rounds per message (default: 3 interactive, 7 one-shot). Changeable mid-session with /max-rounds")
     parser.add_argument("--no-llm-parsing", action="store_true",
                         help="Disable LLM fallback parsing (configured via llm_parser section in .ollama_agent.json)")
+    parser.add_argument("--prompt-file", default=None, dest="prompt_file",
+                        help="Read the one-shot prompt from a file ('-' = stdin) instead of positional prompt args. Mutually exclusive with positional prompt")
     parser.add_argument("--no-logo", action="store_true",
                         help="Do not print the ASCII logo at startup")
     parser.add_argument("prompt", nargs="*", default=[],
@@ -115,7 +119,8 @@ def main():
             print("[Version not found]")
         return
 
-    if not args.no_logo and not args.prompt:
+    is_oneshot = bool(args.prompt) or args.prompt_file is not None
+    if not args.no_logo and not is_oneshot:
         print_logo()
 
     workdir = args.workdir
@@ -127,7 +132,7 @@ def main():
 
     # Bootstrap ~/.uhu skeleton (idempotent; respects UHU_HOME) — see dev-docs/UHU-HOME-ARCH.md
     from .home import bootstrap
-    bootstrap(quiet=bool(args.prompt))
+    bootstrap(quiet=is_oneshot)
 
     # Load ~/.uhu/.secrets/.env into os.environ (OS env wins) before any
     # config resolution — enables auth_token_env / ${VAR} secrets.
@@ -162,6 +167,38 @@ def main():
             print(f"[Error: --openai-extra-body file is invalid: {_p}: {_e}]")
             sys.exit(1)
 
+    # Validate --max-rounds early (fail fast) — same bounds as /max-rounds
+    if args.max_rounds is not None and not (1 <= args.max_rounds <= 20):
+        print("[Error: --max-rounds must be between 1 and 20]")
+        sys.exit(1)
+
+    # --prompt-file: read the one-shot prompt from a file or stdin ('-').
+    # Mutually exclusive with the positional prompt — fail fast on both.
+    prompt_text = None
+    if args.prompt_file:
+        if args.prompt:
+            print("[Error: --prompt-file cannot be combined with a positional prompt — use one or the other]")
+            sys.exit(1)
+        if args.prompt_file == "-":
+            prompt_text = sys.stdin.read()
+        else:
+            _pf = os.path.expanduser(args.prompt_file)
+            if not os.path.isfile(_pf):
+                print(f"[Error: --prompt-file file not found: {_pf}]")
+                sys.exit(1)
+            try:
+                with open(_pf, "r", encoding="utf-8") as _f:
+                    prompt_text = _f.read()
+            except OSError as _e:
+                print(f"[Error: --prompt-file cannot be read: {_pf}: {_e}]")
+                sys.exit(1)
+        # Normalize line endings (files edited on Windows may carry \r\n)
+        prompt_text = prompt_text.replace("\r\n", "\n").replace("\r", "\n")
+        if not prompt_text.strip():
+            _src = "(stdin)" if args.prompt_file == "-" else args.prompt_file
+            print(f"[Error: --prompt-file is empty: {_src}]")
+            sys.exit(1)
+
     session = ChatSession(
         host=args.host,
         model=args.model,
@@ -177,7 +214,7 @@ def main():
         autosave=not args.no_autosave,
         cache_files=not args.no_cache,
         thinking=args.thinking,
-        quiet=bool(args.prompt),
+        quiet=is_oneshot,
         mcp=args.mcp,
         api_type=api_type,
         api_key=args.api_key,
@@ -186,6 +223,7 @@ def main():
         max_context=args.max_context,
         no_llm_parsing=args.no_llm_parsing,
         temperature=args.temperature,
+        max_rounds=args.max_rounds,
     )
 
     # Event sounds — single point of muting for all playback
@@ -195,6 +233,8 @@ def main():
 
     if args.prompt:
         session.run_once(" ".join(args.prompt))
+    elif prompt_text is not None:
+        session.run_once(prompt_text)
     else:
         while session is not None:
             session = session.run()

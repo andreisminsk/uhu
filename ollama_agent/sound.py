@@ -3,6 +3,8 @@
 Events:
 - "done":     the agent finished a round and user feedback is needed
 - "question": a confirmation prompt (y/N/...) is being shown
+- "warn":     extra warning played after "done" when context exceeds the
+              token threshold (see ChatSession._play_done_sound)
 
 Platform support:
 - macOS:    afplay + /System/Library/Sounds/*.aiff
@@ -35,6 +37,7 @@ _ENABLED = True
 _MAC_SOUNDS = {
     "done": "/System/Library/Sounds/Glass.aiff",
     "question": "/System/Library/Sounds/Ping.aiff",
+    "warn": "/System/Library/Sounds/Basso.aiff",
 }
 
 # freedesktop sound theme file names vary slightly across distros and
@@ -50,6 +53,10 @@ _LINUX_FILES = {
         "message-new-instant.oga",
         "bell.oga",
     ],
+    "warn": [
+        "dialog-error.oga",
+        "bell.oga",
+    ],
 }
 _LINUX_BASE_DIRS = [
     "/usr/share/sounds/freedesktop/stereo",
@@ -60,6 +67,7 @@ _LINUX_PLAYERS = ("paplay", "pw-play")
 _WIN_SOUNDS = {
     "done": "SystemExclamation",
     "question": "SystemAsterisk",
+    "warn": "SystemHand",
 }
 
 

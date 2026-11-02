@@ -55,6 +55,10 @@
   "extra_skills_dirs": [
     "~/my-skills"
   ],
+  "sound": {
+    "_comment": "context_warn_tokens: at 'done' (feedback needed), play an extra 'warn' sound when the context exceeds this many tokens (default 131072 = 128K). Set 0 to disable.",
+    "context_warn_tokens": 131072
+  },
   "llm_query": {
     "api_url": "http://localhost:11434",
     "model": "glm-5.3-flash:cloud",
@@ -80,7 +84,9 @@
     "base_url": "http://localhost:11434",
     "timeout": 60,
     "api_type": "ollama",
-    "api_key": "ollama"	
+    "api_key": "ollama",
+    "_comment": "explain: true — the 'd' option in confirmation prompts sends the action to the Parser LLM for an independent safety explanation (no project context), instead of showing raw diff/details",
+    "explain": false
   },
   "tools": {
     "image_analysis": {

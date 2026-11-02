@@ -8,6 +8,7 @@ import sys
 from .constants import MIME_TYPES, IMAGE_MIME_TYPES, SKIP_EXT, MODEL_TEMPERATURE
 from .actions import agent_print
 from .input_utils import read_full_input
+from . import sound
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,9 @@ class CommandMixin:
         if exact_tokens is not None:
             total_tokens = exact_tokens
             source = ""
+            # Track the last exact count so _play_done_sound warns on the
+            # real context size instead of the crude chars/4 estimate.
+            self._last_exact_tokens = exact_tokens
         else:
             total_tokens = int(sum(len(m["content"]) / 4 for m in self.history))
             source = "~"
@@ -160,6 +164,7 @@ class CommandMixin:
              "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
             "  /timeout [sec|reset]         Show/set the active model-call timeout (this session only)\n"
             "  /temperature [val|reset]     Show/set sampling temperature 0.0-2.0 (this session only)\n"
+            "  /max-rounds [N|reset]        Show/set max feedback-loop rounds per message 1-20 (this session only)\n"
             "  /sound                       Toggle event sounds (done/question) on/off\n"
             "  /llm                         Show current API, model, context, host\n"
             "  /llm [--api-openai|--api-ollama] [--model <name>] [--ctx <size>] [--host <url>] [--api-key <key>] [--extra-body <path>]\n"
@@ -937,6 +942,36 @@ class CommandMixin:
         setattr(backend, attr, val)
         agent_print(f"[timeout set to {val}s ({active} mode)]\n")
 
+    def do_max_rounds(self, args_str):
+        """Show or set the max feedback-loop rounds per message for this session.
+
+        /max-rounds          → show current setting and defaults
+        /max-rounds N        → set to N for this session (1-20)
+        /max-rounds reset    → back to per-mode defaults (3 interactive, 7 one-shot)
+
+        No persistence — affects every subsequent _send() until changed.
+        """
+        sub = args_str.strip()
+        current = getattr(self, "max_rounds", None)
+        if sub == "":
+            shown = str(current) if current else "per-mode defaults (3 interactive, 7 one-shot)"
+            agent_print(f"[max-rounds: {shown}]\n")
+            return
+        if sub.lower() == "reset":
+            self.max_rounds = None
+            agent_print("[max-rounds reset to per-mode defaults (3 interactive, 7 one-shot)]\n")
+            return
+        try:
+            val = int(sub)
+        except ValueError:
+            agent_print(f"[Invalid value: {sub!r} — use a number 1-20, or /max-rounds reset]\n")
+            return
+        if not (1 <= val <= 20):
+            agent_print("[max-rounds must be between 1 and 20]\n")
+            return
+        self.max_rounds = val
+        agent_print(f"[max-rounds set to {val} (this session)]\n")
+
     def do_temperature(self, args_str):
         """Show or set the sampling temperature for this session.
 
@@ -1125,6 +1160,7 @@ class CommandMixin:
         "/pid": "_cmd_pid",
          "/timeout": "_cmd_timeout",
         "/temperature": "_cmd_temperature",
+        "/max-rounds": "_cmd_max_rounds",
         "/sound": "_cmd_sound",
         "/llm": "_cmd_llm",
         "workdir": "_cmd_workdir", "/workdir": "_cmd_workdir",
@@ -1133,6 +1169,7 @@ class CommandMixin:
         ("/llm ", "_cmd_llm", 5),
         ("/timeout ", "_cmd_timeout", 8),
         ("/temperature ", "_cmd_temperature", 13),
+        ("/max-rounds ", "_cmd_max_rounds", 12),
         ("/attach-bin", "_cmd_attach_bin", 11),
         ("/embed-bin", "_cmd_embed_bin", 10),
         ("/memorize", "_cmd_memorize", 9),
@@ -1184,6 +1221,7 @@ class CommandMixin:
 
     def _confirm_exit_with_jobs(self, active_count):
         """Prompt user to confirm exit when jobs are active. Returns True if should proceed."""
+        sound.play("question")
         try:
             ans = read_full_input(
                 f"{active_count} job(s) still running/pending. Exit anyway? (y/N): "
@@ -1202,6 +1240,7 @@ class CommandMixin:
         if not self.autosave:
             msgs = [m for m in self.history if m["role"] != "system"]
             if msgs:
+                sound.play("question")
                 try:
                     ans = read_full_input("Exit without saving? (y/N): ").strip().lower()
                 except (KeyboardInterrupt, EOFError):
@@ -1278,6 +1317,10 @@ class CommandMixin:
         self.do_temperature(args)
         return DISPATCH_CONTINUE
 
+    def _cmd_max_rounds(self, args):
+        self.do_max_rounds(args)
+        return DISPATCH_CONTINUE
+
     def _cmd_sound(self, args):
         from .sound import set_enabled, is_enabled
         set_enabled(not is_enabled())
@@ -1320,6 +1363,7 @@ class CommandMixin:
         if not self.autosave:
             msgs = [m for m in self.history if m['role'] != 'system']
             if msgs:
+                sound.play("question")
                 try:
                     ans = read_full_input("Exit without saving? (y/N): ").strip().lower()
                 except (KeyboardInterrupt, EOFError):
@@ -1331,6 +1375,7 @@ class CommandMixin:
             self._do_autosave()
 
         # Confirm
+        sound.play("question")
         try:
             ans = read_full_input(
                 f"Switching to {new_dir}. Current session will be saved. Continue? (Y/n) "
@@ -1370,6 +1415,7 @@ class CommandMixin:
             max_context=self._max_context,
             no_llm_parsing=not self._llm_parser_enabled,
             temperature=self._temperature,
+            max_rounds=getattr(self, "max_rounds", None),
         )
 
         self._workdir_switch_target = new_session

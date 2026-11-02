@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 
 from .constants import AGENT_SYSTEM_PROMPT, get_platform_shell_guidance
+from . import sound
 from .input_utils import read_full_input
 from .utils import relative_time
 from .actions import agent_print
@@ -81,6 +82,7 @@ class PersistenceMixin:
                 rel = relative_time(s["saved"])
                 agent_print(f"  {i}. {s['name']}  —  {s['saved_display']}  —  {rel}  —  {s['messages']} messages  —  model: {s['model']}")
             agent_print()
+            sound.play("question")
             try:
                 choice = read_full_input("Restore which? (number or name, Enter to cancel): ", color=ANSI_AGENT).strip()
             except (KeyboardInterrupt, EOFError):
@@ -105,6 +107,7 @@ class PersistenceMixin:
             return
         non_sys = [m for m in self.history if m["role"] != "system"]
         if non_sys:
+            sound.play("question")
             try:
                 confirm = read_full_input(f"[Current history has {len(non_sys)} messages. Replace? (y/N)]: ").strip().lower()
             except (KeyboardInterrupt, EOFError):

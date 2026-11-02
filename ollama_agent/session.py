@@ -29,7 +29,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 tools=True, skills=False, skills_dir="./.skills", cache_files=True,
                 thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
                 tpm_limit=None, max_context=None, no_llm_parsing=False,
-                openai_extra_body=None, temperature=None):
+                openai_extra_body=None, temperature=None, max_rounds=None):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -84,6 +84,10 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._active_skill = None
         self.show_diff = False
         self.cache_files = cache_files
+        # Max feedback-loop rounds per message. None = per-mode defaults
+        # (3 interactive via MAX_FEEDBACK_ROUNDS, 7 one-shot in run_once).
+        # Set by --max-rounds CLI flag; changeable mid-session via /max-rounds.
+        self.max_rounds = max_rounds
         self.thinking = thinking
         self.autosave_name = None
         self._pasted_images = []  # tracks clipboard-pasted image paths
@@ -110,6 +114,29 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._llm_parser_timeout = _parser_cfg.get("timeout", 60)
         self._llm_parser_api_type = _parser_cfg.get("api_type", "ollama")
         self._llm_parser_api_key = _parser_cfg.get("api_key", "ollama")
+
+        # 'd' confirmation option — optional LLM explainer (independent action
+        # analysis without project context). Shares the llm_parser section
+        # (model/base_url/timeout/api_type/api_key) but is enabled separately
+        # via "explain": true, so verifying parses and explaining actions
+        # can be toggled independently.
+        if _parser_cfg.get("explain", False):
+            self._approval._explain_cfg = {
+                "enabled": True,
+                "model": self._llm_parser_model,
+                "base_url": self._llm_parser_base_url,
+                "timeout": self._llm_parser_timeout,
+                "api_type": self._llm_parser_api_type,
+                "api_key": self._llm_parser_api_key,
+            }
+
+        # 'warn' sound threshold — extra warning at 'done' when the context
+        # exceeds this many tokens (chars/4 estimate, same as context checks).
+        # Absolute check, unlike the %-based _check_context_pressure: on huge
+        # context windows (e.g. 1M tokens) the %-warnings never fire, while
+        # token spend may already be very large. Configurable via the
+        # "sound" section of .ollama_agent.json.
+        self._sound_warn_context_tokens = _cfg.get("sound", {}).get("context_warn_tokens", 131072)  # 128K
 
         if self.autosave:
             project_name = os.path.basename(self.workdir) or "session"
@@ -411,6 +438,35 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             return (atype, name, param_hash)
         return None
 
+    def _play_done_sound(self):
+        """Play the 'done' sound; add a 'warn' sound if context is large.
+
+        The percentage-based warnings in _check_context_pressure only fire
+        relative to --ctx; this check is absolute (default 128K tokens,
+        configurable via sound.context_warn_tokens in .ollama_agent.json)
+        so oversized contexts are flagged even on huge-context models.
+        """
+        sound.play("done")
+        threshold = self._sound_warn_context_tokens
+        if not threshold or threshold <= 0:
+            return
+        try:
+            # Prefer the exact prompt-token count from the last API call
+            # (includes system prompt + tool definitions); fall back to the
+            # crude chars/4 estimate over history only.
+            exact = getattr(self, "_last_exact_tokens", None)
+            if exact is not None:
+                total_tokens = int(exact)
+            else:
+                total_tokens = int(sum(len(m["content"]) / 4 for m in self.history))
+        except Exception:
+            return
+        if total_tokens >= threshold:
+            agent_print(
+                f"[⚠ Context ~{total_tokens:,} tokens — large; consider /compact]\n"
+            )
+            sound.play("warn")
+
     def _check_context_pressure(self):
         """Check context usage and take action if needed.
 
@@ -602,7 +658,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     # Model is stuck on last round — skip to max rounds message
                     continue
                 else:
-                    sound.play("done")
+                    self._play_done_sound()
                     agent_print("AGENT: Done — no more actions\n")
                     return
             self._log("system", obs)
@@ -616,7 +672,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 if consecutive_read_only >= max_consecutive_read_only:
                     # Too many consecutive read-only rounds — stop and nudge
                     self.history.append({"role": "assistant", "content": "Noted."})
-                    sound.play("done")
+                    self._play_done_sound()
                     agent_print(f"⚠  Stopped after {consecutive_read_only} read-only rounds\n")
                     return
                 # Read-only observations — call model again so it can act on what it read
@@ -657,10 +713,14 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             self._log("system", obs)
             self.history.append({"role": "user", "content": obs})
         self.history.append({"role": "assistant", "content": "Noted."})
-        sound.play("done")
+        self._play_done_sound()
         agent_print(f"AGENT: Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
 
-    def _send(self, message, images=None, max_rounds=MAX_FEEDBACK_ROUNDS):
+    def _send(self, message, images=None, max_rounds=None):
+        # Resolve feedback rounds: explicit arg > session setting (--max-rounds
+        # or /max-rounds) > MAX_FEEDBACK_ROUNDS default (3).
+        if max_rounds is None:
+            max_rounds = getattr(self, "max_rounds", None) or MAX_FEEDBACK_ROUNDS
         # Privacy egress net — redact secret-shaped content from the outgoing
         # user message (covers pasted secrets, command output quoted by the user,
         # and anything else headed to the LLM / session autosave)
@@ -736,7 +796,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         # Auto-approve all actions for non-interactive mode
         self.auto_all = True
         try:
-            self._send(prompt, max_rounds=7)
+            # One-shot default is 7 rounds; --max-rounds overrides it.
+            self._send(prompt, max_rounds=self.max_rounds or 7)
         finally:
             self.shutdown_mcp()
 
@@ -802,6 +863,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 except (KeyboardInterrupt, EOFError):
                     has_jobs, job_count = self._has_active_jobs()
                     if has_jobs:
+                        sound.play("question")
                         try:
                             ans = read_full_input(
                                 f"\n{job_count} job(s) still running/pending. Exit anyway? (y/N): "

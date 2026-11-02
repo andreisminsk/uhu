@@ -200,6 +200,51 @@ def _llm_tool_params(base_url, model, text, index, timeout=60, api_type="ollama"
         return None
 
 
+def _llm_explain(base_url, model, text, timeout=60, api_type="ollama", api_key="ollama"):
+    """Ask a Parser LLM to explain actionable content with independent judgement.
+
+    Used by the confirmation flow's 'd' option: the user is deciding whether
+    to approve an action and wants a neutral, context-free assessment of what
+    the content does and whether it is dangerous.
+
+    The text is passed WITHOUT any conversation history, file names from the
+    project, or user context — the model judges the content in isolation.
+
+    Returns (explanation_str, None) on success or (None, error_str) on failure.
+    """
+    system_prompt = (
+        "You are a security-aware technical explainer. You analyze a single "
+        "actionable block (shell script, code snippet, or tool invocation) "
+        "purely on its own merits. You have NO access to the surrounding "
+        "project, conversation, or the user's intent — do not speculate about "
+        "them. Judge only what is literally in front of you.\n\n"
+        "Respond in this structure:\n"
+        "1. WHAT IT DOES — a concise step-by-step description of the actions "
+        "performed (files touched, network calls, installs, deletions, etc.).\n"
+        "2. SIDE EFFECTS — everything that changes state outside the block "
+        "itself (filesystem writes beyond temp, package installs, network "
+        "egress, credential reads, process/service changes).\n"
+        "3. RISK ASSESSMENT — verdict: SAFE / CAUTION / DANGEROUS, with 1-3 "
+        "bullet reasons. Consider data loss, privilege escalation, obfuscated "
+        "or encoded payloads, remote content execution, and destructive "
+        "defaults. If something is ambiguous, say so explicitly instead of "
+        "guessing.\n\n"
+        "Be factual and terse. No recommendations to approve or reject — the "
+        "human decides. If the content is empty or not analyzable, say exactly that."
+    )
+    user_prompt = (
+        "Explain what this actionable block does and assess its safety, "
+        "independently and without any prior context:\n\n"
+        f"<block>\n{text}\n</block>"
+    )
+    resp = _call_llm(base_url, model, system_prompt, user_prompt, timeout=timeout, api_type=api_type, api_key=api_key)
+    if resp is None:
+        return None, "LLM explainer call failed (timeout or connection error)"
+    if not resp.strip():
+        return None, "LLM explainer returned an empty response"
+    return resp.strip(), None
+
+
 def should_trigger_fallback(actions, risky_markers, missing_eof_paths):
     """Determine if LLM fallback parsing should be triggered.
 
