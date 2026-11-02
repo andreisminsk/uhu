@@ -8,7 +8,18 @@ import threading
 
 
 class Spinner:
-    """A terminal spinner that animates while waiting, with optional thinking display."""
+    """A terminal spinner that animates while waiting, with optional thinking display.
+
+    Screen-cleanup ownership (Ctrl+C fix): the animation thread only DRAWS.
+    ``stop()`` is the single owner of erasing — it signals the thread, joins
+    it, and then erases the drawn lines itself. Previously the thread erased
+    on exit AND ``stop()`` abandoned it after a 1s join timeout, so a zombie
+    thread (starved by KeyboardInterrupt unwinding / GIL contention) could
+    wake up later, re-animate and erase over a freshly rendered input prompt
+    — desyncing the terminal cursor from prompt_toolkit's internal cursor
+    (visible as duplicated user input after Enter) and, in the worst case,
+    hanging the process holding the stdout buffer mid-write.
+    """
 
     def __init__(self, message="Thinking", prefix="", max_thinking_lines=5, color=None, thinking_color=None):
         self.message = message
@@ -24,8 +35,6 @@ class Spinner:
         self._stop = threading.Event()
         self._thread = None
         self._last_lines = 0
-        # Regex to strip ANSI escape sequences from thinking text
-        self._ansi_re = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b\].*?\x07|\x1b[\[\]()][0-9;]*")
 
     def start(self):
         self._stop.clear()
@@ -83,7 +92,7 @@ class Spinner:
 
         Defaults to 100; shrinks to the terminal width on narrow terminals
         (e.g. Termux on a phone) so lines never wrap — wrapped lines break
-        the cursor-up redraw logic in _spin(). Subtracts the 2-space indent
+        the cursor-up redraw logic in _render(). Subtracts the 2-space indent
         plus a 1-column safety margin; never goes below 10 chars. Re-queried
         on every redraw frame, so terminal resizes take effect live.
         """
@@ -96,48 +105,60 @@ class Spinner:
             pass
         return 100
 
+    def _render(self, frame):
+        """Draw one frame: spinner line + thinking preview below it.
+
+        Redraws over previously drawn lines by moving the cursor up and
+        clearing to end of screen. ``_last_lines`` tracks how many terminal
+        rows we currently own; ``_erase()`` (called exclusively by stop())
+        removes them. Skips drawing after stop() was requested, so a thread
+        that lost the join race can never paint over subsequent output.
+        """
+        if self._stop.is_set():
+            return
+        thinking_lines = self._get_thinking_lines()
+        if self._last_lines > 0:
+            sys.stdout.write(f"\033[{self._last_lines}A")
+        sys.stdout.write("\033[J")
+        sys.stdout.write(f"\r{self.color or ''}{self.prefix}{frame} {self.message}...\033[0m\n")
+        for tl in thinking_lines:
+            sys.stdout.write(f"{self.thinking_color or ''}{tl}\033[0m\n")
+        self._last_lines = 1 + len(thinking_lines)
+        sys.stdout.flush()
+
     def _spin(self):
-        first = True
         try:
             for frame in itertools.cycle(self._frames):
                 if self._stop.is_set():
                     break
-                thinking_lines = self._get_thinking_lines()
-                total_lines = 1 + len(thinking_lines)
+                self._render(frame)
+                # Wait on the stop event: shutdown latency ≤ one frame tick,
+                # and the thread exits promptly when stop() is requested.
+                if self._stop.wait(0.25):
+                    break
+        except Exception:
+            pass
+        # NOTE: no screen cleanup here — stop() owns erasure. A thread that
+        # survives the join timeout below can emit at most the single frame
+        # it was already writing; it never erases over subsequent output.
 
-                if first:
-                    sys.stdout.write(f"\r{self.color or ''}{self.prefix}{frame} {self.message}...\033[0m\n")
-                    for tl in thinking_lines:
-                        sys.stdout.write(f"{self.thinking_color or ''}{tl}\033[0m\n")
-                    self._last_lines = total_lines
-                    first = False
-                else:
-                    # Move cursor up past all previously displayed lines
-                    if self._last_lines > 0:
-                        sys.stdout.write(f"\033[{self._last_lines}A")
-                    # Clear from cursor to end of screen
-                    sys.stdout.write("\033[J")
-                    # Redraw all lines
-                    sys.stdout.write(f"\r{self.color or ''}{self.prefix}{frame} {self.message}...\033[0m\n")
-                    for tl in thinking_lines:
-                        sys.stdout.write(f"{self.thinking_color or ''}{tl}\033[0m\n")
-                    self._last_lines = total_lines
-
+    def _erase(self):
+        """Erase everything the spinner drew (idempotent)."""
+        n, self._last_lines = self._last_lines, 0
+        if n > 0:
+            try:
+                sys.stdout.write(f"\033[{n}A\033[J")
                 sys.stdout.flush()
-                self._stop.wait(0.25)
-        except Exception:
-            pass
-        try:
-            # Clear all displayed lines
-            if self._last_lines > 0:
-                sys.stdout.write(f"\033[{self._last_lines}A")
-                sys.stdout.write("\033[J")
-            sys.stdout.flush()
-        except Exception:
-            pass
+            except Exception:
+                pass
 
     def stop(self):
         self._stop.set()
-        if self._thread:
-            self._thread.join(timeout=1)
-            self._thread = None
+        thread, self._thread = self._thread, None
+        if thread is not None:
+            # 2.5s headroom — ample even when the GIL is contended by
+            # KeyboardInterrupt unwinding. Previously 1s, after which the
+            # zombie thread was silently abandoned while still able to
+            # write/erase the screen (see class docstring).
+            thread.join(timeout=2.5)
+        self._erase()

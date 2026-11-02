@@ -506,9 +506,11 @@ class OllamaNativeBackend(LLMBackend):
                 except _queue.Empty:
                     if stream_error[0]:
                         spinner.stop()
+                        _ai_color_off()
                         raise stream_error[0]
                     if time.time() - last_chunk_time > self.STREAM_CHUNK_TIMEOUT:
                         spinner.stop()
+                        _ai_color_off()
                         agent_print(f"\n[Model streaming timeout — no response for {self.STREAM_CHUNK_TIMEOUT}s]\n")
                         break
                     continue
@@ -516,6 +518,7 @@ class OllamaNativeBackend(LLMBackend):
                 if chunk is None:
                     if stream_error[0]:
                         spinner.stop()
+                        _ai_color_off()
                         raise stream_error[0]
                     break
 
@@ -548,6 +551,7 @@ class OllamaNativeBackend(LLMBackend):
                 except Exception:
                     pass
             spinner.stop()
+            _ai_color_off()
             raise
 
         if first:
@@ -596,10 +600,12 @@ class OllamaNativeBackend(LLMBackend):
                     )
         except KeyboardInterrupt:
             spinner.stop()
+            _ai_color_off()
             raise
 
         if error_holder[0]:
             spinner.stop()
+            _ai_color_off()
             raise error_holder[0]
 
         response = result_holder[0]
@@ -887,9 +893,11 @@ class OpenAIBackend(LLMBackend):
             
         except KeyboardInterrupt:
             spinner.stop()
+            _ai_color_off()
             raise
         except Exception as e:
             spinner.stop()
+            _ai_color_off()
             raise
         
         if first:
@@ -933,9 +941,11 @@ class OpenAIBackend(LLMBackend):
             
         except KeyboardInterrupt:
             spinner.stop()
+            _ai_color_off()
             raise
         except Exception as e:
             spinner.stop()
+            _ai_color_off()
             raise
 
 
