@@ -1,6 +1,3 @@
-**This repository is Read-Only.** 
-This project is publicly visible for educational or reference purposes
-
 Project demo video: https://youtu.be/heG0QWUt4Lw
 
 ![uhu logo](uhu-logo.png){width=50%}
@@ -9,10 +6,32 @@ Project demo video: https://youtu.be/heG0QWUt4Lw
 
 **uhu** (nickname) is a minimalistic agentic coder that lets you closely interact with the model and see how the agentic flow works under the hood. No magic — just a transparent feedback loop of actions, observations, and model calls you can watch unfold step by step. Unlike common agentic coders, uhu focuses on conservative context consumption, helping you achieve the most productive use of tokens. Switch between models with `--model` to compare how different LLMs — small or large, local or cloud — behave in their natural agentic habitat. You can also connect to remote Ollama instances with `--host` (e.g. a Mac Mini M4 Pro running `gemma4:31b` on your local network at `--host http://192.168.1.42:11434`), so you are able to explore and make your own assessment of conversation capabilities of local models. uhu also supports custom skills — reusable, composable workflows you define in JSON that extend the model's capabilities for specific tasks.
 
+## Quickstart
+
+Python 3.10+ and [Ollama](https://ollama.ai) running — that's all you need:
+
+```bash
+git clone https://github.com/andreisminsk/uhu.git && cd uhu
+pip install -e .                  # core
+# pip install -e ".[all]"         # everything: browser, search, pdf, calendar, ...
+ollama pull glm-5.3-flash:cloud
+ollama run glm-5.3-flash:cloud   # verify the model answers, then /bye
+```
+
+Then start the agent — plain `uhu` runs the default model, or point it at your own:
+
+```bash
+uhu
+# or
+uhu --model yourmodel
+```
+
+`glm-5.3-flash:cloud` runs on your ollama.com account; for fully local use, `ollama pull` any model and pass it to `--model`. Full setup (venv, Windows PATH, optional extras like browser automation and Google Calendar, OpenAI-compatible providers) is detailed below.
+
 ## Features
 
 - **Agent mode** (`--agent`): Parse and execute WRITE/EDIT/RUN/FILE blocks from model output
-- **Tools mode** (on by default, `--no-tools` to disable): 35 structured tool calls for filesystem, git, HTTP, browser automation, web search, calendar, desktop UI automation, jobs, and more
+- **Tools mode** (on by default, `--no-tools` to disable): 40 structured tool calls for filesystem, git, HTTP, browser automation, web search, calendar, desktop UI automation, jobs, and more
 - **Skills mode** (`--skills` - off by default): Invoke development skills (code-review, test-gen, doc-gen, plan, md2pdf, docx2md, what-if, root-cause, problem-solving, architect, medicine, business-coach, pro-bidder, text-writer, graph-ai, svg2png, git-uncommitted) and custom skills
 - **Streaming support** (`--stream`): Token-by-token output
 - **Session persistence**: Save/restore conversations with `/save` and `/restore`
@@ -447,12 +466,12 @@ export OPENROUTER_API_KEY="sk-or-v1-your-key-here"
 
 **Windows PowerShell:**
 ```powershell
-huhu --api-openai --host https://openrouter.ai/api/v1 --api-key $env:OPENROUTER_API_KEY --model z-ai/glm-5.3-flash --openai-extra-body "~/.uhu/provider-sail-research.json"
+uhu --api-openai --host https://openrouter.ai/api/v1 --api-key $env:OPENROUTER_API_KEY --model z-ai/glm-5.3-flash --openai-extra-body "~/.uhu/provider-sail-research.json"
 ```
 
 **Windows cmd:**
 ```cmd
-huhu --api-openai --host https://openrouter.ai/api/v1 --api-key %OPENROUTER_API_KEY% --model z-ai/glm-5.3-flash --openai-extra-body "%USERPROFILE%/.uhu/provider-sail-research.json"
+uhu --api-openai --host https://openrouter.ai/api/v1 --api-key %OPENROUTER_API_KEY% --model z-ai/glm-5.3-flash --openai-extra-body "%USERPROFILE%/.uhu/provider-sail-research.json"
 ```
 
 **macOS/Linux:**
@@ -887,8 +906,8 @@ ollama_agent/
   spinner.py           Terminal spinner for model calls
   process.py           Process tree killing (cross-platform)
   utils.py             Misc utilities
-  skills/              Skill registry + 20 built-in skills
-  tools/               Tool registry + 30 built-in tools, MCP client
+  skills/              Skill registry + 17 built-in skills
+  tools/               Tool registry + 40 built-in tools, MCP client
 ```
 
 ### Companion directory: `llama-huggingface/`
