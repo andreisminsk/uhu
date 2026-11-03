@@ -79,7 +79,7 @@ def _running_jobs_count(mgr):
         return None  # display-only — must never break the wait
 
 
-def _print_progress(remaining, mgr, job_id, job_obj, pid):
+def _progress_line(remaining, mgr, job_id, job_obj, pid):
     parts = [f"[Waiting... {remaining}s remaining"]
     count = _running_jobs_count(mgr)
     if count:
@@ -89,13 +89,38 @@ def _print_progress(remaining, mgr, job_id, job_obj, pid):
         parts.append(f" | job {job_id}: {status}")
     if pid is not None:
         parts.append(f" | pid {pid}: alive")
-    sys.stdout.write("\r" + "".join(parts) + "]    ")
+    return "".join(parts) + "]"
+
+
+def _print_progress(remaining, mgr, job_id, job_obj, pid, pad=0):
+    """Overwrite the countdown line. ``pad`` is the length of the longest line
+    printed so far — shorter lines are space-padded so they fully erase the
+    previous longer one (no garbled residue on terminals without ANSI EL)."""
+    line = _progress_line(remaining, mgr, job_id, job_obj, pid)
+    if len(line) < pad:
+        line = line.ljust(pad)
+    sys.stdout.write("\r" + line)
+    sys.stdout.flush()
+    return max(pad, len(line))
+
+
+def _clear_line(exit_msg, pad=0):
+    msg = f"[{exit_msg}]"
+    if len(msg) < pad:
+        msg = msg.ljust(pad)
+    sys.stdout.write("\r" + msg + "\n")
     sys.stdout.flush()
 
 
-def _clear_line(exit_msg):
-    sys.stdout.write(f"\r[{exit_msg}]                        \n")
-    sys.stdout.flush()
+def _jobs_hint(mgr):
+    """Nudge the model when it sleeps plain while background jobs are running,
+    but did not pass a job_id — wake-up-on-completion is what sleep is for."""
+    count = _running_jobs_count(mgr)
+    if not count:
+        return ""
+    plural = "s" if count > 1 else ""
+    return (" (note: {} job{} running — re-run sleep with its job_id to wake "
+            "as soon as a job finishes)".format(count, plural))
 
 
 class SleepTool:
@@ -216,17 +241,18 @@ Examples:
 
         # ── wait loop: exit on earliest event ──
         start = time.monotonic()
+        pad = 0  # longest countdown line printed this wait — erases residue
         try:
             while True:
                 elapsed = time.monotonic() - start
                 if elapsed >= seconds:  # ① timeout
                     if watch_mode:
-                        _clear_line(f"Wait ended: timeout after {seconds}s")
+                        _clear_line(f"Wait ended: timeout after {seconds}s", pad)
                         return _timeout_result(seconds, job_id, job_obj, pid)
-                    _clear_line(f"Slept {seconds}s")
-                    return f"Slept {seconds}s. Continuing.{degrade_note}"
+                    _clear_line(f"Slept {seconds}s", pad)
+                    return f"Slept {seconds}s. Continuing.{_jobs_hint(mgr)}{degrade_note}"
                 if job_obj is not None and job_obj.is_terminal():  # ② job done
-                    _clear_line(f"Wait ended: job {job_id} {job_obj.status}")
+                    _clear_line(f"Wait ended: job {job_id} {job_obj.status}", pad)
                     return {
                         "event": "job_finished",
                         "job_id": job_id,
@@ -234,7 +260,7 @@ Examples:
                         "waited": round(elapsed, 1),
                     }
                 if pid is not None and not _pid_alive(pid):  # ③ process gone
-                    _clear_line(f"Wait ended: pid {pid} is gone")
+                    _clear_line(f"Wait ended: pid {pid} is gone", pad)
                     return {
                         "event": "process_finished",
                         "process_id": pid,
@@ -242,11 +268,11 @@ Examples:
                     }
                 remaining = seconds - int(elapsed)
                 if int(elapsed) % 15 == 0 or remaining <= 5:
-                    _print_progress(remaining, mgr, job_id, job_obj, pid)
+                    pad = _print_progress(remaining, mgr, job_id, job_obj, pid, pad)
                 time.sleep(max(0.05, min(1.0, seconds - (time.monotonic() - start))))
         except KeyboardInterrupt:
             elapsed = time.monotonic() - start
-            _clear_line(f"Interrupted after {int(elapsed)}s")
+            _clear_line(f"Interrupted after {int(elapsed)}s", pad)
             if watch_mode:
                 return {"event": "interrupted", "waited": round(elapsed, 1)}
             return f"Interrupted after {int(elapsed)}s."
