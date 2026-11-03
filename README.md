@@ -741,6 +741,7 @@ Available when running with tools enabled (default):
 | `weather`         | Yes          | Weather forecast via wttr.in (no API key)                                                                             |
 | `token_count`     | Yes          | Estimate token count for text or a file (chars/4, words×1.3, tiktoken)                                               |
 | `calculator`      | Yes          | Safely evaluate mathematical expressions (arithmetic, trig, log, constants)                                          |
+| `sleep`           | Yes          | Wait up to 600s; with optional `job_id`/`process_id` watchers, exits on the earliest event (timeout, job finished, process gone) |
 | `llm_query`       | No           | Send prompts to a secondary LLM                                                                                        |
 | `browser`         | No           | Playwright browser automation with stealth support (navigate, extract, screenshot, PDF, click, fill, scroll, evaluate) |
 | `ui_automation`   | Partial      | Automate native desktop apps: list windows, focus, send keystrokes, click, capture screen/window/region to PNG (Windows/macOS/Linux) |
@@ -751,6 +752,20 @@ Available when running with tools enabled (default):
 | `job_result`      | Yes          | Get output of a completed background job                                                                               |
 | `job_cancel`      | No           | Cancel a running background job                                                                                        |
 | `job_log`         | Yes          | Get last N log lines from a background job                                                                             |
+
+### Waiting for jobs (sleep watch mode)
+
+After `job_submit`, the model can wait event-driven instead of guessing a fixed duration — `sleep` exits on the earliest of timeout, the watched job reaching a terminal state, or the watched PID exiting. This saves a feedback round vs. fixed sleep + `job_list`:
+
+```
+job_submit  → returns job_id immediately
+sleep       → {"seconds": 120, "job_id": "custom-001"}
+            → {"event": "job_finished", "job_status": "completed", "waited": 87}
+            → (or {"event": "timeout", ...} if the estimate was too short)
+job_result  → fetch the job output
+```
+
+Watchers are optional: plain `{"seconds": N}` waits a fixed time (v1 behavior). Unknown job IDs and already-dead PIDs fail fast without sleeping. Design details: [dev-docs/SLEEP-WATCH-DESIGN.md](dev-docs/SLEEP-WATCH-DESIGN.md).
 
 ### Token Counting
 
