@@ -80,7 +80,7 @@ The same section can also power the **`d` confirmation option**: adding `"explai
    pip install openai
    ```
 
-3. **Clone this repository**
+4. **Clone this repository**
    Assume that you are planning to put the tool into e.g. `~/Projects/` foder, then:
    
    ```
@@ -89,7 +89,7 @@ The same section can also power the **`d` confirmation option**: adding `"explai
    cd uhu
    ```
 
-4. **Create a virtual environment** (macOS/Linux)
+5. **Create a virtual environment** (macOS/Linux)
    Open a terminal in the `uhu` folder (e.g. `~/Projects/uhu`), then:
    
    ```
@@ -99,7 +99,7 @@ The same section can also power the **`d` confirmation option**: adding `"explai
    
    On subsequent sessions, just run `source venv/bin/activate` before starting uhu.
 
-5. **Install Python dependencies**
+6. **Install Python dependencies**
    
    **Option A — pip install (recommended):**
    
@@ -120,7 +120,7 @@ The same section can also power the **`d` confirmation option**: adding `"explai
    pip install -r requirements.txt
    ```
 
-6. **Optional — Browser automation**
+7. **Optional — Browser automation**
    
    ```
    pip install -e ".[browser]"
@@ -129,15 +129,15 @@ The same section can also power the **`d` confirmation option**: adding `"explai
    
    The browser tool also auto-installs the Chromium binary on first use if it's missing.
 
-7. **Optional — Google Calendar integration**
+8. **Optional — Google Calendar integration**
    
    ```
    pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
    ```
 
-8. **Optional — Google Search integration** (⚠️ Deprecated)
+9. **Optional — Google Search integration** (⚠️ Deprecated)
 
-   > **Note:** Google has closed the Custom Search JSON API to new customers. If your GCP project was created recently, this API will return 403 errors regardless of configuration. For web search, use `web_search` with the `ddgs` package instead (see step 6).
+   > **Note:** Google has closed the Custom Search JSON API to new customers. If your GCP project was created recently, this API will return 403 errors regardless of configuration. For web search, use `web_search` with the `ddgs` package instead (see step 7).
 
    If you have an older GCP project with access to the Custom Search JSON API, you can configure `google_search`:
 
@@ -164,19 +164,19 @@ The same section can also power the **`d` confirmation option**: adding `"explai
 
    **Free tier:** 100 queries/day. Paid: $5 per 1,000 queries.
 
-9. **Optional — Markdown to PDF conversion (md2pdf skill)**
+10. **Optional — Markdown to PDF conversion (md2pdf skill)**
    
    ```
    pip install markdown pymdown-extensions xhtml2pdf
    ```
 
-9. **Optional — DOCX to Markdown conversion (docx2md skill)**
+11. **Optional — DOCX to Markdown conversion (docx2md skill)**
 
    ```
    pip install markitdown
    ```
 
-10. **Optional — Clipboard image paste (Alt+V)**
+12. **Optional — Clipboard image paste (Alt+V)**
 
     ```
     pip install Pillow
@@ -184,7 +184,7 @@ The same section can also power the **`d` confirmation option**: adding `"explai
 
     On Linux, also install `xclip` (X11) or `wl-clipboard` (Wayland) via your package manager.
 
-11. **Optional — Ollama balance indicator (native API)**
+13. **Optional — Ollama balance indicator (native API)**
 
     ```
     pip install beautifulsoup4
@@ -744,7 +744,6 @@ Available when running with tools enabled (default):
 | `llm_query`       | No           | Send prompts to a secondary LLM                                                                                        |
 | `browser`         | No           | Playwright browser automation with stealth support (navigate, extract, screenshot, PDF, click, fill, scroll, evaluate) |
 | `ui_automation`   | Partial      | Automate native desktop apps: list windows, focus, send keystrokes, click, capture screen/window/region to PNG (Windows/macOS/Linux) |
-| `android_build`   | No           | Android build environment detection and Gradle execution                                                               |
 | `android_build`   | No           | Android build environment detection and Gradle execution                                                               |
 | `model_test`      | No           | Test model compatibility with the uhu harness                                                                          |
 | `job_submit`      | No           | Submit long-running background jobs (video processing, model analysis, custom commands)                              |
