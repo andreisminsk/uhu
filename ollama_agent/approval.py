@@ -15,16 +15,7 @@ from .input_utils import read_full_input
 from . import sound
 
 
-def _extract_run_code(diff_text):
-    """Extract the runnable command/script text from a RUN-style diff_text.
 
-    CommandRunner passes diff_text as "[Command details]\\n  cwd: ...\\n  cmd: <cmd>".
-    Returns the raw command string, or the full text if the format doesn't match.
-    """
-    for line in diff_text.splitlines():
-        if line.strip().startswith("cmd: "):
-            return line.strip()[len("cmd: "):]
-    return diff_text
 
 
 def _llm_explain_from_gate(gate, title, diff_text):
@@ -202,10 +193,18 @@ class ApprovalGate:
                 # LLM explainer's independent (context-free) analysis.
                 if diff_text:
                     show_diff_colored(diff_text)
+                    # Pass the FULL details (cwd + complete command) and a
+                    # neutral title. Two bugs made the explainer useless on
+                    # multi-line commands: (1) _extract_run_code returned only
+                    # the single "cmd: " line — for heredocs that's just
+                    # `python3 - <<'PY'`, the entire payload was dropped; and
+                    # (2) the prompt title embeds cmd[:80] + '…', so the LLM
+                    # received a fragment cut mid-line and answered
+                    # "NOT ANALYZABLE — truncated" instead of a verdict.
                     _llm_explain_from_gate(
                         self,
-                        prompt,
-                        _extract_run_code(diff_text) if cmd else diff_text,
+                        "Command details" if cmd else prompt,
+                        diff_text,
                     )
                 else:
                     agent_print("[No details available for this action]\n")
