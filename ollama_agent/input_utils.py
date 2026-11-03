@@ -178,6 +178,24 @@ def _get_pt_history():
     return _pt_history
 
 
+def _ptk_output_no_cpr():
+    """Create a prompt_toolkit Output with CPR (cursor position request)
+    probing disabled, or None if unavailable.
+
+    prompt_toolkit sends ESC[6n and waits for the terminal's reply in order
+    to position completer dropdowns / menu bars — which uhu's prompt never
+    uses. On some terminals the reply never arrives: the user sees
+      WARNING: your terminal doesn't support cursor position requests (CPR)
+    and the prompt then hangs (input blocked until process kill).
+    Setting enable_cpr=False prevents the request from ever being sent —
+    the renderer checks output.responds_to_cpr before waiting.
+    """
+    from prompt_toolkit.output import create_output
+    out = create_output()
+    out.enable_cpr = False
+    return out
+
+
 # ── ANSI SGR → prompt_toolkit color mapping ────────────────────────────
 # prompt_toolkit uses CSS-like style strings, not raw ANSI codes.
 # Map the SGR foreground codes we use to prompt_toolkit color names.
@@ -390,7 +408,13 @@ def _try_prompt_toolkit_input(prompt_text, multiline_mode="shift_enter", color=N
         _saved_sigint = _signal.getsignal(_signal.SIGINT)
         try:
             history = _get_pt_history()
-            session = PromptSession(key_bindings=kb, history=history)
+            _output = None
+            try:
+                _output = _ptk_output_no_cpr()
+            except Exception:
+                _output = None  # non-tty or unknown Output class — use default
+            session = PromptSession(key_bindings=kb, history=history,
+                                    output=_output)
             result = session.prompt(_prompt_obj, handle_sigint=False,
                                     style=_ptk_style)
         finally:
