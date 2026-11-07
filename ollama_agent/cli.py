@@ -97,6 +97,8 @@ def main():
                         help="Max context cap for history trimming (OpenAI-compatible + --tpm only, default: 16384)")
     parser.add_argument("--temperature", type=float, default=None,
                         help="Sampling temperature 0.0-2.0 (default: 0.0 for Ollama native API; provider default for OpenAI-compatible API). Change mid-session with /temperature")
+    parser.add_argument("--top-p", type=float, default=None, dest="top_p",
+                        help="Top-p (nucleus) sampling 0.0-1.0 (default: model/provider default). Change mid-session with /top-p")
     parser.add_argument("--no-sound", action="store_true",
                         help="Disable event sounds (done/question notifications). Toggled mid-session with /sound")
     parser.add_argument("--max-rounds", type=int, default=None, dest="max_rounds",
@@ -150,6 +152,11 @@ def main():
     # Validate --temperature early (fail fast)
     if args.temperature is not None and not (0.0 <= args.temperature <= 2.0):
         print("[Error: --temperature must be between 0.0 and 2.0]")
+        sys.exit(1)
+
+    # Validate --top-p early (fail fast)
+    if args.top_p is not None and not (0.0 <= args.top_p <= 1.0):
+        print("[Error: --top-p must be between 0.0 and 1.0]")
         sys.exit(1)
 
     # Determine API type
@@ -225,6 +232,7 @@ def main():
         max_context=args.max_context,
         no_llm_parsing=args.no_llm_parsing,
         temperature=args.temperature,
+        top_p=args.top_p,
         think_level=args.think_level,
         max_rounds=args.max_rounds,
     )

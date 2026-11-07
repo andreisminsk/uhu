@@ -24,6 +24,7 @@ class LlmQueryTool:
         "- model (string, optional): Ollama model name (default from config)\n"
         "- system (string, optional): System prompt for the LLM\n"
         "- temperature (float, optional, default 0.3): Sampling temperature\n"
+        "- top_p (float, optional): Top-p sampling; omitted = model default\n"
         "- max_tokens (integer, optional): Max tokens to generate\n"
         "- json_mode (boolean, optional): Force JSON output\n"
     )
@@ -36,6 +37,7 @@ class LlmQueryTool:
         model = params.get("model", config.get("llm_query", {}).get("model", "kimi-k2.6:cloud"))
         system = params.get("system")
         temperature = params.get("temperature", config.get("llm_query", {}).get("temperature", 0.3))
+        top_p = params.get("top_p")
         max_tokens = params.get("max_tokens")
         json_mode = params.get("json_mode", False)
 
@@ -45,6 +47,7 @@ class LlmQueryTool:
                 model=model,
                 system=system,
                 temperature=temperature,
+                top_p=top_p,
                 max_tokens=max_tokens,
                 json_mode=json_mode,
             )
@@ -58,6 +61,7 @@ def llm_query(
     model: str = None,
     system: str = None,
     temperature: float = None,
+    top_p: float = None,
     max_tokens: int = None,
     timeout: int = None,
     json_mode: bool = False,
@@ -86,6 +90,8 @@ def llm_query(
         "options": {"temperature": temperature},
     }
 
+    if top_p is not None:
+        payload["options"]["top_p"] = top_p
     if json_mode:
         payload["format"] = "json"
     if max_tokens:

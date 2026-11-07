@@ -30,7 +30,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
                 tpm_limit=None, max_context=None, no_llm_parsing=False,
                 openai_extra_body=None, temperature=None, max_rounds=None,
-                think_level=None):
+                think_level=None, top_p=None):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -47,6 +47,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             max_context=max_context,
             extra_body_path=openai_extra_body,
             temperature=temperature,
+            top_p=top_p,
             think_level=think_level,
             quiet=quiet
         )
@@ -60,6 +61,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._extra_body_path = openai_extra_body
         # Sampling temperature — None = backend default (0.0 Ollama / not sent OpenAI)
         self._temperature = temperature
+        # Top-p (nucleus) sampling — None = don't send the param (model/provider default)
+        self._top_p = top_p
         # Thinking effort — None = omit the param (model default)
         self._think_level = think_level
 
@@ -284,6 +287,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             tpm_limit=self._tpm_limit, max_context=self._max_context,
             extra_body_path=extra_body_path,
             temperature=self._temperature,
+            top_p=self._top_p,
             think_level=think_level,
             quiet=self.quiet
         )
@@ -828,8 +832,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         if hasattr(self._backend, 'client') and hasattr(self._backend.client, '_client'):
             backend_info += f" | {self._backend.client._client.base_url}"
         think_part = f" | Think: {self._think_level}" if getattr(self, '_think_level', None) else ""
+        topp_part = f" | TopP: {self._top_p}" if getattr(self, '_top_p', None) is not None else ""
         agent_print(f"Connected | {backend_info} | Model: {self.model} | "
-              f"Context: {self.ctx_size}{think_part} | Stream: {self.stream} | Agent: {self.agent} | "
+              f"Context: {self.ctx_size}{think_part}{topp_part} | Stream: {self.stream} | Agent: {self.agent} | "
               f"Tools: {self.tools} | Skills: {self.skills} | Thinking: {self.thinking} | "
               f"Cache: {self.cache_files} | Autosave: {self.autosave}")
         agent_print(f"Platform: {info['platform_label']} | Shell: {info['shell_label']}")

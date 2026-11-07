@@ -11,6 +11,8 @@
 | gemma4:12b             | 2026-06-10 20:39 UTC | 26    | 26   | 0    | 354.8s | ✅ Full compatibility                                   |
 | kimi-k2.7-code:cloud   | 2026-06-13 09:32 UTC | 26    | 24   | 2    | 99.1s  | ❌ 2 failed (edit_with_eof, no_prose_instead_of_action) |
 | glm-5.2:cloud          | 2026-06-18 03:36 UTC | 26    | 26   | 0    | 75.8s  | ✅ Full compatibility                                   |
+| glm-5.3-flash:cloud    | 2026-11-07 18:24 UTC | 26    | 25   | 1    | 39.3s  | ❌ 1 failed (edit_with_eof)                             |
+| beam:cloud             | 2026-11-07 18:27 UTC | 26    | 2    | 24   | 36.5s  | ❌ 24 failed (empty responses)                          |
 
 ## gemma4:31b-cloud — 2026-06-04 18:05 UTC
 
@@ -352,5 +354,93 @@
 | 24  | full_relative_path         | ✅ PASS | 0.9s |
 | 25  | no_prose_instead_of_action | ✅ PASS | 1.5s |
 | 26  | concise_output             | ✅ PASS | 3.7s |
+
+---
+
+## glm-5.3-flash:cloud — 2026-11-07 18:24 UTC
+
+- **Result**: FAIL (25/26)
+- **Total time**: 39.3s
+- **Categories**: WRITE, EDIT, FILE, RUN, TOOL, EOF, MULTI, EDGE — 1 failed, 0 errors
+
+### Details
+
+| #   | Test                       | Result | Time |
+| --- | -------------------------- | ------ | ---- |
+| 1   | write_new_file             | ✅ PASS | 0.9s |
+| 2   | write_with_eof             | ✅ PASS | 0.6s |
+| 3   | edit_search_replace        | ✅ PASS | 1.9s |
+| 4   | edit_with_eof              | ❌ FAIL | 1.0s |
+| 5   | file_read                  | ✅ PASS | 0.5s |
+| 6   | run_command                | ✅ PASS | 0.8s |
+| 7   | tool_read_file             | ✅ PASS | 0.9s |
+| 8   | tool_search_in_files       | ✅ PASS | 0.7s |
+| 9   | tool_list_files            | ✅ PASS | 1.0s |
+| 10  | tool_find_file             | ✅ PASS | 1.3s |
+| 11  | tool_peek_file             | ✅ PASS | 0.9s |
+| 12  | tool_git_status            | ✅ PASS | 0.8s |
+| 13  | tool_git_log               | ✅ PASS | 0.6s |
+| 14  | tool_write_file            | ✅ PASS | 0.6s |
+| 15  | tool_replace_in_file       | ✅ PASS | 1.0s |
+| 16  | tool_run_command           | ✅ PASS | 0.6s |
+| 17  | tool_env_info             | ✅ PASS | 0.7s |
+| 18  | tool_http_request          | ✅ PASS | 0.9s |
+| 19  | tool_web_search            | ✅ PASS | 1.6s |
+| 20  | eof_uses_tool_name         | ✅ PASS | 2.9s |
+| 21  | no_bare_tool_signals       | ✅ PASS | 0.7s |
+| 22  | multiple_tools             | ✅ PASS | 0.9s |
+| 23  | mixed_actions              | ✅ PASS | 1.3s |
+| 24  | full_relative_path         | ✅ PASS | 0.9s |
+| 25  | no_prose_instead_of_action | ✅ PASS | 1.4s |
+| 26  | concise_output             | ✅ PASS | 0.5s |
+
+### Failed tests
+
+- **edit_with_eof**: Edits or reads main.py (EDIT/replace_in_file/read_file first)
+
+---
+
+## beam:cloud — 2026-11-07 18:27 UTC
+
+- **Result**: FAIL (2/26)
+- **Total time**: 36.5s
+- **Sampling**: temperature=0.7, top_p=0.99
+- **Categories**: WRITE, EDIT, FILE, RUN, TOOL, EOF, MULTI, EDGE — 24 failed, 0 errors
+- **Note**: model returned empty output on every test; the 2 "passes" (no_bare_tool_signals, concise_output) are vacuous. Sampling change made no difference vs default run.
+
+### Details
+
+| #   | Test                       | Result | Time |
+| --- | -------------------------- | ------ | ---- |
+| 1   | write_new_file             | ❌ FAIL | 1.9s |
+| 2   | write_with_eof             | ❌ FAIL | 0.9s |
+| 3   | edit_search_replace        | ❌ FAIL | 0.9s |
+| 4   | edit_with_eof              | ❌ FAIL | 1.0s |
+| 5   | file_read                  | ❌ FAIL | 0.8s |
+| 6   | run_command                | ❌ FAIL | 0.8s |
+| 7   | tool_read_file             | ❌ FAIL | 0.7s |
+| 8   | tool_search_in_files       | ❌ FAIL | 0.9s |
+| 9   | tool_list_files            | ❌ FAIL | 0.8s |
+| 10  | tool_find_file             | ❌ FAIL | 0.9s |
+| 11  | tool_peek_file             | ❌ FAIL | 0.7s |
+| 12  | tool_git_status            | ❌ FAIL | 0.6s |
+| 13  | tool_git_log               | ❌ FAIL | 0.8s |
+| 14  | tool_write_file            | ❌ FAIL | 0.8s |
+| 15  | tool_replace_in_file       | ❌ FAIL | 1.1s |
+| 16  | tool_run_command           | ❌ FAIL | 1.0s |
+| 17  | tool_env_info              | ❌ FAIL | 0.6s |
+| 18  | tool_http_request          | ❌ FAIL | 0.8s |
+| 19  | tool_web_search            | ❌ FAIL | 1.0s |
+| 20  | eof_uses_tool_name         | ❌ FAIL | 0.6s |
+| 21  | no_bare_tool_signals       | ✅ PASS | 1.1s |
+| 22  | multiple_tools             | ❌ FAIL | 1.6s |
+| 23  | mixed_actions              | ❌ FAIL | 0.8s |
+| 24  | full_relative_path         | ❌ FAIL | 0.8s |
+| 25  | no_prose_instead_of_action | ❌ FAIL | 0.7s |
+| 26  | concise_output             | ✅ PASS | 0.8s |
+
+### Failed tests
+
+All 24 action tests failed identically — empty output, no action blocks parsed (see Details table). Verdict: POOR — model not suitable for this harness.
 
 

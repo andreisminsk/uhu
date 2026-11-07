@@ -165,6 +165,7 @@ class CommandMixin:
              "  /diff                        Toggle auto-diff for edits (press d at any prompt for on-demand)\n"
             "  /timeout [sec|reset]         Show/set the active model-call timeout (this session only)\n"
             "  /temperature [val|reset]     Show/set sampling temperature 0.0-2.0 (this session only)\n"
+            "  /top-p [val|reset]           Show/set top-p (nucleus) sampling 0.0-1.0 (this session only)\n"
             "  /think-level [lvl|reset]     Show/set thinking effort: off, low, medium, high, max (this session only)\n"
             "  /max-rounds [N|reset]        Show/set max feedback-loop rounds per message 1-20 (this session only)\n"
             "  /sound                       Toggle event sounds (done/question) on/off\n"
@@ -1040,6 +1041,40 @@ class CommandMixin:
         api_note = "think" if self._api_type == "ollama" else "reasoning_effort"
         agent_print(f"[think level set to {sub} (sends {api_note})]\n")
 
+    def do_top_p(self, args_str):
+        """Show or set the top-p (nucleus) sampling for this session.
+
+        Applies to both API types: native Ollama (options.top_p) and
+        OpenAI-compatible (top-level top_p param). No persistence.
+        """
+        backend = getattr(self, '_backend', None)
+        if backend is None:
+            agent_print("[No backend available]\n")
+            return
+        sub = args_str.strip()
+        current = getattr(backend, "top_p", None)
+        if sub == "":
+            shown = current if current is not None else "model default"
+            agent_print(f"[top-p: {shown}]\n")
+            return
+        if sub.lower() == "reset":
+            self._top_p = None
+            backend.top_p = None
+            agent_print("[top-p reset to model default]\n")
+            return
+        try:
+            val = float(sub)
+        except ValueError:
+            agent_print(f"[Invalid top-p: {sub!r} — use a number between 0.0 and 1.0, or /top-p reset]\n")
+            return
+        if not (0.0 <= val <= 1.0):
+            agent_print("[Top-p must be between 0.0 and 1.0]\n")
+            return
+        val = round(val, 3)
+        self._top_p = val
+        backend.top_p = val
+        agent_print(f"[top-p set to {val}]\n")
+
     def do_auto(self, args_str):
         sub = args_str.strip().lower()
         if sub == "reset":
@@ -1193,6 +1228,7 @@ class CommandMixin:
         "/pid": "_cmd_pid",
          "/timeout": "_cmd_timeout",
         "/temperature": "_cmd_temperature",
+        "/top-p": "_cmd_top_p",
         "/think-level": "_cmd_think_level",
         "/max-rounds": "_cmd_max_rounds",
         "/sound": "_cmd_sound",
@@ -1203,6 +1239,7 @@ class CommandMixin:
         ("/llm ", "_cmd_llm", 5),
         ("/timeout ", "_cmd_timeout", 8),
         ("/temperature ", "_cmd_temperature", 13),
+        ("/top-p ", "_cmd_top_p", 6),
         ("/think-level ", "_cmd_think_level", 14),
         ("/max-rounds ", "_cmd_max_rounds", 12),
         ("/attach-bin", "_cmd_attach_bin", 11),
@@ -1364,6 +1401,10 @@ class CommandMixin:
         self.do_temperature(args)
         return DISPATCH_CONTINUE
 
+    def _cmd_top_p(self, args):
+        self.do_top_p(args)
+        return DISPATCH_CONTINUE
+
     def _cmd_max_rounds(self, args):
         self.do_max_rounds(args)
         return DISPATCH_CONTINUE
@@ -1462,6 +1503,7 @@ class CommandMixin:
             max_context=self._max_context,
             no_llm_parsing=not self._llm_parser_enabled,
             temperature=self._temperature,
+            top_p=getattr(self, "_top_p", None),
             think_level=getattr(self, "_think_level", None),
             max_rounds=getattr(self, "max_rounds", None),
         )
@@ -1546,7 +1588,9 @@ class CommandMixin:
             extra = f" | Extra body: {self._extra_body_path}" if self._extra_body_path else ""
             temp = getattr(self._backend, "temperature", None)
             temp_part = f" | Temp: {temp}" if temp is not None else ""
-            agent_print(f"[API: {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}{extra}{temp_part}]\n")
+            topp = getattr(self._backend, "top_p", None)
+            topp_part = f" | TopP: {topp}" if topp is not None else ""
+            agent_print(f"[API: {api_label} | Model: {self.model} | Context: {self.ctx_size} | Host: {self._host}{extra}{temp_part}{topp_part}]\n")
             return DISPATCH_CONTINUE
 
         new_api = None

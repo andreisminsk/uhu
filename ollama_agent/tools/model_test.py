@@ -370,6 +370,8 @@ class ModelTestTool:
         "- model (string, required): Model name to test (e.g. 'minimax-m3:cloud', 'qwen2.5:14b')\n"
         "- base_url (string, optional): Ollama API base URL (default: http://localhost:11434)\n"
         "- timeout (integer, optional, default 120): Timeout per test in seconds\n"
+        "- temperature (float, optional, default 0.1): Sampling temperature for test calls\n"
+        "- top_p (float, optional): Top-p sampling for test calls; omitted = model default\n"
         "- categories (string, optional): Comma-separated categories to test (default: all). "
         "Options: WRITE,EDIT,FILE,RUN,TOOL,EOF,MULTI,EDGE"
     )
@@ -394,6 +396,16 @@ class ModelTestTool:
             "description": "Comma-separated categories to test (default: all). Options: WRITE,EDIT,FILE,RUN,TOOL,EOF,MULTI,EDGE",
             "required": False,
         },
+        "temperature": {
+            "type": "float",
+            "description": "Sampling temperature for test calls (default: 0.1)",
+            "required": False,
+        },
+        "top_p": {
+            "type": "float",
+            "description": "Top-p sampling for test calls; omitted = model default",
+            "required": False,
+        },
         "report_path": {
             "type": "string",
             "description": "Path to write the report file (default: temp file). Use a temp path so the agent can safely append results to MODELS-TEST.md.",
@@ -407,6 +419,9 @@ class ModelTestTool:
         timeout = int(params.get("timeout", 120))
         categories_str = params.get("categories", "")
         report_path = params.get("report_path", "")
+        temperature = float(params.get("temperature", 0.1))
+        top_p = params.get("top_p")
+        top_p = float(top_p) if top_p is not None else None
 
         if not model:
             return "Error: 'model' parameter is required. Usage: model_test with {\"model\": \"qwen2.5:14b\"}"
@@ -441,6 +456,7 @@ class ModelTestTool:
         lines.append(f"Model Compatibility Test: {model}")
         lines.append(f"Date: {now_str}")
         lines.append(f"System prompt: {len(system_prompt)} chars")
+        lines.append(f"Sampling: temperature={temperature}, top_p={'model default' if top_p is None else top_p}")
         lines.append(f"Tests: {len(tests)}")
         lines.append(f"{'='*70}")
 
@@ -458,7 +474,8 @@ class ModelTestTool:
                     prompt=prompt,
                     system=system_prompt,
                     model=model,
-                    temperature=0.1,
+                    temperature=temperature,
+                    top_p=top_p,
                     max_tokens=500,
                     timeout=timeout,
                     ollama_url=base_url,
@@ -579,6 +596,7 @@ class ModelTestTool:
             report_lines.append(f"\n## {model} — {now_str}\n")
             report_lines.append(f"- **Result**: {'PASS' if failed == 0 and errors == 0 else 'FAIL'} ({passed}/{len(tests)})")
             report_lines.append(f"- **Total time**: {total_elapsed:.1f}s")
+            report_lines.append(f"- **Sampling**: temperature={temperature}, top_p={'model default' if top_p is None else top_p}")
             report_lines.append(f"- **Categories**: {', '.join(cat for cat in ['WRITE','EDIT','FILE','RUN','TOOL','EOF','MULTI','EDGE'] if any(r['category'] == cat for r in results))} — {'all passed' if failed == 0 and errors == 0 else f'{failed} failed, {errors} errors'}\n")
             report_lines.append("### Details\n")
             report_lines.append("| # | Test | Result | Time |")
@@ -597,7 +615,7 @@ class ModelTestTool:
             report_path = None
 
         # Return concise summary to avoid truncation
-        summary_lines = lines[:6]  # header (now 6 lines with date)
+        summary_lines = lines[:7]  # header (now 7 lines with date + sampling)
         summary_lines.append(f"  Passed: {passed}/{len(tests)}  Failed: {failed}  Errors: {errors}  Score: {score:.0f}%")
         summary_lines.append(f"  Total time: {total_elapsed:.1f}s")
         if report_path:
@@ -614,6 +632,8 @@ if __name__ == "__main__":
     parser.add_argument("--base-url", default="http://localhost:11434", help="Ollama API base URL")
     parser.add_argument("--timeout", type=int, default=120, help="Timeout per test in seconds")
     parser.add_argument("--categories", default="", help="Comma-separated categories to test")
+    parser.add_argument("--temperature", type=float, default=0.1, help="Sampling temperature for test calls")
+    parser.add_argument("--top-p", type=float, default=None, help="Top-p sampling for test calls (omitted = model default)")
     args = parser.parse_args()
 
     tool = ModelTestTool()
@@ -622,5 +642,7 @@ if __name__ == "__main__":
         "base_url": args.base_url,
         "timeout": args.timeout,
         "categories": args.categories,
+        "temperature": args.temperature,
+        "top_p": args.top_p,
     })
     print(result)

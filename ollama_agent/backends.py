@@ -380,7 +380,8 @@ class OllamaNativeBackend(LLMBackend):
     NON_STREAM_TIMEOUT = 600
     
     def __init__(self, host: str, model: str, ctx_size: int, thinking: bool = True,
-                 temperature: Optional[float] = None, think_level: Optional[str] = None):
+                 temperature: Optional[float] = None, think_level: Optional[str] = None,
+                 top_p: Optional[float] = None):
         super().__init__()
         from ollama import Client
         self.client = Client(host=host)
@@ -389,6 +390,8 @@ class OllamaNativeBackend(LLMBackend):
         self.thinking = thinking
         # Sampling temperature — None → MODEL_TEMPERATURE (0.0, greedy decoding default)
         self.temperature = temperature if temperature is not None else MODEL_TEMPERATURE
+        # Top-p (nucleus) sampling — None = don't send the option (model default)
+        self.top_p = top_p
         # Thinking effort — None = omit the param (model default). "off" →
         # think: False; otherwise sent as-is ("low"/"high"/"max" for models
         # with levels). Unsupported names resolve to the model default server-side.
@@ -413,7 +416,10 @@ class OllamaNativeBackend(LLMBackend):
             logger.debug("Cache-stats patch not applied: %s", e)
     
     def _build_options(self) -> Dict[str, Any]:
-        return {"num_ctx": self.ctx_size, "temperature": self.temperature}
+        opts = {"num_ctx": self.ctx_size, "temperature": self.temperature}
+        if self.top_p is not None:
+            opts["top_p"] = self.top_p
+        return opts
 
     def _think_param(self):
         """Top-level think param for /api/chat. None = omit → model default."""
@@ -641,7 +647,8 @@ class OpenAIBackend(LLMBackend):
                  max_context: Optional[int] = None, quiet: bool = False,
                  extra_body_path: Optional[str] = None,
                  temperature: Optional[float] = None,
-                 think_level: Optional[str] = None):
+                 think_level: Optional[str] = None,
+                 top_p: Optional[float] = None):
         super().__init__()
         try:
             from openai import OpenAI
@@ -655,6 +662,8 @@ class OpenAIBackend(LLMBackend):
         # Sampling temperature — None = don't send the param (provider default;
         # o1/o3-style reasoning models reject it). Set via --temperature / /temperature.
         self.temperature = temperature
+        # Top-p (nucleus) sampling — None = don't send the param (provider default).
+        self.top_p = top_p
         # Thinking effort — None = don't send reasoning_effort (model default);
         # "off" → reasoning_effort "none"; otherwise sent as the level name.
         self.think_level = think_level
@@ -767,6 +776,10 @@ class OpenAIBackend(LLMBackend):
         # fields still override it per SDK merge order.
         if self.temperature is not None:
             kwargs["temperature"] = self.temperature
+        # Top-p (nucleus) sampling — sent only when explicitly set; extra_body
+        # fields still override it per SDK merge order.
+        if self.top_p is not None:
+            kwargs["top_p"] = self.top_p
         # Thinking effort — Ollama's OpenAI-compatible endpoint maps
         # reasoning_effort (and reasoning.effort) to model thinking levels.
         if self.think_level is not None:
@@ -790,6 +803,14 @@ class OpenAIBackend(LLMBackend):
             if self.temperature is not None and "temperature" in err_str:
                 logger.warning("OpenAI fallback: retrying without temperature (%s)", e)
                 kwargs.pop("temperature", None)
+                # Some models reject both temperature and top_p together
+                if self.top_p is not None and "top_p" in err_str:
+                    kwargs.pop("top_p", None)
+                return self.client.chat.completions.create(**kwargs)
+            # Some models reject top_p (e.g. o1/o3 series) — retry without it
+            if self.top_p is not None and "top_p" in err_str:
+                logger.warning("OpenAI fallback: retrying without top_p (%s)", e)
+                kwargs.pop("top_p", None)
                 return self.client.chat.completions.create(**kwargs)
             # Some providers don't support reasoning_effort — retry without it
             if "reasoning_effort" in err_str or "reasoning effort" in err_str:
@@ -961,7 +982,8 @@ def create_backend(
     quiet: bool = False,
     extra_body_path: Optional[str] = None,
     temperature: Optional[float] = None,
-    think_level: Optional[str] = None
+    think_level: Optional[str] = None,
+    top_p: Optional[float] = None
 ) -> LLMBackend:
     """Factory function to create appropriate backend.
     
@@ -976,6 +998,7 @@ def create_backend(
         max_context: Max context cap for trimming (OpenAI-compatible + --tpm only)
         extra_body_path: Path to JSON file with extra request body params (OpenAI-compatible only)
         temperature: Sampling temperature 0.0-2.0 (None = backend default: 0.0 for Ollama, not sent for OpenAI)
+        top_p: Top-p (nucleus) sampling 0.0-1.0 (None = model/provider default, not sent)
         think_level: Thinking effort (None = model default; "off" disables thinking;
             "low"/"high"/"max" sent as Ollama 'think' level or OpenAI 'reasoning_effort')
         quiet: Suppress non-essential output
@@ -1000,6 +1023,7 @@ def create_backend(
             max_context=max_context,
             extra_body_path=extra_body_path,
             temperature=temperature,
+            top_p=top_p,
             think_level=think_level,
             quiet=quiet
         )
@@ -1011,5 +1035,6 @@ def create_backend(
             ctx_size=ctx_size,
             thinking=thinking,
             temperature=temperature,
+            top_p=top_p,
             think_level=think_level
         )
