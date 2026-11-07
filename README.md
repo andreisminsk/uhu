@@ -566,7 +566,8 @@ uhu --no-autosave --no-cache
 | `/reset`                           | Clear conversation history (keeps system prompt)                                                                                                             |
 | `/v`, `/ver`, `/version`           | Show version (also `-v` CLI flag)                                                                                                                            |
 | `/history`                         | Show context usage bar                                                                                                                                       |
-| `/sober`                           | Re-inject system prompt to refocus the model. Use it when you see that model becomes inadequate, but you want to preserve context and continue conversation. |
+| `/sober`                           | Re-inject system prompt to refocus the model. Use it when you see that model becomes inadequate, but you want to preserve context and continue conversation. |
+| `/nudge`                           | Inject a `[SYSTEM WARNING]` as a user message and immediately re-call the model — nudges it from narrating plans to producing action blocks that advance the current goal. |
 | `/compact`                         | Summarize history into a compact briefing. Keeps recent messages verbatim (30% of context budget) and summarizes older ones.                                 |
 | `/compact force`                   | Force compaction even when all messages fit the recent budget — useful for huge-context models (e.g. 1M tokens) where the proportional budget is too generous. Summarizes the whole conversation, keeping no verbatim tail. |
 | `/compact memory [project\|agent]` | Compact memory file using LLM deduplication                                                                                                                  |
@@ -665,6 +666,8 @@ Status indicators show what's happening:
 On the last feedback round (e.g. Round 3/3), nudging is skipped — the loop is about to end, so a system nudge would be wasted. This is the point where **user input is needed** to unblock the model. Send a message to continue or redirect the conversation.
 
 The `/sober` command re-injects the system prompt to refocus a drifting model. It's also called automatically after `/compact` to reinforce instructions.
+
+For the same problem one level down, the `/nudge` command injects a `[SYSTEM WARNING]` telling the model to stop narrating and respond only with action blocks advancing the last request — and immediately re-calls it. Use it when the model keeps talking about what it *would* do instead of doing it.
 
 ## Context Conservation
 

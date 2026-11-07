@@ -4,6 +4,13 @@ import sys
 
 MODEL_TEMPERATURE = 0.0
 
+# Injected by /nudge — refocuses a model that is talking instead of acting.
+NUDGE_TEXT = (
+    "[SYSTEM WARNING] Unproductive output detected. Do not narrate plans or restate context. "
+    "Respond ONLY with action blocks (WRITE/EDIT/FILE/RUN/TOOL) that directly advance "
+    "the user's most recent request. If the goal is already achieved, say so and stop."
+)
+
 AGENT_SYSTEM_PROMPT = (
     "Your name is 'uhu'.\n\n"
     "You are a concise coding assistant with file access.\n\n"

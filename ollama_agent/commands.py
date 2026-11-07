@@ -154,6 +154,7 @@ class CommandMixin:
             "  /history                     Show context usage bar\n"
             "  /v, /ver, /version           Show version\n"
             "  /sober                       Re-inject system prompt to refocus the model\n"
+            "  /nudge                       Inject [SYSTEM WARNING] and re-call the model\n"
             "  /compact                     Summarize history into a compact briefing\n"
             "  /compact force               Force compaction even if all messages fit the recent budget\n"
             "  /compact memory [project|agent]   Compact memory file using LLM\n"
@@ -1184,6 +1185,7 @@ class CommandMixin:
         "history": "_cmd_history", "/history": "_cmd_history",
         "/v": "_cmd_version", "/ver": "_cmd_version", "/version": "_cmd_version",
         "/sober": "_cmd_sober", "/diff": "_cmd_diff", "/help": "_cmd_help",
+        "/nudge": "_cmd_nudge",
         "/m": "_cmd_multiline", "/multiline": "_cmd_multiline",
         "/sessions": "_cmd_sessions", "/skills": "_cmd_skills", "/jobs": "_cmd_jobs",
         "/migrate": "_cmd_migrate",
@@ -1304,6 +1306,14 @@ class CommandMixin:
 
     def _cmd_sober(self, args):
         self.do_sober()
+        return DISPATCH_CONTINUE
+
+    def _cmd_nudge(self, args):
+        """Inject [SYSTEM WARNING] as a user message and immediately re-call
+        the model — nudges it from narration to action blocks."""
+        from .constants import NUDGE_TEXT
+        agent_print("[Nudge injected]\n")
+        self._send(NUDGE_TEXT)
         return DISPATCH_CONTINUE
 
     def _cmd_diff(self, args):
