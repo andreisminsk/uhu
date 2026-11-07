@@ -56,7 +56,7 @@ class LlmQueryTool:
             return f"[LLM query error: {e}]"
 
 
-def llm_query(
+def llm_query_full(
     prompt: str,
     model: str = None,
     system: str = None,
@@ -66,10 +66,11 @@ def llm_query(
     timeout: int = None,
     json_mode: bool = False,
     ollama_url: str = None,
-) -> str:
-    """Send a prompt to a local Ollama model and return the response text.
+) -> dict:
+    """Send a prompt to a local Ollama model; return full response channels.
 
-    This is the core function that can also be used as a library by other tools.
+    Returns {"content": str, "thinking": str, "tool_calls": list}. Core
+    library function — use llm_query() for the content-only string contract.
     """
     config = get_config()
     llm_cfg = config.get("llm_query", {})
@@ -107,7 +108,12 @@ def llm_query(
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-        return result.get("message", {}).get("content", "").strip()
+        msg = result.get("message", {}) or {}
+        return {
+            "content": (msg.get("content") or "").strip(),
+            "thinking": msg.get("thinking") or "",
+            "tool_calls": msg.get("tool_calls") or [],
+        }
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else ""
         raise RuntimeError(f"Ollama HTTP {e.code}: {e.reason} — {body[:200]}")
@@ -115,3 +121,25 @@ def llm_query(
         raise RuntimeError(f"Ollama connection error: {e.reason}")
     except Exception as e:
         raise RuntimeError(f"Ollama error: {e}")
+
+
+def llm_query(
+    prompt: str,
+    model: str = None,
+    system: str = None,
+    temperature: float = None,
+    top_p: float = None,
+    max_tokens: int = None,
+    timeout: int = None,
+    json_mode: bool = False,
+    ollama_url: str = None,
+) -> str:
+    """Send a prompt to a local Ollama model and return the content text.
+
+    Thin wrapper over llm_query_full preserving the original string contract.
+    """
+    return llm_query_full(
+        prompt=prompt, model=model, system=system, temperature=temperature,
+        top_p=top_p, max_tokens=max_tokens, timeout=timeout,
+        json_mode=json_mode, ollama_url=ollama_url,
+    )["content"]

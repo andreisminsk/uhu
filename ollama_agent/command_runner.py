@@ -11,10 +11,20 @@ import sys
 import threading
 import time
 
-from .display import agent_print
+from .display import agent_print, neutralize_screen_controls
 from .process import kill_proc_tree
 from .platform import terminal
 from .safety import CommandSafetyGate, get_base_command
+
+# Terminal flood guard (dev-docs/TERMINAL-FLOOD-GUARD.md). Field-found
+# 2026-11-08 (SANDBOX): model-run TUI/animation programs streamed thousands
+# of raw lines into the console — a curses snake at ~8 fps cycled macOS
+# Terminal's fixed scrollback and evicted the whole conversation, and
+# screen-wipe escapes (\033[2J, \033[H, \033[?1049h) blanked the visible
+# screen / stranded the session on the alternate screen (no scrollback
+# there). The console stream is now sanitized + capped; the captured
+# observation keeps raw bytes (faithful record for the model and the log).
+MAX_STREAMED_LINES = 300
 
 
 def _fix_win_backslash_quote(m):
@@ -173,6 +183,7 @@ class CommandRunner:
             output_lines = []
             last_output = time.time()
             interrupted = False
+            streamed = 0
             try:
                 while True:
                     try:
@@ -191,8 +202,14 @@ class CommandRunner:
                     if line is None:
                         break
                     output_lines.append(line)
-                    agent_print(line, end='')
-                    sys.stdout.flush()
+                    streamed += 1
+                    if streamed <= MAX_STREAMED_LINES:
+                        # Console copy: sanitized (no screen wipes/alt-screen)
+                        # and capped — animations must not flood scrollback.
+                        agent_print(neutralize_screen_controls(line), end='')
+                        sys.stdout.flush()
+                    elif streamed == MAX_STREAMED_LINES + 1:
+                        agent_print(f"\n[... console streaming suppressed after {MAX_STREAMED_LINES} lines — output still being captured]\n")
                     last_output = time.time()
             except KeyboardInterrupt:
                 interrupted = True
@@ -233,7 +250,11 @@ class CommandRunner:
                 obs = f"[Run killed]\n{combined}" if combined else "[Run killed, no output]"
                 agent_print("[Run killed]\n")
             else:
-                rc = proc.returncode
+                # poll() reaps the process — returncode alone stays None when
+                # stdout EOF arrives before any queue-empty poll() call (fast,
+                # quiet commands raced to "[Run rc=None]"). Found by the
+                # flood-guard regression tests.
+                rc = proc.poll()
                 obs = f"[Run rc={rc}]\n{combined}" if combined else f"[Run rc={rc}, no output]"
                 agent_print(f"[Run rc={rc}]\n")
             return obs

@@ -25,6 +25,7 @@ from typing import List, Dict, Tuple, Optional, Any
 from .constants import MODEL_TEMPERATURE, ANSI_AI, ANSI_AI_DIM, ANSI_RESET
 from .display import agent_print
 from .spinner import Spinner
+from .tool_calls import merge_tool_call_fragments, normalize_tool_calls
 
 logger = logging.getLogger(__name__)
 
@@ -318,6 +319,14 @@ class LLMBackend(ABC):
         # Reasoning tokens within the last call's output, if reported by the API
         # (OpenAI: usage.completion_tokens_details.reasoning_tokens; Ollama: not exposed)
         self.last_reasoning_tokens: Optional[int] = None
+        # Native tool_calls from the last call, normalized to [{"name", "params"}]
+        # (Phase 2, NATIVE-TOOL-CALLS-ARCH). Empty list when the model didn't
+        # use the structured tool_calls channel. Content contract unchanged.
+        self.last_tool_calls: List[Dict] = []
+        # Chars of thinking actually surfaced by this backend in the last call
+        # (display or structured capture). Session uses it to distinguish
+        # "tokens went to shown thinking" from "tokens vanished invisibly".
+        self.last_thinking_chars: int = 0
         # Instance-level timeout overrides (shadow the class constants).
         # The /timeout command can adjust these for the current session only;
         # the class constants remain the defaults for /timeout reset.
@@ -334,6 +343,8 @@ class LLMBackend(ABC):
         self.last_cached_tokens = None
         self.last_output_tokens = None
         self.last_reasoning_tokens = None
+        self.last_tool_calls = []
+        self.last_thinking_chars = 0
         # 1. TPM check (only if --tpm is set)
         if self._tpm_tracker and self._token_counter:
             estimated = self._token_counter.count(messages)
@@ -400,18 +411,23 @@ class OllamaNativeBackend(LLMBackend):
     
     @staticmethod
     def _apply_cache_stats_patch():
-        """Make ollama's pydantic ChatResponse keep unknown server fields.
+        """Make ollama's pydantic ChatResponse/Message keep unknown fields.
 
         The ollama library declares ChatResponse with extra='ignore', which
         silently drops prompt_eval_cached_count (KV-cache hits) returned by
         /api/chat. Switching to extra='allow' preserves it in model_extra.
-        See dev-docs/CACHE-STATS.md.
+        Message is patched the same way so native message.tool_calls survive
+        ollama versions where the typed model would drop them.
+        See dev-docs/CACHE-STATS.md, dev-docs/NATIVE-TOOL-CALLS-ARCH.md.
         """
         try:
-            from ollama._types import ChatResponse
+            from ollama._types import ChatResponse, Message
             if ChatResponse.model_config.get("extra") != "allow":
                 ChatResponse.model_config["extra"] = "allow"
                 ChatResponse.model_rebuild(force=True)
+            if Message.model_config.get("extra") != "allow":
+                Message.model_config["extra"] = "allow"
+                Message.model_rebuild(force=True)
         except Exception as e:
             logger.debug("Cache-stats patch not applied: %s", e)
     
@@ -427,6 +443,61 @@ class OllamaNativeBackend(LLMBackend):
             return None
         return False if self.think_level.lower() == "off" else self.think_level.lower()
     
+    @staticmethod
+    def _wire_tool_results(messages: List[Dict]) -> List[Dict]:
+        """Wire-boundary fix for the native function-calling protocol (400).
+
+        Field-found (2026-11-08, mistral-large-4:cloud): after an assistant
+        message with tool_calls, the server requires tool-role results
+        IMMEDIATELY — one per call, no other role in between ("Expected last
+        role User or Tool", "Not the same number of function calls and
+        responses", "Unexpected role 'tool' after role 'system'"). uhu
+        stores the round's observation as a single user message; convert it
+        at the wire boundary so stored history stays as-is.
+
+        Rules (probed live):
+        - user obs directly after a tool_calls assistant → per-call tool
+          results (full obs text each — the blob covers all of the round's
+          actions and can't be split reliably; count matches protocol).
+        - system messages between the assistant and its results are
+          deferred until after the results (job notifications).
+        - tool_name included when known (server accepts without, but it
+          aids attribution).
+        """
+        out: List[Dict] = []
+        pending_system: List[Dict] = []
+        for m in messages:
+            role = m.get("role")
+            if role == "system":
+                if out and out[-1].get("tool_calls"):
+                    pending_system.append(m)  # defer past the tool results
+                    continue
+                if pending_system:
+                    # system after tool results — flush earlier deferrals too
+                    out.extend(pending_system)
+                    pending_system = []
+                out.append(m)
+                continue
+            if role == "user" and out and out[-1].get("tool_calls"):
+                # The observation for the round's tool_calls — convert.
+                # native_tool_calls was already popped into tool_calls by
+                # _sanitize_messages; recover the names from there.
+                calls = out[-1].get("tool_calls") or []
+                for tc in calls:
+                    fn = tc.get("function") or {}
+                    entry = {"role": "tool", "content": m.get("content") or ""}
+                    if fn.get("name"):
+                        entry["tool_name"] = fn["name"]
+                    out.append(entry)
+                continue
+            if pending_system:
+                out.extend(pending_system)
+                pending_system = []
+            out.append(m)
+        if pending_system:
+            out.extend(pending_system)
+        return out
+
     @staticmethod
     def _sanitize_messages(messages: List[Dict]) -> List[Dict]:
         """Strip lone surrogates from message content."""
@@ -444,6 +515,17 @@ class OllamaNativeBackend(LLMBackend):
             nm = dict(m)
             if 'content' in nm:
                 nm['content'] = _clean(nm['content'])
+            # As-is history (AS-IS-HISTORY-ARCH): stored entries carry
+            # native_tool_calls (normalized name/params). The /api/chat wire
+            # expects the assistant tool_calls shape — convert without
+            # mutating the stored history entry.
+            ntc = nm.pop("native_tool_calls", None)
+            if ntc:
+                nm["tool_calls"] = [
+                    {"function": {"name": tc.get("name", ""),
+                                  "arguments": tc.get("params") or {}}}
+                    for tc in ntc if tc.get("name")
+                ]
             cleaned.append(nm)
         return cleaned
     
@@ -451,7 +533,7 @@ class OllamaNativeBackend(LLMBackend):
         return True
     
     def _call(self, messages: List[Dict], stream: bool = True) -> Tuple[str, Optional[int]]:
-        messages = self._sanitize_messages(messages)
+        messages = self._wire_tool_results(self._sanitize_messages(messages))
         if stream:
             return self._call_streaming(messages)
         else:
@@ -465,6 +547,8 @@ class OllamaNativeBackend(LLMBackend):
         eval_count = None
         cached_count = None
         first = True
+        thinking_shown = 0  # chars of thinking surfaced (last_thinking_chars)
+        tool_call_frags: List[Dict] = []  # native tool_call fragments (Phase 2)
         chunk_queue = _queue.Queue(maxsize=100)  # Bounded queue for backpressure
         stream_error = [None]
         active_response = [None]
@@ -535,6 +619,7 @@ class OllamaNativeBackend(LLMBackend):
                 if thinking_token and self.thinking:
                     if spinner.is_running:
                         spinner.append_thinking(thinking_token)
+                    thinking_shown += len(thinking_token)
                 if token:
                     if first:
                         spinner.stop()
@@ -549,6 +634,11 @@ class OllamaNativeBackend(LLMBackend):
                     cached_count = chunk.get("prompt_eval_cached_count")
                     self.last_cached_tokens = cached_count
                     self.last_output_tokens = chunk.get("eval_count")
+                # Native tool_calls (Phase 2): fragments may arrive spread across
+                # chunks or complete in the final chunk — collect, merge at end.
+                msg_tool_calls = (chunk.get("message") or {}).get("tool_calls") or []
+                if msg_tool_calls:
+                    tool_call_frags.extend(msg_tool_calls)
         except KeyboardInterrupt:
             resp = active_response[0]
             if resp is not None:
@@ -567,6 +657,10 @@ class OllamaNativeBackend(LLMBackend):
             sys.stdout.flush()
         _ai_color_off()
         print("\n")
+        # Native tool_calls (Phase 2): surface what the model emitted; content
+        # contract unchanged (empty stays empty).
+        self.last_tool_calls = normalize_tool_calls(merge_tool_call_fragments(tool_call_frags))
+        self.last_thinking_chars = thinking_shown
         return msg, eval_count
 
     def _call_blocking(self, messages: List[Dict]) -> Tuple[str, Optional[int]]:
@@ -628,6 +722,19 @@ class OllamaNativeBackend(LLMBackend):
             pass
         self.last_cached_tokens = cached_count
         self.last_output_tokens = response.get("eval_count")
+        # Native tool_calls (Phase 2): blocking path delivers them complete.
+        try:
+            self.last_tool_calls = normalize_tool_calls(response["message"].get("tool_calls"))
+        except Exception:
+            self.last_tool_calls = []
+        # Blocking path surfaces content only — count thinking as "not shown"
+        # unless the model embedded it visibly. Ollama returns thinking in
+        # message.thinking; recorded so the session can distinguish channels
+        # when auditing invisible token spend.
+        try:
+            self.last_thinking_chars = len(response["message"].get("thinking") or "")
+        except Exception:
+            self.last_thinking_chars = 0
         _ai_color_on()
         sys.stdout.write("AI: ")
         sys.stdout.flush()
@@ -743,15 +850,71 @@ class OpenAIBackend(LLMBackend):
             if isinstance(content, list):
                 # Already in multimodal format (vision)
                 sanitized.append(m)
-            else:
-                sanitized.append({
-                    "role": m.get("role", "user"),
-                    "content": content
-                })
+                continue
+            entry = {
+                "role": m.get("role", "user"),
+                "content": content
+            }
+            # As-is history (AS-IS-HISTORY-ARCH): convert stored native calls
+            # to the /v1 wire shape — arguments as a JSON string per OpenAI
+            # spec (the same format these models emit on the wire).
+            ntc = m.get("native_tool_calls")
+            if ntc:
+                entry["tool_calls"] = [
+                    {"function": {"name": tc.get("name", ""),
+                                  "arguments": json.dumps(tc.get("params") or {},
+                                                          ensure_ascii=False,
+                                                          default=str)}}
+                    for tc in ntc if tc.get("name")
+                ]
+            sanitized.append(entry)
         return sanitized
-    
+
+    @staticmethod
+    def _wire_tool_results(messages: List[Dict]) -> List[Dict]:
+        """Wire-boundary fix for the native function-calling protocol.
+
+        Same protocol as the native backend (see the OllamaNativeBackend
+        version): after an assistant tool_calls message, tool-role results
+        must follow immediately — one per call. /v1 additionally matches
+        results to calls by tool_call_id (probed: Ollama's /v1 accepts
+        missing ids, but ids are the OpenAI spec and other providers
+        require them). uhu's stored history has no ids (native Ollama
+        channel doesn't provide them), so synthesize stable ones from the
+        call index and attach them to both sides at the wire boundary.
+        """
+        out: List[Dict] = []
+        pending_system: List[Dict] = []
+        for m in messages:
+            role = m.get("role")
+            if role == "system":
+                if out and out[-1].get("tool_calls"):
+                    pending_system.append(m)  # defer past the tool results
+                    continue
+                if pending_system:
+                    out.extend(pending_system)
+                    pending_system = []
+                out.append(m)
+                continue
+            if role == "user" and out and out[-1].get("tool_calls"):
+                calls = out[-1].get("tool_calls") or []
+                for idx, tc in enumerate(calls):
+                    fn = tc.get("function") or {}
+                    call_id = fn.get("call_id") or f"uhu_{len(out) - 1}_{idx}"
+                    tc.setdefault("id", call_id)
+                    out.append({"role": "tool", "tool_call_id": call_id,
+                                "content": m.get("content") or ""})
+                continue
+            if pending_system:
+                out.extend(pending_system)
+                pending_system = []
+            out.append(m)
+        if pending_system:
+            out.extend(pending_system)
+        return out
+
     def _call(self, messages: List[Dict], stream: bool = True) -> Tuple[str, Optional[int]]:
-        messages = self._sanitize_messages(messages)
+        messages = self._wire_tool_results(self._sanitize_messages(messages))
         if stream:
             return self._call_streaming(messages)
         else:
@@ -861,6 +1024,7 @@ class OpenAIBackend(LLMBackend):
         cached_count = None
         first = True
         
+        tool_call_frags: List[Dict] = []  # /v1 tool_call delta fragments (Phase 3)
         finish_reason = None
         try:
             response = self._call_create(messages, stream=True)
@@ -881,6 +1045,10 @@ class OpenAIBackend(LLMBackend):
                     continue
                 if chunk.choices[0].finish_reason:
                     finish_reason = chunk.choices[0].finish_reason
+                # Native tool_calls (Phase 3): collect delta fragments for merge
+                # (read whenever present — some providers report non-tool finish_reasons)
+                for frag in (getattr(chunk.choices[0].delta, "tool_calls", None) or []):
+                    tool_call_frags.append(frag)
                     
                 delta = chunk.choices[0].delta
                 token = delta.content or ""
@@ -895,6 +1063,15 @@ class OpenAIBackend(LLMBackend):
                     print(token, end="", flush=True)
                     msg += token
             
+            # Native tool_calls (Phase 3): merge delta fragments and normalize
+            # to the shared contract. Content contract unchanged.
+            self.last_tool_calls = normalize_tool_calls(merge_tool_call_fragments(tool_call_frags))
+            # OpenAI reasoning arrives via usage details (last_reasoning_tokens);
+            # mark thinking as reported so the session's invisible-token hint
+            # doesn't fire for reasoning models.
+            cdetails = getattr(getattr(self._last_usage, "completion_tokens_details", None), "reasoning_tokens", None) if self._last_usage else None
+            if cdetails:
+                self.last_thinking_chars = 1  # truthy sentinel; count unknown
             # Get usage from final chunk if available
             if hasattr(response, 'usage') and response.usage:
                 self._last_usage = response.usage
@@ -939,6 +1116,11 @@ class OpenAIBackend(LLMBackend):
             response = self._call_create(messages, stream=False)
             
             content = response.choices[0].message.content or ""
+            # Native tool_calls (Phase 3): /v1 blocking delivers complete calls
+            # with JSON-string arguments; normalize with degradation to _raw.
+            self.last_tool_calls = normalize_tool_calls(
+                getattr(response.choices[0].message, "tool_calls", None)
+            )
             self._last_usage = response.usage
             eval_count = response.usage.prompt_tokens if response.usage else None
             cached_count = None

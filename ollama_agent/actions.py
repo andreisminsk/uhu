@@ -16,7 +16,7 @@ from .constants import MAX_CONSOLE_DISPLAY_CHARS, MAX_BATCH_WRITES
 from .constants import ANSI_AGENT
 from .approval import ApprovalGate
 from .command_runner import CommandRunner, _fix_win_backslash_quote
-from .display import agent_print, tool_print, show_diff_colored
+from .display import agent_print, tool_print, show_diff_colored, neutralize_screen_controls
 from .file_executor import FileExecutor, FileCache, RollbackManager
 from .observation import truncate_observations
 from .parser import parse_actions, _PATH_SIGNAL, _BASH_BLOCK, _compute_masked_lines, find_risky_markers
@@ -360,7 +360,9 @@ class ActionMixin:
         try:
             result = tool.execute(params, workdir=self.workdir)
             msg = f"[TOOL {tool_name}]: {result}"
-            tool_print(self._truncate_for_console(msg) + "\n")
+            # Console echo: neutralize screen-control escapes (flood guard) —
+            # captured observation (msg) keeps raw bytes for the model/log.
+            tool_print(neutralize_screen_controls(self._truncate_for_console(msg)) + "\n")
             return msg
         except SystemExit as e:
             # Defense-in-depth: tools that exec user/model code (py_compile,
@@ -445,7 +447,7 @@ class ActionMixin:
                     result = f"{skill.system_prompt}\n\n---\n\n{result}"
             agent_print(f"\n{'─'*60}")
             agent_print(f"⚡ SKILL RESULT: {skill_name} ({skill_type})")
-            tool_print(self._truncate_for_console(result))
+            tool_print(neutralize_screen_controls(self._truncate_for_console(result)))
             agent_print(f"{'─'*60}\n")
             msg = f"⚡ [SKILL {skill_name} ({skill_type})]: {result}"
             return msg
@@ -460,7 +462,57 @@ class ActionMixin:
             msg = f"[SKILL FAILED: {skill_name}: {e}]"
             return msg
 
-    def process_actions(self, response_text):
+    def _native_action_dicts(self, native_calls):
+        """Normalized native tool_calls → tool action dicts (Phase 5).
+
+        Used by process_actions (merge into the action pipeline) and by the
+        feedback-loop pre-parse (loop detection). closed=True — native calls
+        are always complete, so no missing-EOF machinery applies.
+        """
+        return [
+            {"type": "tool", "name": tc["name"], "params": tc.get("params") or {},
+             "closed": True, "native": True,
+             # Native calls carry explicit params by construction — suppress
+             # execute_tool's empty-params truncation warning (a text-parser
+             # heuristic) so parameterless tools like list_files run cleanly.
+             "params_explicit": True}
+            for tc in native_calls if tc.get("name")
+        ]
+
+    def _recover_native_from_render(self, response_text):
+        """Last-resort recovery: re-parse native calls from the faithful render
+        embedded in the response text (field-found loss bug — see
+        NATIVE-TOOL-CALLS-ARCH). The render is the history record; recovering
+        from it is consistent with the transparency rule.
+
+        Sections look like: "[native tool_call N/M: name]\\n{args json}".
+        json.dumps escapes embedded newlines, so args JSON never contains
+        blank lines — splitting on blank lines isolates each section.
+        Display-truncated args (">2000 chars) fail json.loads and stay
+        unrecovered (the lost-calls warning covers those). Recovered calls
+        flow through the same approval gate and tool-name resolution as any
+        parsed action — no new trust surface.
+        """
+        if "[native tool_call " not in response_text:
+            return []
+        recovered = []
+        for section in response_text.split("\n\n"):
+            m = re.match(r"\[native tool_call \d+/\d+: ([^\]\n]+)\]\n(.*)",
+                         section, re.DOTALL)
+            if not m:
+                continue
+            name = m.group(1).strip()
+            if not name or name == "?":
+                continue
+            try:
+                params = json.loads(m.group(2).strip())
+            except ValueError:
+                continue  # truncated or malformed display — unrecoverable
+            if isinstance(params, dict):
+                recovered.append({"name": name, "params": params})
+        return recovered
+
+    def process_actions(self, response_text, native_calls=None):
         if not self.agent and not self.tools and not self.skills:
             if _PATH_SIGNAL.search(response_text) or _BASH_BLOCK.search(response_text):
                 agent_print("[hint: response contains **WRITE:**/**EDIT:**/**TOOL:**/**SKILL:** blocks -- add --agent, --tools, and/or --skills to execute them]\n")
@@ -493,6 +545,70 @@ class ActionMixin:
                 actions, llm_parser_warnings = compare_and_merge(actions, llm_actions)
                 for w in llm_parser_warnings:
                     agent_print(f"{w}\n")
+        # Phase 5 (NATIVE-TOOL-CALLS-ARCH): merge the last model call's native
+        # tool_calls into the action pipeline — one gate, same approval/loop/
+        # observation machinery as text-based calls. Dedupe by name+params
+        # signature against text-parsed actions (models occasionally emit both
+        # channels). Snapshot consumed exactly once per action round. The
+        # feedback loop passes the round's snapshot explicitly (native_calls);
+        # direct callers fall back to session state.
+        if native_calls is None:
+            native_pending = getattr(self, '_pending_native_calls', None) or []
+            self._pending_native_calls = None
+        else:
+            native_pending = native_calls or []
+        lost_native_warning = None
+        if native_pending and getattr(self, 'native_tools', True) and self.tools:
+            seen_sigs = {
+                (a.get("name") or "",
+                 json.dumps(a.get("params") or {}, sort_keys=True, default=str))
+                for a in actions if a.get("type") == "tool"
+            }
+            native_actions = []
+            for tc in self._native_action_dicts(native_pending):
+                sig = (tc["name"], json.dumps(tc["params"], sort_keys=True, default=str))
+                if sig in seen_sigs:
+                    continue
+                seen_sigs.add(sig)
+                native_actions.append(tc)
+            if native_actions:
+                agent_print(f"[native tool_calls merged into action pipeline: {len(native_actions)}]\n")
+                actions.extend(native_actions)
+        elif (not native_pending and self.tools
+              and getattr(self, 'native_tools', True)
+              and getattr(self, '_native_rendered_last_call', False)):
+            # Field-found failure mode (see NATIVE-TOOL-CALLS-ARCH): uhu's own
+            # faithful render is present but the snapshot was empty at merge
+            # time. Gated on the render flag set in _call_model — NOT on a
+            # substring search: prose merely quoting "[native tool_call N/M:"
+            # (docs, analysis) used to false-positive the lost-calls warning.
+            # Recover from the faithful render (the history record); the ⚠
+            # warning is the last resort for calls that can't be recovered
+            # (display-truncated args).
+            recovered = self._recover_native_from_render(response_text)
+            if recovered:
+                agent_print(f"[native tool_calls recovered from render: {len(recovered)}]\n")
+                seen_sigs = {
+                    (a.get("name") or "",
+                     json.dumps(a.get("params") or {}, sort_keys=True, default=str))
+                    for a in actions if a.get("type") == "tool"
+                }
+                native_actions = []
+                for tc in self._native_action_dicts(recovered):
+                    sig = (tc["name"], json.dumps(tc["params"], sort_keys=True, default=str))
+                    if sig in seen_sigs:
+                        continue
+                    seen_sigs.add(sig)
+                    native_actions.append(tc)
+                if native_actions:
+                    agent_print(f"[native tool_calls merged into action pipeline: {len(native_actions)}]\n")
+                    actions.extend(native_actions)
+            else:
+                lost_native_warning = (
+                    "[⚠ Native tool_calls were rendered with this response but vanished "
+                    "before the action pipeline (args truncated or unrecoverable). "
+                    "No execution happened — please report the session log to the uhu project.]")
+                agent_print(lost_native_warning + "\n")
         if not actions:
             # Check if the model wrote signal lines but with incomplete format
             if _PATH_SIGNAL.search(response_text):
@@ -500,6 +616,26 @@ class ActionMixin:
                         "For TOOL blocks, use: **TOOL:`tool_name`** then a ```json block with params, then **EOF:`tool_name`**. "
                         "For RUN blocks, use **RUN:** then a ```cmd (or bash/powershell) block with the command. "
                         "Do NOT write bare signal lines without content blocks.]", False, False, False)
+            if lost_native_warning:
+                return (lost_native_warning, False, True, False)
+            # Render-mimicry breaker (field, 2026-11-08, beam:cloud): a degraded
+            # all-native session taught the model uhu's own display record — it
+            # echoed "[native tool_call 1/1: name]" sections as plain text
+            # (degenerate 1/1 numbering, inline-glued after prose), nothing
+            # executed, rounds burned to "Done". Nudge back to executable forms.
+            # Shape-gated: a REAL render (or its echo) is a header line
+            # followed by newline + JSON args block. Prose mentions — digit
+            # placeholders or header-only examples in docs/analysis (both
+            # reproduced live, firing the digits-only version on the session
+            # assistant itself) — lack the shape and pass.
+            if re.search(r"\[native tool_call \d+/\d+: \w+\]\s*\n\s*[\{\[]", response_text):
+                return ("[SYSTEM WARNING: This response imitates uhu's internal execution "
+                        "record — bracketed native-call headers followed by JSON arguments "
+                        "are how EXECUTED calls appear in history, not an action. Nothing "
+                        "was executed. Emit a real action: a structured tool call on the "
+                        "native channel, a properly formatted action block (marker + json "
+                        "content block + matching EOF marker), or plain prose with no "
+                        "action markers at all.]", False, False, False)
             return (None, False, False, False)
         modified = set()
         created = set()

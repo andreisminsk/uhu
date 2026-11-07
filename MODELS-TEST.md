@@ -13,6 +13,8 @@
 | glm-5.2:cloud          | 2026-06-18 03:36 UTC | 26    | 26   | 0    | 75.8s  | ✅ Full compatibility                                   |
 | glm-5.3-flash:cloud    | 2026-11-07 18:24 UTC | 26    | 25   | 1    | 39.3s  | ❌ 1 failed (edit_with_eof)                             |
 | beam:cloud             | 2026-11-07 18:27 UTC | 26    | 2    | 24   | 36.5s  | ❌ 24 failed (empty responses)                          |
+| glm-5.3-flash:cloud    | 2026-11-07 20:03 UTC | 26    | 26   | 0    | 44.3s  | ✅ Full compatibility (text channel, 0 native)          |
+| beam:cloud             | 2026-11-07 20:05 UTC | 26    | 23   | 3    | 36.1s  | ✅ 23 passed (native tool_calls channel, 26/26 tests)   |
 
 ## gemma4:31b-cloud — 2026-06-04 18:05 UTC
 
@@ -442,5 +444,90 @@
 ### Failed tests
 
 All 24 action tests failed identically — empty output, no action blocks parsed (see Details table). Verdict: POOR — model not suitable for this harness.
+
+---
+
+## glm-5.3-flash:cloud — 2026-11-07 20:03 UTC (post native-tool_calls implementation)
+
+- **Result**: PASS (26/26)
+- **Total time**: 44.3s
+- **Native tool_calls**: used in 0/26 test(s) — text channel only, as expected
+- **Categories**: WRITE, EDIT, FILE, RUN, TOOL, EOF, MULTI, EDGE — all passed
+
+### Details
+
+| #   | Test                       | Result        | Time |
+| --- | -------------------------- | ------------- | ---- |
+| 1   | write_new_file             | ✅ PASS       | 1.0s |
+| 2   | write_with_eof             | ✅ PASS       | 1.1s |
+| 3   | edit_search_replace        | ✅ PASS       | 2.5s |
+| 4   | edit_with_eof              | ✅ PASS       | 0.9s |
+| 5   | file_read                  | ✅ PASS       | 0.8s |
+| 6   | run_command                | ✅ PASS       | 1.2s |
+| 7   | tool_read_file             | ✅ PASS       | 0.8s |
+| 8   | tool_search_in_files       | ✅ PASS       | 1.4s |
+| 9   | tool_list_files            | ✅ PASS       | 0.8s |
+| 10  | tool_find_file             | ✅ PASS       | 0.8s |
+| 11  | tool_peek_file             | ✅ PASS       | 0.8s |
+| 12  | tool_git_status            | ✅ PASS       | 0.9s |
+| 13  | tool_git_log               | ✅ PASS       | 0.9s |
+| 14  | tool_write_file            | ✅ PASS       | 0.9s |
+| 15  | tool_replace_in_file       | ✅ PASS       | 1.3s |
+| 16  | tool_run_command           | ✅ PASS       | 1.0s |
+| 17  | tool_env_info              | ✅ PASS       | 1.4s |
+| 18  | tool_http_request          | ✅ PASS       | 1.4s |
+| 19  | tool_web_search            | ✅ PASS       | 2.4s |
+| 20  | eof_uses_tool_name         | ✅ PASS       | 0.9s |
+| 21  | no_bare_tool_signals       | ✅ PASS       | 1.0s |
+| 22  | multiple_tools             | ✅ PASS       | 1.8s |
+| 23  | mixed_actions              | ✅ PASS       | 2.6s |
+| 24  | full_relative_path         | ✅ PASS       | 0.9s |
+| 25  | no_prose_instead_of_action | ✅ PASS       | 0.7s |
+| 26  | concise_output             | ✅ PASS       | 0.5s |
+
+---
+
+## beam:cloud — 2026-11-07 20:05 UTC (post native-tool_calls implementation)
+
+- **Result**: PASS (23/26, native channel)
+- **Total time**: 36.1s
+- **Native tool_calls**: used in 26/26 test(s) — the model emits structured tool_calls exclusively (empty text content on every response); previously surfaced as empty responses and 24 fails
+- **Categories**: WRITE 2/2, FILE 1/1, RUN 1/1, TOOL 13/13, EOF 2/2, EDGE 3/3; EDIT 0/2 and MULTI 1/2 failed (find_file-first exploration instead of direct read/edit in one round — resolves in a live feedback loop)
+
+### Details
+
+| #   | Test                       | Result             | Time |
+| --- | -------------------------- | ------------------ | ---- |
+| 1   | write_new_file             | ✅ PASS (native)   | 0.9s |
+| 2   | write_with_eof             | ✅ PASS (native)   | 1.3s |
+| 3   | edit_search_replace        | ❌ FAIL (native)   | 0.9s |
+| 4   | edit_with_eof              | ❌ FAIL (native)   | 0.8s |
+| 5   | file_read                  | ✅ PASS (native)   | 1.0s |
+| 6   | run_command                | ✅ PASS (native)   | 0.7s |
+| 7   | tool_read_file             | ✅ PASS (native)   | 0.9s |
+| 8   | tool_search_in_files       | ✅ PASS (native)   | 0.7s |
+| 9   | tool_list_files            | ✅ PASS (native)   | 1.1s |
+| 10  | tool_find_file             | ✅ PASS (native)   | 0.7s |
+| 11  | tool_peek_file             | ✅ PASS (native)   | 0.7s |
+| 12  | tool_git_status            | ✅ PASS (native)   | 0.7s |
+| 13  | tool_git_log               | ✅ PASS (native)   | 0.9s |
+| 14  | tool_write_file            | ✅ PASS (native)   | 0.7s |
+| 15  | tool_replace_in_file       | ✅ PASS (native)   | 0.9s |
+| 16  | tool_run_command           | ✅ PASS (native)   | 0.7s |
+| 17  | tool_env_info              | ✅ PASS (native)   | 0.7s |
+| 18  | tool_http_request          | ✅ PASS (native)   | 0.7s |
+| 19  | tool_web_search            | ✅ PASS (native)   | 1.1s |
+| 20  | eof_uses_tool_name         | ✅ PASS (native)   | 0.7s |
+| 21  | no_bare_tool_signals       | ✅ PASS (native)   | 0.7s |
+| 22  | multiple_tools             | ✅ PASS (native)   | 1.3s |
+| 23  | mixed_actions              | ❌ FAIL (native)   | 1.3s |
+| 24  | full_relative_path         | ✅ PASS (native)   | 0.8s |
+| 25  | no_prose_instead_of_action | ✅ PASS (native)   | 0.7s |
+| 26  | concise_output             | ✅ PASS (native)   | 0.9s |
+
+### Failed tests
+
+- **edit_search_replace** / **edit_with_eof**: model emitted find_file first (locate-then-edit strategy) — check expects direct read/edit in a single response; succeeds in live multi-round feedback loop
+- **mixed_actions**: read issued, write deferred to next round
 
 

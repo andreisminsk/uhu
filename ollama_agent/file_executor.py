@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from .constants import SKIP_EXT
-from .display import agent_print, tool_print
+from .display import agent_print, tool_print, neutralize_screen_controls
 from .edit_utils import make_edit_summary, make_unified_diff
 from .matching import find_match_in_content
 
@@ -372,10 +372,10 @@ class FileExecutor:
         content_lines = content.split('\n')
         if len(content_lines) > max_display_lines:
             for line in content_lines[:max_display_lines]:
-                tool_print(line)
+                tool_print(neutralize_screen_controls(line))
             tool_print(f"... ({len(content_lines) - max_display_lines} more lines)")
         else:
-            tool_print(content)
+            tool_print(neutralize_screen_controls(content))
         tool_print()
         obs = f"[File: {path}]\n{content}"
         self._log("system", f"[Read: {path} ({lines_count} lines{truncated}{url_info})]")

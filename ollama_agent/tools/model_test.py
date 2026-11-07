@@ -359,8 +359,20 @@ TESTS = [
 ]
 
 
+# Phase 1 (NATIVE-TOOL-CALLS-ARCH): the normalizer now lives in
+# ollama_agent/tool_calls.py, shared with backends.py. Kept as a
+# backward-compatible alias for existing callers.
+from ollama_agent.tool_calls import normalize_tool_calls as _normalize_tool_calls
+
+
 class ModelTestTool:
-    """Test model compatibility with the ollama-chat-agentic harness."""
+    """Test model compatibility with the ollama-chat-agentic harness.
+
+    Native Ollama tool_calls are treated as a first-class alternative action
+    channel (see dev-docs/NATIVE-TOOL-CALLS-ARCH.md): responses carrying
+    message.tool_calls are merged into the parsed action list before checks
+    run, and marked '[native]' in results.
+    """
     name = "model_test"
     description = "Test whether a model is compatible with this harness by running structured prompts."
     system_prompt = (
@@ -434,7 +446,7 @@ class ModelTestTool:
             tests = TESTS
 
         from ollama_agent.parser import parse_actions
-        from ollama_agent.tools.llm_query import llm_query
+        from ollama_agent.tools.llm_query import llm_query_full
         from ollama_agent.tools import tools_system_prompt
 
         tool_prompt = tools_system_prompt()
@@ -447,6 +459,7 @@ class ModelTestTool:
         passed = 0
         failed = 0
         errors = 0
+        native_tests = set()  # tests whose responses carried native tool_calls
         total_start = time.time()
 
         lines = []
@@ -457,6 +470,7 @@ class ModelTestTool:
         lines.append(f"Date: {now_str}")
         lines.append(f"System prompt: {len(system_prompt)} chars")
         lines.append(f"Sampling: temperature={temperature}, top_p={'model default' if top_p is None else top_p}")
+        lines.append("Native tool_calls: checked as an alternative action channel")
         lines.append(f"Tests: {len(tests)}")
         lines.append(f"{'='*70}")
 
@@ -470,7 +484,7 @@ class ModelTestTool:
                 progress = f"  [{idx}/{len(tests)}] Testing {name}..."
                 lines.append(progress)
                 print(progress)
-                result = llm_query(
+                res = llm_query_full(
                     prompt=prompt,
                     system=system_prompt,
                     model=model,
@@ -480,6 +494,7 @@ class ModelTestTool:
                     timeout=timeout,
                     ollama_url=base_url,
                 )
+                result = res["content"]
             except Exception as e:
                 test_elapsed = time.time() - test_start
                 err_line = f"  [ERR] {name}: ERROR -- {e} ({test_elapsed:.1f}s)"
@@ -490,6 +505,27 @@ class ModelTestTool:
                 continue
 
             actions = list(parse_actions(result))
+            # Native tool_calls — alternative action channel. Merge into the
+            # parsed action list (dedup by name+params) before checks run.
+            native_merged = 0
+            native_list = _normalize_tool_calls(res.get("tool_calls"))
+            if native_list:
+                seen = {
+                    (a.get("name") or a.get("path") or "",
+                     json.dumps(a.get("params") or {}, sort_keys=True, default=str))
+                    for a in actions if a.get("type") == "tool"
+                }
+                for tc in native_list:
+                    sig = (tc["name"], json.dumps(tc["params"], sort_keys=True, default=str))
+                    if sig in seen:
+                        continue
+                    actions.append({"type": "tool", "name": tc["name"],
+                                    "params": tc["params"], "closed": True,
+                                    "native": True})
+                    seen.add(sig)
+                    native_merged += 1
+            if native_merged:
+                native_tests.add(name)
 
             try:
                 check_result = test["check"](actions, result)
@@ -507,7 +543,7 @@ class ModelTestTool:
                 failed += 1
                 icon = "[FAIL]"
 
-            result_line = f"  {icon} {name}: {status} ({test_elapsed:.1f}s)"
+            result_line = f"  {icon} {name}: {status} ({test_elapsed:.1f}s)" + (" [native]" if native_merged else "")
             lines.append(result_line)
             print(result_line)
             if status == "FAIL":
@@ -528,6 +564,7 @@ class ModelTestTool:
                 "status": status,
                 "detail": desc if status == "FAIL" else "",
                 "time": test_elapsed,
+                "native": bool(native_merged),
             })
 
             time.sleep(0.5)
@@ -541,6 +578,7 @@ class ModelTestTool:
         print(f"  Failed: {failed}/{len(tests)}")
         print(f"  Errors: {errors}/{len(tests)}")
         print(f"  Total time: {total_elapsed:.1f}s")
+        print(f"  Native tool_calls used in: {len(native_tests)}/{len(tests)} test(s)")
         lines.append(f"\n{'='*70}")
         lines.append(f"SUMMARY: {model}")
         lines.append(f"{'='*70}")
@@ -548,6 +586,7 @@ class ModelTestTool:
         lines.append(f"  Failed: {failed}/{len(tests)}")
         lines.append(f"  Errors: {errors}/{len(tests)}")
         lines.append(f"  Total time: {total_elapsed:.1f}s")
+        lines.append(f"  Native tool_calls used in: {len(native_tests)}/{len(tests)} test(s)")
 
         lines.append(f"\n  Category breakdown:")
         print(f"\n  Category breakdown:")
@@ -597,6 +636,7 @@ class ModelTestTool:
             report_lines.append(f"- **Result**: {'PASS' if failed == 0 and errors == 0 else 'FAIL'} ({passed}/{len(tests)})")
             report_lines.append(f"- **Total time**: {total_elapsed:.1f}s")
             report_lines.append(f"- **Sampling**: temperature={temperature}, top_p={'model default' if top_p is None else top_p}")
+            report_lines.append(f"- **Native tool_calls**: used in {len(native_tests)}/{len(tests)} test(s)")
             report_lines.append(f"- **Categories**: {', '.join(cat for cat in ['WRITE','EDIT','FILE','RUN','TOOL','EOF','MULTI','EDGE'] if any(r['category'] == cat for r in results))} — {'all passed' if failed == 0 and errors == 0 else f'{failed} failed, {errors} errors'}\n")
             report_lines.append("### Details\n")
             report_lines.append("| # | Test | Result | Time |")
@@ -604,7 +644,8 @@ class ModelTestTool:
             for r in results:
                 icon = "✅" if r["status"] == "PASS" else ("❌" if r["status"] == "FAIL" else "⚠️")
                 time_str = f"{r['time']:.1f}s" if r["time"] is not None else "—"
-                report_lines.append(f"| {results.index(r)+1} | {r['name']} | {icon} {r['status']} | {time_str} |")
+                native_tag = " (native)" if r.get("native") else ""
+                report_lines.append(f"| {results.index(r)+1} | {r['name']} | {icon} {r['status']}{native_tag} | {time_str} |")
             if fails:
                 report_lines.append(f"\n### Failed tests\n")
                 for r in fails:
@@ -615,7 +656,7 @@ class ModelTestTool:
             report_path = None
 
         # Return concise summary to avoid truncation
-        summary_lines = lines[:7]  # header (now 7 lines with date + sampling)
+        summary_lines = lines[:8]  # header (now 8 lines: date + sampling + native)
         summary_lines.append(f"  Passed: {passed}/{len(tests)}  Failed: {failed}  Errors: {errors}  Score: {score:.0f}%")
         summary_lines.append(f"  Total time: {total_elapsed:.1f}s")
         if report_path:

@@ -103,6 +103,8 @@ def main():
                         help="Disable event sounds (done/question notifications). Toggled mid-session with /sound")
     parser.add_argument("--max-rounds", type=int, default=None, dest="max_rounds",
                         help="Max feedback-loop rounds per message (default: 3 interactive, 7 one-shot). Changeable mid-session with /max-rounds")
+    parser.add_argument("--no-native-tools", action="store_true",
+                        help="Disable merging native tool_calls (structured message.tool_calls channel) into the action pipeline. The backend still reports them — use for A/B experiments")
     parser.add_argument("--no-llm-parsing", action="store_true",
                         help="Disable LLM fallback parsing (configured via llm_parser section in .ollama_agent.json)")
     parser.add_argument("--prompt-file", default=None, dest="prompt_file",
@@ -235,6 +237,7 @@ def main():
         top_p=args.top_p,
         think_level=args.think_level,
         max_rounds=args.max_rounds,
+        native_tools=not args.no_native_tools,
     )
 
     # Event sounds — single point of muting for all playback

@@ -210,7 +210,9 @@ SAFE_TOOLS = {
     'git',              # Read-only git operations (status, diff, log) — no writes
     'calculator',       # Pure math evaluation — no I/O, no side effects
     'token_count',      # Counts tokens in text/files — read-only, no side effects
-    'py_compile',       # Check Python syntax, import modules, or run Python expressions 
+    # py_compile is NOT here: its 'run' action executes arbitrary code.
+    # It is conditionally auto-approved in actions.py (syntax/import only);
+    # unconditional SAFE_TOOLS membership made that gate dead code.
     'job_list',         # Lists jobs — read-only, no side effects
     'job_result',       # Gets job result — read-only, no side effects
     'job_log',          # Gets job log — read-only, no side effects

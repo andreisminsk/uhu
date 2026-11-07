@@ -30,7 +30,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
                 tpm_limit=None, max_context=None, no_llm_parsing=False,
                 openai_extra_body=None, temperature=None, max_rounds=None,
-                think_level=None, top_p=None):
+                think_level=None, top_p=None, native_tools=True):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -74,6 +74,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.stream = stream
         self.agent = agent
         self.tools = tools
+        # Native tool_calls merge (Phase 5) — --no-native-tools disables the
+        # session-side merge for A/B experiments (backend still reports them).
+        self.native_tools = native_tools
         self.mcp = mcp
         self.skills = skills
         self.skills_dir = skills_dir
@@ -84,6 +87,10 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.history = []
         self.pending_content = []
         self.pending_embeds = []
+        # Native tool_calls from the last model call (Phase 5,
+        # NATIVE-TOOL-CALLS-ARCH) — snapshotted in _call_model, consumed by
+        # process_actions exactly once per action round.
+        self._pending_native_calls = None
         # ApprovalGate is the single source of truth for auto-approval state.
         # Legacy attribute access (self.auto_all, etc.) is delegated via __getattr__/__setattr__.
         from .approval import ApprovalGate
@@ -256,14 +263,147 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     # stuck in a repetitive loop.
     # ── Model interaction ──────────────────────────────────────────────
 
+    # Native tool_call rendering limit (Phase 4 display spec — "truncated per
+    # observation limits"): args JSON shown in console/history is capped.
+    NATIVE_CALL_ARGS_DISPLAY_CHARS = 2000
+    # Console shows a compact preview; the full (2000-capped) faithful text
+    # still goes into history/log. Reason: pretty-printed args are 60-80
+    # wrapped terminal rows per call — across a long session this cycled
+    # macOS Terminal's fixed scrollback buffer (default 10k lines) and
+    # pushed the conversation out of view. Audit completeness lives in
+    # history/log; the console only needs enough to judge the action.
+    NATIVE_CALL_CONSOLE_PREVIEW_CHARS = 600
+    # Per-line value elision for the console preview. json.dumps(indent=2)
+    # puts giant values (write_file content) on ONE line — a raw
+    # line-boundary cut then collapses to a bare "{" (field-found
+    # 2026-11-08: 2461-char content line → preview showed "{" only, the
+    # path key invisible). Eliding long lines first keeps every param KEY
+    # visible under the cap.
+    NATIVE_CALL_PREVIEW_VALUE_CHARS = 160
+    # Console-only accent for native tool_call listings — bold bright green,
+    # brighter than the AI-output green, so the structured channel stands out.
+    # History/log text stays uncolored (faithful record).
+    NATIVE_COLOR = "\033[1;92m"
+
+    def _compact_preview(self, args_json):
+        """Elide over-long value lines so the preview shows all param keys.
+
+        Console-only compaction — the faithful (2000-capped) args_json still
+        goes to history/log untouched. Lines longer than
+        NATIVE_CALL_PREVIEW_VALUE_CHARS are cut with a per-line "+N" marker,
+        which keeps the subsequent line-boundary cap from ever collapsing to
+        a useless fragment when one value dwarfs the rest.
+        """
+        cap = self.NATIVE_CALL_PREVIEW_VALUE_CHARS
+        out_lines = []
+        for line in args_json.splitlines():
+            if len(line) > cap:
+                out_lines.append(line[:cap] + f"…[+{len(line) - cap} chars]")
+            else:
+                out_lines.append(line)
+        return "\n".join(out_lines)
+
+    def _render_native_calls(self, content, native_calls):
+        """Phase 4 — faithful rendering of native tool_calls.
+
+        The model emitted structured message.tool_calls instead of (or in
+        addition to) text. Per the transparency rule, console display and the
+        assistant message stored in history show exactly what the model sent —
+        never rendered text the model never produced. Empty content +
+        tool_calls renders only the native listing, so the user sees why the
+        assistant message is empty.
+        """
+        if not native_calls:
+            return content
+        total = len(native_calls)
+        sections = []
+        for i, tc in enumerate(native_calls, 1):
+            name = tc.get("name") or "?"
+            try:
+                args_json = json.dumps(tc.get("params") or {}, indent=2,
+                                       ensure_ascii=False, default=str)
+            except Exception:
+                args_json = str(tc.get("params") or {})
+            n_chars = len(args_json)
+            # Console preview — built from the FULL args (before the history
+            # truncation below): per-line value elision keeps every param KEY
+            # visible, then a line-boundary cap bounds scrollback. Field fix
+            # (2026-11-08): the 2000-char history cut is mid-line — building
+            # the preview from the truncated text dropped later keys entirely
+            # (path invisible after a giant content value).
+            preview = self._compact_preview(args_json)
+            if len(preview) > self.NATIVE_CALL_CONSOLE_PREVIEW_CHARS:
+                cut = preview.rfind("\n", 0, self.NATIVE_CALL_CONSOLE_PREVIEW_CHARS)
+                preview = preview[:cut if cut > 0 else self.NATIVE_CALL_CONSOLE_PREVIEW_CHARS]
+                preview += f"\n[... {n_chars} chars total — full args in history (FILE log / assistant message)]"
+            elif preview != args_json:
+                preview += "\n[... long values elided for preview — full args in history (FILE log / assistant message)]"
+            # History/log — faithful 2000-capped record (render-recovery source)
+            if n_chars > self.NATIVE_CALL_ARGS_DISPLAY_CHARS:
+                args_json = (args_json[:self.NATIVE_CALL_ARGS_DISPLAY_CHARS]
+                             + f"\n[... {n_chars} chars total, truncated for display]")
+            sections.append(f"[native tool_call {i}/{total}: {name}]\n{args_json}")
+            agent_print(self.NATIVE_COLOR + f"[native tool_call {i}/{total}: {name}]" + ANSI_RESET)
+            agent_print(self.NATIVE_COLOR + preview + ANSI_RESET + "\n")
+        native_text = "\n\n".join(sections)
+        return (content + "\n\n" + native_text) if content else native_text
+
+    def _take_asst_entry(self):
+        """Return (and detach) the as-is assistant entry for the last model
+        call — see AS-IS-HISTORY-ARCH. Detaching guarantees one entry per
+        model call; defensive fallback returns a plain empty-text entry when
+        no entry was captured (every append site directly follows a model
+        call, so this should not occur in practice)."""
+        entry = getattr(self, '_last_asst_entry', None)
+        self._last_asst_entry = None
+        if entry is not None:
+            return entry
+        return {"role": "assistant", "content": ""}
+
     def _call_model(self):
         """Call the model. Delegates to backend."""
         result = self._backend.call(self.history, stream=self.stream)
+        content, eval_count = result[0], result[1]
+        # Phase 5 — snapshot native tool_calls for the process_actions merge.
+        # Consumed exactly once per action round; /reset, /restore and /llm
+        # swaps never leak stale calls into a later merge.
+        native = getattr(self._backend, 'last_tool_calls', None) or []
+        self._pending_native_calls = list(native) if getattr(self, 'native_tools', True) else None
+        # Loss-detector signal (prose false-positive fix): True only when uhu
+        # itself rendered native sections into this response — never set by
+        # model/user prose quoting the render format.
+        self._native_rendered_last_call = bool(native)
+        # As-is history (AS-IS-HISTORY-ARCH): the model-facing record stores
+        # this turn exactly as the model emitted it — text content PRE-render
+        # plus native tool_calls as structured data. uhu's render text never
+        # enters history; it is display/processing-only. This removes the
+        # copyable pattern that taught degraded models to imitate the display
+        # format instead of emitting actions.
+        self._last_asst_entry = {"role": "assistant", "content": content}
+        if native and getattr(self, 'native_tools', True):
+            self._last_asst_entry["native_tool_calls"] = [dict(tc) for tc in native]
+        if native:
+            content = self._render_native_calls(content, native)
+        else:
+            # Field-found transparency gap (beam:cloud): output tokens consumed
+            # with nothing rendered anywhere — likely hidden reasoning or a
+            # server-dropped tool call. Never let token spend be invisible.
+            # NOTE: the value returned by _call_model is prompt_eval_count
+            # (exact ctx total), NOT output tokens — gating on it would fire
+            # on every empty reply. Gate on last_output_tokens instead.
+            out_n = getattr(self._backend, 'last_output_tokens', None) or 0
+            if (not content and out_n >= 10
+                    and not getattr(self._backend, 'last_thinking_chars', 0)
+                    and getattr(self._backend, 'last_reasoning_tokens', None) is None):
+                agent_print(
+                    f"[note: model generated {out_n} output tokens with no visible "
+                    f"output — likely hidden reasoning or a dropped tool call. "
+                    f"Try /think off to isolate the channel.]\n")
         # Accumulate session output-token total (reset by /reset, /restore, /llm)
         out_tokens = getattr(self._backend, 'last_output_tokens', None)
         if out_tokens:
             self._output_tokens_total = getattr(self, '_output_tokens_total', 0) + out_tokens
-        return result
+        return content, eval_count
 
     def _rebuild_backend(self, api_type=None, model=None, ctx_size=None,
                          host=None, api_key=None, extra_body_path=None,
@@ -280,6 +420,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
 
         # Reset session output-token total — fresh backend, fresh stats
         self._output_tokens_total = 0
+        # Native tool_calls are per-call state — old backend's calls must not
+        # leak into the new backend's first-round merge
+        self._pending_native_calls = None
 
         self._backend = create_backend(
             api_type=api_type, host=host, model=model, ctx_size=ctx_size,
@@ -563,6 +706,13 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         consecutive_read_only = 0
         max_consecutive_read_only = 3
         action_sig_rounds = {}  # sig -> number of rounds this signature appeared in
+        # Wasted-round escalation (field, 2026-11-08, beam:cloud): mimicry and
+        # other no-action responses parse to ZERO actions, so the existing
+        # identical-action repeat guard (which keys on action signatures) never
+        # fires. Track hashes of no-action responses instead; an identical
+        # repeat escalates the injected warning.
+        last_wasted_hash = None
+        wasted_repeat = 0
         for round_num in range(max_rounds):
             assistant_msg = self.history[-1]["content"]
             round_label = f"Round {round_num + 1}/{max_rounds}"
@@ -574,8 +724,18 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 self._log("system", notif_text)
                 agent_print(notif_text + "\n")
 
-            # Pre-parse actions to detect loops before executing them
+            # Round-top capture (field hardening): the native snapshot belongs
+            # to THIS round's message — pop it once so no intermediate handler
+            # can lose it, and pass it explicitly into process_actions instead
+            # of reading mutable session state there.
+            native_for_round = self._pending_native_calls
+            self._pending_native_calls = None
+            # Pre-parse actions to detect loops before executing them.
+            # Native tool_calls (Phase 5) participate in loop detection — the
+            # snapshot corresponds to the message being processed.
             pre_actions = parse_actions(assistant_msg)
+            if native_for_round and getattr(self, 'native_tools', True):
+                pre_actions += self._native_action_dicts(native_for_round)
             current_sigs = set()
             for a in pre_actions:
                 sig = self._action_signature(a)
@@ -610,6 +770,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
 
             if skip_execution:
                 logger.warning("Loop detected — skipping execution | sig=%s | rounds=%d", sig, rounds_seen)
+                # Skipped native calls must not re-merge next round (stale snapshot)
+                self._pending_native_calls = None
                 # Don't execute — just add the loop nudge and call model again
                 agent_print(loop_nudge + "\n")
                 self._log("system", loop_nudge)
@@ -618,7 +780,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     agent_print()
                     feedback_msg, fb_eval_count = self._call_model()
                     self._log("assistant", feedback_msg)
-                    self.history.append({"role": "assistant", "content": feedback_msg})
+                    self.history.append(self._take_asst_entry())
                     self.show_ctx(fb_eval_count)
                 except KeyboardInterrupt:
                     self._log("system", "[Loop nudge interrupted by user]")
@@ -633,11 +795,45 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 continue
 
             # Execute actions normally
-            obs, cancelled_run, has_non_read, has_skill = self.process_actions(assistant_msg)
+            obs, cancelled_run, has_non_read, has_skill = self.process_actions(
+                assistant_msg, native_calls=native_for_round)
 
             # Add loop nudge to observation if at warning level
             if loop_nudge and obs:
                 obs += "\n" + loop_nudge
+
+            # Wasted-round tracking: zero parsed actions + a truthy observation
+            # means a warning-only round (mimicry breaker, incomplete-format,
+            # lost-native). Console visibility: these returns were log-only —
+            # the user saw nothing while the loop burned rounds. On an
+            # IDENTICAL repeat, escalate the warning sharply.
+            if not current_sigs:
+                if obs:
+                    h = hashlib.sha1(assistant_msg.encode("utf-8", "replace")).hexdigest()
+                    if h == last_wasted_hash:
+                        wasted_repeat += 1
+                        esc = (
+                            "[SYSTEM ESCALATION: This is the same response as the previous "
+                            f"round, repeated {wasted_repeat + 1}x with NO executable action — "
+                            "the previous warning was ignored. Action-like text quoted from "
+                            "uhu's internal record (native tool_call render sections) is NOT "
+                            "an action and will never execute. Choose ONE: (1) emit a real "
+                            "structured tool call on the native channel, (2) emit a properly "
+                            "formatted action block (marker + json content block + matching "
+                            "EOF marker), or (3) give your final answer as plain prose with "
+                            "NO action markers at all.]")
+                        obs = obs + "\n" + esc
+                        agent_print(esc + "\n")
+                    else:
+                        wasted_repeat = 0
+                        agent_print(obs + "\n")
+                    last_wasted_hash = h
+                else:
+                    last_wasted_hash = None
+                    wasted_repeat = 0
+            else:
+                last_wasted_hash = None
+                wasted_repeat = 0
 
             if not obs:
                 # No actions produced — check if model seems stuck and nudge
@@ -652,7 +848,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                         agent_print(f"⟳ {round_label} — nudging model...")
                         feedback_msg, fb_eval_count = self._call_model()
                         self._log("assistant", feedback_msg)
-                        self.history.append({"role": "assistant", "content": feedback_msg})
+                        self.history.append(self._take_asst_entry())
                         self.show_ctx(fb_eval_count)
                         # Process the nudged response
                         continue
@@ -706,7 +902,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 agent_print()
                 feedback_msg, fb_eval_count = self._call_model()
                 self._log("assistant", feedback_msg)
-                self.history.append({"role": "assistant", "content": feedback_msg})
+                self.history.append(self._take_asst_entry())
                 self.show_ctx(fb_eval_count)
             except KeyboardInterrupt:
                 self._log("system", "[Feedback interrupted by user]")
@@ -718,12 +914,53 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 agent_print(f"\n[Feedback error: {e}]\n")
                 self.history.append({"role": "assistant", "content": "Noted."})
                 return
-        # Exhausted max rounds — process any remaining actions but don't call model again
+        # Exhausted max rounds — process any remaining actions but don't call model again.
+        # The last response's native calls were captured by its round's round-top
+        # pop only inside the loop — this final response never got a round, so
+        # pop and pass explicitly.
+        wrapup_native = self._pending_native_calls
+        self._pending_native_calls = None
         assistant_msg = self.history[-1]["content"]
-        obs, _, _, _ = self.process_actions(assistant_msg)
+        obs, wrap_ran_non_read, _, _ = self.process_actions(assistant_msg, native_calls=wrapup_native)
         if obs:
             self._log("system", obs)
             self.history.append({"role": "user", "content": obs})
+            if not wrap_ran_non_read:
+                # Warning-only wrap-up (mimicry breaker, incomplete format —
+                # field, 2026-11-08, beam:cloud): two gaps closed here.
+                # 1. Visibility: these observations were log/history-only —
+                #    the user saw nothing while the turn ended as if fine.
+                agent_print(obs + "\n")
+                # 2. Consumability: the warning was appended AFTER the last
+                #    model call, so the model could never act on it — its
+                #    fixed-but-botched action (echoed as render text with zero
+                #    native calls) was silently lost. Grant ONE grace call so
+                #    the feedback is actually received; strictly once.
+                try:
+                    self._check_context_pressure()
+                    agent_print("⟳ Grace round — last response had no executable action; model called once more to act on the warning...\n")
+                    grace_msg, grace_eval_count = self._call_model()
+                    self._log("assistant", grace_msg)
+                    self.history.append(self._take_asst_entry())
+                    self.show_ctx(grace_eval_count)
+                    grace_native = self._pending_native_calls
+                    self._pending_native_calls = None
+                    gobs, g_non_read, _, _ = self.process_actions(grace_msg, native_calls=grace_native)
+                    if gobs:
+                        self._log("system", gobs)
+                        self.history.append({"role": "user", "content": gobs})
+                        if not g_non_read:
+                            agent_print(gobs + "\n")
+                        else:
+                            agent_print("✓ Grace round executed the pending action(s)\n")
+                except KeyboardInterrupt:
+                    self._log("system", "[Grace round interrupted by user]")
+                    agent_print("\n[Grace round interrupted]\n")
+                    self.history.append({"role": "assistant", "content": "Noted."})
+                except Exception as e:
+                    self._log("system", f"[Grace round error: {e}]")
+                    agent_print(f"\n[Grace round error: {e}]\n")
+                    self.history.append({"role": "assistant", "content": "Noted."})
         self.history.append({"role": "assistant", "content": "Noted."})
         self._play_done_sound()
         agent_print(f"AGENT: Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
@@ -765,7 +1002,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             agent_print()
             assistant_msg, prompt_eval_count = self._call_model()
             self._log("assistant", assistant_msg)
-            self.history.append({"role": "assistant", "content": assistant_msg})
+            self.history.append(self._take_asst_entry())
             self.show_ctx(prompt_eval_count)
             self._check_context_pressure()
             self._feedback_loop(max_rounds=max_rounds)
