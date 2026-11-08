@@ -3,11 +3,21 @@
 import re
 import sys
 
-from .constants import ANSI_AGENT, ANSI_RESET, ANSI_TOOL
+from .constants import ANSI_AGENT, ANSI_RESET, ANSI_TOOL, ANSI_AI
+
+
+# Telemetry/status lines ([out:]/[ctx:]/[ollama:) share the model-output
+# color (truecolor green; 2026-11-08): they report model-call stats, so they
+# read as the "model lane", not agent voice. The no-prefix skip-list below
+# already treats them as non-voice lines — this extends that to color.
+_STATUS_PREFIXES = ("[out:", "[ctx:", "[ollama:")
 
 
 def agent_print(*args, **kwargs):
     """Print with agent color (bright yellow) + [AGENT] text prefix.
+
+    Telemetry lines ([out:/[ctx:/[ollama:) are printed in the model-output
+    green instead (see _STATUS_PREFIXES).
 
     The prefix makes agent-voice lines distinctive even in plain-text
     captures (logs, pipes, non-TTY) where ANSI colors are absent. Skipped
@@ -30,7 +40,10 @@ def agent_print(*args, **kwargs):
                                              "[Version check:", "[Update available:"))):
             args = ("[AGENT] " + first,) + args[1:]
     if sys.stdout.isatty():
-        print(ANSI_AGENT, end="", flush=True)
+        color = ANSI_AGENT
+        if args and isinstance(args[0], str) and args[0].strip().startswith(_STATUS_PREFIXES):
+            color = ANSI_AI
+        print(color, end="", flush=True)
         print(*args, **kwargs)
         print(ANSI_RESET, end="", flush=True)
     else:

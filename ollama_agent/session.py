@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sys
 from collections import Counter
 from datetime import datetime
@@ -12,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
 from .actions import agent_print, tool_print
+from .display import neutralize_screen_controls
 from .parser import parse_actions
 from . import sound
 from .input_utils import read_full_input, _reconfigure_stdout
@@ -20,6 +22,41 @@ from .platform import terminal
 from .commands import CommandMixin, DISPATCH_CONTINUE, DISPATCH_BREAK, DISPATCH_WORKDIR_SWITCH
 from .actions import ActionMixin
 from .persistence import PersistenceMixin
+
+
+# ── Wrap-up classification (feedback-loop tail) ────────────────────────────
+# Warning-shaped observations produced by a wrap-up WITHOUT executed actions:
+# missing-EOF, risky parse markers, lost-native, mimicry/incomplete-format
+# breakers, placeholder warnings. These were historically log-only and
+# appended after the last model call — the user saw nothing and the model
+# never got to act. Ordinary tool/read/run results, by contrast, are already
+# console-echoed by their executors and consumed as history observations;
+# re-printing them duplicated scrollback and a grace call burned a wasted
+# model round. (field, 2026-11-08)
+_WARN_OBS_PREFIX_RE = re.compile(r"^\[\s*(?:⚠|SYSTEM (?:WARNING|ESCALATION))")
+
+# Content already printed to console by an executor/process_actions itself.
+_OBS_ECHOED_RE = re.compile(
+    r"uses placeholder '"                        # placeholder warnings: printed in process_actions
+    r"|\[Note: "                                 # batch-write note: printed in process_actions
+    r"|\[File: "                                 # read results: echoed by execute_read
+    r"|\[TOOL \S+\]: |\[TOOL FAILED"            # tool results/failures: echoed by execute_tool
+    r"|\[Run "                                   # run results: echoed by CommandRunner
+    r"|Rolled back "                             # rollback: printed in process_actions
+)
+
+
+def _is_warning_only_observation(obs):
+    """True if obs starts with a system-warning marker ([SYSTEM WARNING/…,
+    [⚠ …). Gates the _feedback_loop wrap-up's console re-print and grace
+    model call to genuinely unconsumed warnings (see block comment above)."""
+    return bool(_WARN_OBS_PREFIX_RE.match(obs))
+
+
+def _obs_already_echoed(obs):
+    """True if obs' relevant content was already printed to console by its
+    executor (results, skips, notes) — suppress the wrap-up re-print."""
+    return bool(_OBS_ECHOED_RE.search(obs))
 
 
 class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
@@ -901,7 +938,16 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                         agent_print(esc + "\n")
                     else:
                         wasted_repeat = 0
-                        agent_print(obs + "\n")
+                        # Visibility for warning-only rounds: re-print only if
+                        # no executor echoed this content already (ordinary
+                        # tool/read/run results get console-echoed at execution
+                        # time — re-printing them here duplicated scrollback with
+                        # an untruncated [AGENT] copy; field, 2026-11-08).
+                        if _obs_already_echoed(obs):
+                            agent_print("[warning-only round — details in history/log]\n")
+                        else:
+                            agent_print(neutralize_screen_controls(
+                                self._truncate_for_console(obs)) + "\n")
                     last_wasted_hash = h
                 else:
                     last_wasted_hash = None
@@ -996,16 +1042,28 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         wrapup_native = self._pending_native_calls
         self._pending_native_calls = None
         assistant_msg = self.history[-1]["content"]
-        obs, wrap_ran_non_read, _, _ = self.process_actions(assistant_msg, native_calls=wrapup_native)
+        # NOTE the unpack order: process_actions returns (result,
+        # user_cancelled_run, has_executed_non_read, has_skill). The old
+        # code bound element 2 (user_cancelled_run — almost always False)
+        # into wrap_ran_non_read, so EVERY non-empty wrap-up obs — including
+        # ordinary read-only tool results — entered the warning-only print
+        # + grace-round branch (field trace, 2026-11-08: duplicated full
+        # file dump + wasted grace call).
+        obs, _wrap_cancelled, wrap_ran_non_read, _wrap_skill = self.process_actions(
+            assistant_msg, native_calls=wrapup_native)
         if obs:
             self._log("system", obs)
             self.history.append({"role": "user", "content": obs})
-            if not wrap_ran_non_read:
+            if not wrap_ran_non_read and _is_warning_only_observation(obs):
                 # Warning-only wrap-up (mimicry breaker, incomplete format —
                 # field, 2026-11-08, beam:cloud): two gaps closed here.
                 # 1. Visibility: these observations were log/history-only —
                 #    the user saw nothing while the turn ended as if fine.
-                agent_print(obs + "\n")
+                #    Console echo: truncated + screen-control-neutralized
+                #    (executors already echoed ordinary results in full).
+                if not _obs_already_echoed(obs):
+                    agent_print(neutralize_screen_controls(
+                        self._truncate_for_console(obs)) + "\n")
                 # 2. Consumability: the warning was appended AFTER the last
                 #    model call, so the model could never act on it — its
                 #    fixed-but-botched action (echoed as render text with zero
@@ -1020,12 +1078,16 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     self.show_ctx(grace_eval_count)
                     grace_native = self._pending_native_calls
                     self._pending_native_calls = None
-                    gobs, g_non_read, _, _ = self.process_actions(grace_msg, native_calls=grace_native)
+                    gobs, _g_cancelled, g_non_read, _ = self.process_actions(grace_msg, native_calls=grace_native)
                     if gobs:
                         self._log("system", gobs)
                         self.history.append({"role": "user", "content": gobs})
-                        if not g_non_read:
-                            agent_print(gobs + "\n")
+                        if not g_non_read and _is_warning_only_observation(gobs):
+                            # Warning-only grace result — surface it (truncated,
+                            # neutralized) unless an executor already echoed it.
+                            if not _obs_already_echoed(gobs):
+                                agent_print(neutralize_screen_controls(
+                                    self._truncate_for_console(gobs)) + "\n")
                         else:
                             agent_print("✓ Grace round executed the pending action(s)\n")
                 except KeyboardInterrupt:
