@@ -391,8 +391,14 @@ MAX_CONSOLE_DISPLAY_CHARS = 2000
 MAX_BATCH_WRITES = 3
 
 # Loop detection thresholds
-MAX_IDENTICAL_ACTION_REPEATS = 3   # Skip execution after this many identical action repeats across rounds
-LOOP_NUDGE_THRESHOLD = 2           # Add loop warning nudge after this many repeats
+MAX_IDENTICAL_ACTION_REPEATS = 3   # Skip execution after this many identical action repeats ACROSS ROUNDS WITHIN ONE SEND
+LOOP_NUDGE_THRESHOLD = 2           # Add loop warning nudge after this many repeats within one send
+# Cross-SEND repetition (field, 2026-11-08, beam:cloud): identical "You: ?"
+# re-prompts re-ran the same read-only action forever — per-send counters saw
+# the action "once" every time. Across sends, warn at this many identical
+# occurrences — but NEVER skip and NEVER count a repeat whose preceding disk
+# state was stable-but-changed (files may have changed legitimately).
+CROSS_SEND_LOOP_WARN_THRESHOLD = 3   # Warn (soft) after this many identical actions ACROSS sends at the SAME user prompt
 
 # Command category classification for broader loop detection.
 # Commands in the same category are considered "similar" for loop detection.

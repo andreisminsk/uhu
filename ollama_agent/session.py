@@ -11,7 +11,17 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS
+from .constants import AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE, get_platform_shell_guidance, get_platform_info, ANSI_LIGHT_GRAY, ANSI_AGENT, ANSI_RESET, MAX_IDENTICAL_ACTION_REPEATS, LOOP_NUDGE_THRESHOLD, RUN_COMMAND_CATEGORIES, MAX_CONSECUTIVE_EMPTY_RUN, MAX_FEEDBACK_ROUNDS, CROSS_SEND_LOOP_WARN_THRESHOLD
+
+# Cross-send loop radar (field, 2026-11-08, beam:cloud): identical "You: ?"
+# re-prompts re-executed the same read-only action forever — a per-send
+# signature dict saw the action "once" every time, below every threshold.
+# The radar counts action signatures ACROSS sends and warns (soft, never
+# skips): legitimate re-runs exist — files change on disk between prompts.
+# Decay rule: if the workdir fingerprint changed since the previous send,
+# the re-run may be justified, so prior counts decay by one instead of
+# growing (persistent looping would still climb: warn → warn+1 → ...).
+CROSS_SEND_LOOP_WARN_THRESHOLD = 3
 from .actions import agent_print, tool_print
 from .display import neutralize_screen_controls
 from .parser import parse_actions
@@ -531,6 +541,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         # Native tool_calls are per-call state — old backend's calls must not
         # leak into the new backend's first-round merge
         self._pending_native_calls = None
+        # New model, new behavior — clear cross-message loop counts too.
+        self._cross_sig_rounds = {}
         # Re-evaluate native solicitation for the NEW model (capability may
         # differ), then pass the schemas to the fresh backend.
         self._native_solicit = (getattr(self, 'tools_mode', 'hybrid') != "text") and self._model_supports_tools(host, model)
@@ -634,6 +646,32 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                         "If the task is complete, just confirm — no action blocks needed.]"
                     )
         return None
+
+    def _workdir_fingerprint(self):
+        """Cheap workdir change detector for cross-send loop-radar decay.
+
+        Samples mtime+size of top-level entries only (shallow, bounded —
+        dot-dirs like .uhu/.cache excluded to avoid caching noise). Any
+        difference vs the previous send means "disk changed" and decays
+        prior per-signature counts by one (see _send): a re-run after a
+        change may be legitimate re-verification. Imperfect by design —
+        false "changed" slightly undercounts, which errs safe.
+        """
+        import os
+        fp = []
+        try:
+            with os.scandir(self.workdir) as it:
+                for e in it:
+                    if e.name.startswith("."):
+                        continue
+                    try:
+                        st = e.stat(follow_symlinks=False)
+                        fp.append((e.name, st.st_mtime_ns, st.st_size))
+                    except OSError:
+                        continue
+        except OSError:
+            return None
+        return tuple(sorted(fp))
 
     @staticmethod
     def _classify_run_command(cmd):
@@ -817,7 +855,12 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         """
         consecutive_read_only = 0
         max_consecutive_read_only = 3
-        action_sig_rounds = {}  # sig -> number of rounds this signature appeared in
+        # Cross-send + within-send counts: seeded from the session-level
+        # radar (reset by a changed user message, decayed by disk change —
+        # see _send), then updated locally as before; this copy is written
+        # BACK to the session at loop-nudge points so the next identical
+        # re-prompt sees the accumulated count.
+        action_sig_rounds = dict(getattr(self, "_cross_sig_rounds", {}))
         # Wasted-round escalation (field, 2026-11-08, beam:cloud): mimicry and
         # other no-action responses parse to ZERO actions, so the existing
         # identical-action repeat guard (which keys on action signatures) never
@@ -855,11 +898,21 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     current_sigs.add(sig)
 
             # Check for loops: how many rounds has each signature been seen?
+            # Seed counts include the cross-send radar (identical re-prompts);
+            # MAX_IDENTICAL is reached ONLY via repeats within this send —
+            # a count that arrived already at the threshold from across sends
+            # stays at soft-warning level (legitimate re-runs are never
+            # skipped; files change between sends).
             loop_nudge = None
             skip_execution = False
+            cross_counts_pre = dict(getattr(self, "_cross_sig_rounds", {}))
             for sig in current_sigs:
                 rounds_seen = action_sig_rounds.get(sig, 0) + 1
-                if rounds_seen >= MAX_IDENTICAL_ACTION_REPEATS:
+                preexisting = cross_counts_pre.get(sig, 0)
+                # Within-send repeats only may reach the hard skip: a count
+                # seeded from the cross-send radar (legitimate re-runs of an
+                # identical prompt) can never trigger skip_execution.
+                if (rounds_seen - preexisting) >= MAX_IDENTICAL_ACTION_REPEATS:
                     skip_execution = True
                     loop_nudge = (
                         f"⚠️ LOOP DETECTED: You have repeated the same {sig[0]} action "
@@ -869,12 +922,31 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                         f"If an EDIT keeps failing, re-read the file with FILE: first."
                     )
                     break
-                elif rounds_seen >= LOOP_NUDGE_THRESHOLD:
+                elif (rounds_seen - preexisting) >= LOOP_NUDGE_THRESHOLD:
+                    # Within-send delta, not the seeded total: a cross-send
+                    # carry-in (legitimate first round of this send) must not
+                    # fire the within-send warning; the cross-send radar has
+                    # its own soft message below.
                     if loop_nudge is None:
                         loop_nudge = (
                             f"⚠️ WARNING: You have repeated the same {sig[0]} action "
                             f"{rounds_seen} times. Consider trying a different approach."
                         )
+
+            # Cross-send soft radar (see CROSS_SEND_LOOP_WARN_THRESHOLD): the
+            # SAME signature repeated across identical re-prompts. Pure soft
+            # warning — informs the user+model, never skips execution.
+            if not skip_execution and not loop_nudge:
+                for sig in current_sigs:
+                    n_now = cross_counts_pre.get(sig, 0) + 1
+                    if n_now >= CROSS_SEND_LOOP_WARN_THRESHOLD:
+                        loop_nudge = (
+                            f"⚠ CROSS-SEND REPETITION: the same {sig[0]} action has been "
+                            f"repeated {n_now} sends in a row for identical prompts. "
+                            f"If files have changed and re-checking is intended, ignore this; "
+                            f"otherwise consider a different action or a more specific request."
+                        )
+                        break
 
             # Update round counts for current signatures
             for sig in current_sigs:
@@ -913,6 +985,13 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             # Add loop nudge to observation if at warning level
             if loop_nudge and obs:
                 obs += "\n" + loop_nudge
+            # Console visibility (field trace, 2026-11-08): executed rounds
+            # only echoed tool output — the ⚠ nudge went to history/model but
+            # the screen showed nothing, reading as "no warning".
+            # (skip_execution prints its own nudge below.)
+            if loop_nudge and not skip_execution:
+                agent_print(loop_nudge + "\n")
+                self._log("system", loop_nudge)
 
             # Wasted-round tracking: zero parsed actions + a truthy observation
             # means a warning-only round (mimicry breaker, incomplete-format,
@@ -1017,6 +1096,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             else:
                 consecutive_read_only = 0
                 agent_print(f"⟳ {round_label} — model continuing...\n")
+            # Write back accumulated counts — the next send's identical
+            # re-prompt must see the repetition, warn across the boundary.
+            self._cross_sig_rounds = dict(action_sig_rounds)
             # Call model for feedback (whether read-only or not)
             self._check_context_pressure()
             try:
@@ -1121,6 +1203,31 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     message = _red
         except Exception:
             pass
+        # Cross-send loop radar state: counts keyed by action signature.
+        # A DIFFERENT user message (new instruction) resets them — fresh
+        # legitimacy for a fresh task; an identical re-prompt keeps them.
+        self._cross_sig_rounds = getattr(self, "_cross_sig_rounds", {})
+        if (getattr(self, "_last_send_user_msg", None) or "").strip().lower() != (message or "").strip().lower():
+            self._cross_sig_rounds = {}
+        else:
+            # Decay on disk change (field note, 2026-11-08): between two
+            # identical re-prompts the workdir may legitimately have changed
+            # (user edited files, jobs finished) — the repeat is then plausibly
+            # re-verification, not a loop. Fingerprint check is cheap (top-
+            # level mtimes), tolerant of noise otherwise.
+            fp_now = self._workdir_fingerprint()
+            if fp_now != getattr(self, "_last_workdir_fp", fp_now):
+                # Decay by TWO: one disk-change event discounts a full prior
+                # repetition — after a change the next identical re-run counts
+                # nearly fresh (3→1, so one more run stays below the warn
+                # threshold). Decay-by-1 would be cancelled out by the send's
+                # own +1 and the warning would never clear.
+                for k in list(self._cross_sig_rounds):
+                    self._cross_sig_rounds[k] = max(0, self._cross_sig_rounds[k] - 2)
+                    if self._cross_sig_rounds[k] == 0:
+                        del self._cross_sig_rounds[k]
+            self._last_workdir_fp = fp_now
+        self._last_send_user_msg = message
         self._log("user", message)
         msg = {"role": "user", "content": message}
         if images:
