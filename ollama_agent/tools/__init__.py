@@ -43,6 +43,39 @@ class Tool:
         raise NotImplementedError
 
 
+def _flat_params_to_schema(name, description, params):
+    """Convert the flat parameters format ({name: {type, description, required}})
+    into a JSON Schema function definition for the /api/chat tools param."""
+    params = params or {}
+    properties = {}
+    required = []
+    for pname, pdef in params.items():
+        if not isinstance(pdef, dict):
+            continue
+        prop = {"type": pdef.get("type", "string")}
+        if pdef.get("description"):
+            prop["description"] = pdef["description"]
+        if pdef.get("enum"):
+            prop["enum"] = list(pdef["enum"])
+        if pdef.get("items"):
+            prop["items"] = pdef["items"]
+        properties[pname] = prop
+        if pdef.get("required"):
+            required.append(pname)
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": required,
+            },
+        },
+    }
+
+
 from .mcp import MCPTool  # noqa: E402 — must be after Tool class
 from .model_test import ModelTestTool  # noqa: E402 — must be after Tool class
 
@@ -114,6 +147,56 @@ def tools_system_prompt(enabled_names=None, workdir=None):
     parts.append("Use /attach-bin <path> to make the model aware of binary files (images, audio, etc.)")
     parts.append("before using image-analysis or other binary-handling tools.")
     return "\n".join(parts)
+
+
+def tools_native_prompt():
+    """Compact tools section for native-tools mode (NATIVE-TOOLS-SWITCH-ARCH).
+
+    Replaces the per-tool prose listing — schemas travel via the /api/chat
+    tools param. Keeps only channel-agnostic guidance.
+    """
+    return (
+        "TOOLS: available via native tool calls — names, descriptions, and parameters "
+        "are provided by the runtime. Invoke tools ONLY via tool calls, not text.\n"
+        "WHEN TO USE TOOLS:\n"
+        "- Unsure about a fact, API, library, or current information — web_search first.\n"
+        "- Need details from a URL — web_fetch (retry with larger max_length if truncated; "
+        "escalate to browser for JS-rendered pages; http_request for APIs/raw HTTP; "
+        "curl/wget in run_command is a last resort).\n"
+        "- File operations — use the fs tools (read_file, search_in_files, list_files, ...) "
+        "instead of shell commands.\n"
+        "- When asked to perform multiple operations, emit ALL tool calls in a single response.\n"
+        "- Use /attach-bin <path> to make the model aware of binary files (images, audio) "
+        "before using image-analysis or other binary-handling tools.\n"
+        "- For commands that may take longer than 30s, use job_submit; then sleep, job_list, job_result.\n"
+    )
+
+
+def tools_schemas(enabled_names=None, workdir=None):
+    """Build the native tools array for /api/chat (NATIVE-TOOLS-SWITCH-ARCH).
+
+    Same config filtering as tools_system_prompt: tools disabled in
+    .ollama_agent.json are excluded. Tools whose schema can't be built are
+    skipped (they stay reachable via the text channel).
+    """
+    from ._config import load_config
+    config = load_config(workdir)
+    tools_config = config.get("tools", {})
+    tools = all_tools() if enabled_names is None else [t for t in all_tools() if t.name in enabled_names]
+    tools = [t for t in tools if tools_config.get(t.name, {}).get("enabled", True)]
+    out = []
+    for t in tools:
+        # Duck-typed: most tool classes don't subclass Tool, so build the
+        # schema from the flat parameters attribute directly. MCPTool also
+        # exposes `parameters` (converted from its input_schema), so MCP
+        # tools are included with their real schemas.
+        try:
+            s = _flat_params_to_schema(t.name, t.description, getattr(t, "parameters", None))
+        except Exception:
+            continue
+        if isinstance(s, dict) and s.get("function", {}).get("name"):
+            out.append(s)
+    return out
 
 
 # Register built-in tools

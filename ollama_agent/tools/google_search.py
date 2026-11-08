@@ -27,6 +27,10 @@ def _get_search_service(api_key, cx):
 
 class GoogleSearchTool:
     name = "google_search"
+    parameters = {
+        "query": {"type": "string", "description": "The search query", "required": True},
+        "num_results": {"type": "integer", "description": "Number of results to return (max 10, default 5)", "required": False},
+    }
     description = (
         "Search the web using Google Custom Search API. "
         "Parameters: {\"query\": \"search terms\", \"num_results\": 5}"

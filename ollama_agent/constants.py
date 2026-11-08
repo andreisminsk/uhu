@@ -121,6 +121,26 @@ AGENT_CALL_RULE = (
     "Do NOT write analysis or conclusions that depend on the tool/skill result — you don't have it yet. Wait for the result in the next turn.\n"
 )
 
+# Native-tools mode (NATIVE-TOOLS-SWITCH-ARCH): appended INSTEAD of
+# AGENT_TOOLS_RULES when the backend solicits native tool_calls (tools param
+# sent on /api/chat). The text TOOL: protocol docs are suppressed — they
+# compete with the model's tool-calling training. WRITE/EDIT/FILE/RUN text
+# blocks remain (more context-efficient for large content).
+AGENT_NATIVE_TOOLS_RULES = (
+    "\n\nNATIVE TOOLS:\n"
+    "- Tools are available via native tool calls — their names, descriptions, and "
+    "parameters are provided by the runtime. Invoke tools ONLY via tool calls, never as text.\n"
+    "- WRITE/EDIT/FILE/RUN text blocks remain available for file writes, edits, and shell commands.\n"
+)
+
+# Call-and-wait rule for native tool calls (replaces the text-channel variant
+# when native mode is active).
+AGENT_NATIVE_CALL_RULE = (
+    "\n\nCALL RULES:\n"
+    "- When you emit a tool call, STOP your response after it. "
+    "Do NOT write analysis or conclusions that depend on the tool result — you don't have it yet. Wait for the result in the next turn.\n"
+)
+
 SKIP_EXT = {
     '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.svg',
     '.zip', '.tar', '.gz', '.bz2', '.xz', '.7z', '.rar',

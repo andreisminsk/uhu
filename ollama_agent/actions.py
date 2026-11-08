@@ -558,7 +558,7 @@ class ActionMixin:
         else:
             native_pending = native_calls or []
         lost_native_warning = None
-        if native_pending and getattr(self, 'native_tools', True) and self.tools:
+        if native_pending and self.tools:
             seen_sigs = {
                 (a.get("name") or "",
                  json.dumps(a.get("params") or {}, sort_keys=True, default=str))
@@ -575,7 +575,6 @@ class ActionMixin:
                 agent_print(f"[native tool_calls merged into action pipeline: {len(native_actions)}]\n")
                 actions.extend(native_actions)
         elif (not native_pending and self.tools
-              and getattr(self, 'native_tools', True)
               and getattr(self, '_native_rendered_last_call', False)):
             # Field-found failure mode (see NATIVE-TOOL-CALLS-ARCH): uhu's own
             # faithful render is present but the snapshot was empty at merge

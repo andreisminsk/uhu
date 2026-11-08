@@ -104,7 +104,7 @@ def main():
     parser.add_argument("--max-rounds", type=int, default=None, dest="max_rounds",
                         help="Max feedback-loop rounds per message (default: 3 interactive, 7 one-shot). Changeable mid-session with /max-rounds")
     parser.add_argument("--no-native-tools", action="store_true",
-                        help="Disable merging native tool_calls (structured message.tool_calls channel) into the action pipeline. The backend still reports them — use for A/B experiments")
+                        help="Legacy text-protocol mode: don't solicit native tool_calls (no tools param, full text-protocol prompt). Unsolicited native calls are still merged")
     parser.add_argument("--no-llm-parsing", action="store_true",
                         help="Disable LLM fallback parsing (configured via llm_parser section in .ollama_agent.json)")
     parser.add_argument("--prompt-file", default=None, dest="prompt_file",

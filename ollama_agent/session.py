@@ -34,23 +34,6 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         _reconfigure_stdout()
         self.quiet = quiet
         
-        # Initialize LLM backend (native Ollama or OpenAI-compatible)
-        from .backends import create_backend
-        self._backend = create_backend(
-            api_type=api_type,
-            host=host,
-            model=model,
-            ctx_size=ctx_size,
-            thinking=thinking,
-            api_key=api_key,
-            tpm_limit=tpm_limit,
-            max_context=max_context,
-            extra_body_path=openai_extra_body,
-            temperature=temperature,
-            top_p=top_p,
-            think_level=think_level,
-            quiet=quiet
-        )
         self._api_type = api_type
         # Retain construction params for runtime backend switching (/llm command)
         self._host = host
@@ -69,6 +52,11 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.client = None  # Deprecated: use _backend instead
         self.model = model
         self.ctx_size = ctx_size
+        # Native-tools mode (NATIVE-TOOLS-SWITCH-ARCH): --no-native-tools now
+        # disables SOLICITATION (tools param + stripped prompt) — legacy
+        # text-protocol mode. The merge catch for unsolicited native calls
+        # (beam/mistral-class reflex) stays active in ALL modes.
+        self._native_solicit = native_tools and self._model_supports_tools(host, model)
         # Accumulated output tokens for the session (reset by /reset, /restore, /llm)
         self._output_tokens_total = 0
         self.stream = stream
@@ -97,6 +85,25 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._approval = ApprovalGate(self.workdir, quiet=self.quiet)
         self._active_skill = None
         self.show_diff = False
+        # Initialize LLM backend (native Ollama or OpenAI-compatible) — after
+        # tools/native_solicit are set: _native_tools_schemas() reads them.
+        from .backends import create_backend
+        self._backend = create_backend(
+            api_type=api_type,
+            host=host,
+            model=model,
+            ctx_size=ctx_size,
+            thinking=thinking,
+            api_key=api_key,
+            tpm_limit=tpm_limit,
+            max_context=max_context,
+            extra_body_path=openai_extra_body,
+            temperature=temperature,
+            top_p=top_p,
+            think_level=think_level,
+            tools_schemas=self._native_tools_schemas(),
+            quiet=quiet
+        )
         self.cache_files = cache_files
         # Max feedback-loop rounds per message. None = per-mode defaults
         # (3 interactive via MAX_FEEDBACK_ROUNDS, 7 one-shot in run_once).
@@ -202,7 +209,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         # Build system prompt via centralized builder
         from .system_prompt import build_system_prompt, get_memory_warnings
         system_prompt = build_system_prompt(
-            self.workdir, agent=self.agent, tools=self.tools, skills=self.skills
+            self.workdir, agent=self.agent, tools=self.tools, skills=self.skills,
+            native_tools=self._native_solicit
         )
         if system_prompt:
             self.history.append({"role": "system", "content": system_prompt})
@@ -360,6 +368,48 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             return entry
         return {"role": "assistant", "content": ""}
 
+    def _native_tools_schemas(self):
+        """Tools array for native solicitation, or None in text mode.
+
+        Only when tools mode is on AND solicitation is active. MCP tools are
+        excluded in v1 (schema generation for them is follow-up work).
+        """
+        if not (self.tools and getattr(self, '_native_solicit', False)):
+            return None
+        from .tools import tools_schemas
+        schemas = tools_schemas(workdir=self.workdir)
+        return schemas or None
+
+    @staticmethod
+    def _model_supports_tools(host, model):
+        """Check the model's 'tools' capability via /api/tags (cached per host).
+
+        Native solicitation is only worthwhile for tool-capable models; for
+        others the text protocol stays primary. Connection failures degrade
+        to False (text mode) — never block session start.
+        """
+        cache = ChatSession._tools_cap_cache
+        key = (host, model)
+        if key in cache:
+            return cache[key]
+        try:
+            import json as _json
+            import urllib.request as _ur
+            with _ur.urlopen(host.rstrip("/") + "/api/tags", timeout=10) as resp:
+                data = _json.loads(resp.read().decode("utf-8"))
+            caps = []
+            for m in data.get("models", []):
+                if m.get("name") == model or m.get("model") == model:
+                    caps = m.get("capabilities") or []
+                    break
+            supported = "tools" in caps
+        except Exception:
+            supported = False
+        cache[key] = supported
+        return supported
+
+    _tools_cap_cache = {}
+
     def _call_model(self):
         """Call the model. Delegates to backend."""
         result = self._backend.call(self.history, stream=self.stream)
@@ -368,7 +418,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         # Consumed exactly once per action round; /reset, /restore and /llm
         # swaps never leak stale calls into a later merge.
         native = getattr(self._backend, 'last_tool_calls', None) or []
-        self._pending_native_calls = list(native) if getattr(self, 'native_tools', True) else None
+        # NATIVE-TOOLS-SWITCH-ARCH: snapshot unconditionally — the merge catch
+        # is always active. --no-native-tools gates SOLICITATION only.
+        self._pending_native_calls = list(native)
         # Loss-detector signal (prose false-positive fix): True only when uhu
         # itself rendered native sections into this response — never set by
         # model/user prose quoting the render format.
@@ -380,7 +432,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         # copyable pattern that taught degraded models to imitate the display
         # format instead of emitting actions.
         self._last_asst_entry = {"role": "assistant", "content": content}
-        if native and getattr(self, 'native_tools', True):
+        if native:
             self._last_asst_entry["native_tool_calls"] = [dict(tc) for tc in native]
         if native:
             content = self._render_native_calls(content, native)
@@ -423,6 +475,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         # Native tool_calls are per-call state — old backend's calls must not
         # leak into the new backend's first-round merge
         self._pending_native_calls = None
+        # Re-evaluate native solicitation for the NEW model (capability may
+        # differ), then pass the schemas to the fresh backend.
+        self._native_solicit = getattr(self, 'native_tools', True) and self._model_supports_tools(host, model)
 
         self._backend = create_backend(
             api_type=api_type, host=host, model=model, ctx_size=ctx_size,
@@ -432,6 +487,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             temperature=self._temperature,
             top_p=self._top_p,
             think_level=think_level,
+            tools_schemas=self._native_tools_schemas(),
             quiet=self.quiet
         )
         self.model = model
@@ -734,7 +790,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             # Native tool_calls (Phase 5) participate in loop detection — the
             # snapshot corresponds to the message being processed.
             pre_actions = parse_actions(assistant_msg)
-            if native_for_round and getattr(self, 'native_tools', True):
+            if native_for_round:
                 pre_actions += self._native_action_dicts(native_for_round)
             current_sigs = set()
             for a in pre_actions:
@@ -1070,9 +1126,12 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             backend_info += f" | {self._backend.client._client.base_url}"
         think_part = f" | Think: {self._think_level}" if getattr(self, '_think_level', None) else ""
         topp_part = f" | TopP: {self._top_p}" if getattr(self, '_top_p', None) is not None else ""
+        native_part = ""
+        if self.tools:
+            native_part = " | Native tools: on" if getattr(self, '_native_solicit', False) else " | Native tools: off (text protocol)"
         agent_print(f"Connected | {backend_info} | Model: {self.model} | "
               f"Context: {self.ctx_size}{think_part}{topp_part} | Stream: {self.stream} | Agent: {self.agent} | "
-              f"Tools: {self.tools} | Skills: {self.skills} | Thinking: {self.thinking} | "
+              f"Tools: {self.tools}{native_part} | Skills: {self.skills} | Thinking: {self.thinking} | "
               f"Cache: {self.cache_files} | Autosave: {self.autosave}")
         agent_print(f"Platform: {info['platform_label']} | Shell: {info['shell_label']}")
         if self.agent:

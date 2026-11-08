@@ -123,7 +123,8 @@ class PersistenceMixin:
             self._output_tokens_total = 0
             from .system_prompt import build_system_prompt, get_memory_warnings
             system_prompt = build_system_prompt(
-                self.workdir, agent=self.agent, tools=self.tools, skills=self.skills
+                self.workdir, agent=self.agent, tools=self.tools, skills=self.skills,
+                native_tools=getattr(self, '_native_solicit', False)
             )
             if system_prompt:
                 self.history.append({"role": "system", "content": system_prompt})

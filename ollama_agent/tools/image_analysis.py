@@ -15,6 +15,12 @@ IMAGE_MIME_TYPES = {
 class ImageAnalysisTool:
     name = "image-analysis"
     do_not_truncate_observations = True
+    parameters = {
+        "path": {"type": "string", "description": "Path to the image file (use /attach-bin first to make the model aware of it)", "required": True},
+        "prompt": {"type": "string", "description": "Question or instruction about the image (default: describe in detail)", "required": False},
+        "model": {"type": "string", "description": "Override the configured model", "required": False},
+        "timeout": {"type": "integer", "description": "Override the configured timeout in seconds (default 120)", "required": False},
+    }
     description = (
         "Analyze an image file using a vision-capable model. "
         "Params: {\"path\": \"<file_path>\", \"prompt\": \"<optional question>\", "

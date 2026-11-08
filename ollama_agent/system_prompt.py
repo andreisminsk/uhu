@@ -9,19 +9,24 @@ from pathlib import Path
 
 from .constants import (
     AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE,
+    AGENT_NATIVE_TOOLS_RULES, AGENT_NATIVE_CALL_RULE,
     get_platform_info, get_platform_shell_guidance,
 )
 
 
-def build_system_prompt(workdir, agent=True, tools=False, skills=False):
+def build_system_prompt(workdir, agent=True, tools=False, skills=False, native_tools=False):
     """Build the complete system prompt for a chat session.
+
+    native_tools=True selects the native-tools mode prompt (NATIVE-TOOLS-SWITCH-ARCH):
+    tool schemas travel via the /api/chat tools param, so the text TOOL: protocol
+    docs are replaced by compact native-mode rules. Skills stay on the text channel.
 
     Assembles in order:
     1. Agent base prompt (with date and shell_lang placeholder replaced)
-    2. Tool rules (if tools enabled)
+    2. Tool rules (if tools enabled; native variant when native_tools)
     3. Call-and-wait rules (if tools or skills enabled)
     4. Platform shell guidance
-    5. Tools system prompt (if tools enabled)
+    5. Tools system prompt (if tools enabled; compact native note when native_tools)
     6. Skills system prompt (if skills enabled)
     7. User name from config (if set)
     8. Permanent memory (project + agent)
@@ -35,15 +40,25 @@ def build_system_prompt(workdir, agent=True, tools=False, skills=False):
         system_prompt = f"Current date: {date.today().isoformat()}\n\n" + AGENT_SYSTEM_PROMPT
         info = get_platform_info()
         system_prompt = system_prompt.replace("{shell_lang}", info["shell_lang"])
-        if tools:
-            system_prompt += AGENT_TOOLS_RULES
-        if tools or skills:
-            system_prompt += AGENT_CALL_RULE
+        if tools and native_tools:
+            system_prompt += AGENT_NATIVE_TOOLS_RULES
+            if skills:
+                system_prompt += AGENT_CALL_RULE  # SKILL: stays on the text channel
+            system_prompt += AGENT_NATIVE_CALL_RULE
+        else:
+            if tools:
+                system_prompt += AGENT_TOOLS_RULES
+            if tools or skills:
+                system_prompt += AGENT_CALL_RULE
         parts.append(system_prompt + get_platform_shell_guidance())
 
     if tools:
-        from .tools import tools_system_prompt
-        parts.append(tools_system_prompt(workdir=workdir))
+        if native_tools:
+            from .tools import tools_native_prompt
+            parts.append(tools_native_prompt())
+        else:
+            from .tools import tools_system_prompt
+            parts.append(tools_system_prompt(workdir=workdir))
 
     if skills:
         from .skills import skills_system_prompt

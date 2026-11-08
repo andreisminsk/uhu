@@ -14,6 +14,15 @@ from ._config import get_config
 class LlmQueryTool:
     name = "llm_query"
     description = "Query a local LLM via Ollama for out-of-context analysis"
+    parameters = {
+        "prompt": {"type": "string", "description": "The prompt to send", "required": True},
+        "model": {"type": "string", "description": "Ollama model name (default from config)", "required": False},
+        "system": {"type": "string", "description": "System prompt for the LLM", "required": False},
+        "temperature": {"type": "number", "description": "Sampling temperature (default 0.3)", "required": False},
+        "top_p": {"type": "number", "description": "Top-p sampling; omitted = model default", "required": False},
+        "max_tokens": {"type": "integer", "description": "Max tokens to generate", "required": False},
+        "json_mode": {"type": "boolean", "description": "Force JSON output", "required": False},
+    }
     system_prompt = (
         "## llm_query\n"
         "Sends a prompt to a local LLM (via Ollama) and returns the response.\n"

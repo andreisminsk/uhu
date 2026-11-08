@@ -12,6 +12,11 @@ from .llm_query import llm_query
 class WebFetchTool:
     name = "web_fetch"
     description = "Fetch the text content of a web page, with optional LLM summarization"
+    parameters = {
+        "url": {"type": "string", "description": "The URL to fetch", "required": True},
+        "max_length": {"type": "integer", "description": "Maximum characters to return (default 3000)", "required": False},
+        "summarize": {"type": "boolean", "description": "If true, use LLM to summarize the page content", "required": False},
+    }
     system_prompt = (
         "## web_fetch\n"
         "Fetches the text content of a web page. Use this to retrieve information from URLs.\n"

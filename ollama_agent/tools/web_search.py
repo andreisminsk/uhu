@@ -17,6 +17,10 @@ except ImportError:
 class WebSearchTool:
     name = "web_search"
     description = "Search the web using DuckDuckGo"
+    parameters = {
+        "query": {"type": "string", "description": "The search query", "required": True},
+        "num_results": {"type": "integer", "description": "Number of results to return (max 10, default 5)", "required": False},
+    }
     system_prompt = (
         "## web_search\n"
         "Searches the web using DuckDuckGo. Returns a list of results with titles, URLs, and snippets.\n"

@@ -392,7 +392,7 @@ class OllamaNativeBackend(LLMBackend):
     
     def __init__(self, host: str, model: str, ctx_size: int, thinking: bool = True,
                  temperature: Optional[float] = None, think_level: Optional[str] = None,
-                 top_p: Optional[float] = None):
+                 top_p: Optional[float] = None, tools_schemas: Optional[List[Dict]] = None):
         super().__init__()
         from ollama import Client
         self.client = Client(host=host)
@@ -407,6 +407,10 @@ class OllamaNativeBackend(LLMBackend):
         # think: False; otherwise sent as-is ("low"/"high"/"max" for models
         # with levels). Unsupported names resolve to the model default server-side.
         self.think_level = think_level
+        # Native tools solicitation (NATIVE-TOOLS-SWITCH-ARCH): when set, the
+        # tools array is sent on every /api/chat call — the chat template
+        # injects the schemas and tool-capable models emit native tool_calls.
+        self._tools_schemas = tools_schemas or None
         self._apply_cache_stats_patch()
     
     @staticmethod
@@ -561,6 +565,8 @@ class OllamaNativeBackend(LLMBackend):
                     "stream": True,
                     "options": self._build_options(),
                 }
+                if self._tools_schemas:
+                    payload["tools"] = self._tools_schemas
                 think = self._think_param()
                 if think is not None:
                     payload["think"] = think
@@ -677,6 +683,8 @@ class OllamaNativeBackend(LLMBackend):
                 messages=messages,
                 options=self._build_options()
             )
+            if self._tools_schemas:
+                kwargs["tools"] = self._tools_schemas
             think = self._think_param()
             if think is not None:
                 kwargs["think"] = think
@@ -755,7 +763,8 @@ class OpenAIBackend(LLMBackend):
                  extra_body_path: Optional[str] = None,
                  temperature: Optional[float] = None,
                  think_level: Optional[str] = None,
-                 top_p: Optional[float] = None):
+                 top_p: Optional[float] = None,
+                 tools_schemas: Optional[List[Dict]] = None):
         super().__init__()
         try:
             from openai import OpenAI
@@ -774,6 +783,9 @@ class OpenAIBackend(LLMBackend):
         # Thinking effort — None = don't send reasoning_effort (model default);
         # "off" → reasoning_effort "none"; otherwise sent as the level name.
         self.think_level = think_level
+        # Native tools solicitation (see OllamaNativeBackend) — /v1 uses the
+        # same {"type": "function", "function": {...}} tools shape.
+        self._tools_schemas = tools_schemas or None
         self._last_usage = None
         self._quiet = quiet
         # Provider-specific request body params from JSON file (--openai-extra-body)
@@ -948,6 +960,9 @@ class OpenAIBackend(LLMBackend):
         if self.think_level is not None:
             level = self.think_level.lower()
             kwargs["reasoning_effort"] = "none" if level == "off" else level
+        # Native tools solicitation (NATIVE-TOOLS-SWITCH-ARCH)
+        if self._tools_schemas:
+            kwargs["tools"] = self._tools_schemas
         # Some models (e.g. o1/o3 series) don't support temperature or max_tokens.
         # We try max_completion_tokens first (newer API), fall back to max_tokens,
         # and if both fail, retry without any max parameter.
@@ -984,6 +999,12 @@ class OpenAIBackend(LLMBackend):
             if "stream_options" in err_str or "include_usage" in err_str:
                 logger.warning("OpenAI fallback: retrying without stream_options (%s)", e)
                 kwargs.pop("stream_options", None)
+                return self.client.chat.completions.create(**kwargs)
+            # Some providers/models reject the tools param — retry without it
+            # (solicitation drops; text channel + merge catch remain)
+            if "tools" in err_str:
+                logger.warning("OpenAI fallback: retrying without tools (%s)", e)
+                kwargs.pop("tools", None)
                 return self.client.chat.completions.create(**kwargs)
             # Fall back to max_tokens if max_completion_tokens not supported
             if "max_completion_tokens" in err_str or "unrecognized" in err_str:
@@ -1165,7 +1186,8 @@ def create_backend(
     extra_body_path: Optional[str] = None,
     temperature: Optional[float] = None,
     think_level: Optional[str] = None,
-    top_p: Optional[float] = None
+    top_p: Optional[float] = None,
+    tools_schemas: Optional[List[Dict]] = None
 ) -> LLMBackend:
     """Factory function to create appropriate backend.
     
@@ -1207,6 +1229,7 @@ def create_backend(
             temperature=temperature,
             top_p=top_p,
             think_level=think_level,
+            tools_schemas=tools_schemas,
             quiet=quiet
         )
     else:
@@ -1218,5 +1241,6 @@ def create_backend(
             thinking=thinking,
             temperature=temperature,
             top_p=top_p,
-            think_level=think_level
+            think_level=think_level,
+            tools_schemas=tools_schemas
         )

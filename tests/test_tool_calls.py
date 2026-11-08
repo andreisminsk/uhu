@@ -562,13 +562,13 @@ class TestNativeSessionPhases45:
         assert s._output_tokens_total == 5
 
     def test_call_model_flag_off(self, tmp_path):
-        # Flag gates the MERGE, not the display — transparency requires the
-        # user to always see what the model actually emitted.
+        # NATIVE-TOOLS-SWITCH-ARCH: the flag now gates SOLICITATION, not the
+        # merge — unsolicited native calls (beam/mistral reflex) still merge.
         s = self._min_session(tmp_path, native_tools=False)
         s._backend = FakeNativeBackend()
         s._output_tokens_total = 0
         content, _ = s._call_model()
-        assert s._pending_native_calls is None
+        assert s._pending_native_calls == [{"name": "t", "params": {}}]
         assert content.startswith("hello")
         assert "[native tool_call 1/1: t]" in content
 
@@ -603,11 +603,14 @@ class TestNativeSessionPhases45:
         obs, _, _, _ = s.process_actions(text)
         assert obs.count("[TOOL list_files]:") == 1
 
-    def test_process_actions_flag_off_ignores_native(self, tmp_path):
+    def test_process_actions_flag_off_still_merges(self, tmp_path):
+        # Flag gates SOLICITATION only — the merge catch is always active
+        # (beam/mistral-class models emit native calls with no tools param).
         s = self._min_session(tmp_path, native_tools=False)
         s._pending_native_calls = [{"name": "list_files", "params": {}}]
         obs, _, has_non_read, _ = s.process_actions("")
-        assert obs is None and has_non_read is False
+        assert obs and "list_files" in obs
+        assert has_non_read is True
 
     def test_process_actions_explicit_native_calls_param(self, tmp_path):
         """Feedback-loop round-top capture: snapshot passed explicitly, not
@@ -645,12 +648,13 @@ class TestNativeSessionPhases45:
         assert obs is None or "vanished" not in obs
         assert "list_files" not in (obs or "")
 
-    def test_render_echo_with_merge_off_still_breaker(self, tmp_path):
-        """As-is-history era: with native_tools=False the merge is off, but
-        echo-shaped render text is still caught by the text-channel breaker —
-        echo protection is independent of the merge flag."""
+    def test_render_echo_with_solicit_off_still_breaker(self, tmp_path):
+        """As-is-history era: with native_tools=False (solicitation off) the
+        merge is still on, but echo-shaped render text is still caught by the
+        text-channel breaker — echo protection is independent of the flag."""
         s = self._min_session(tmp_path, native_tools=False)
         s._native_rendered_last_call = False
+        s._pending_native_calls = None
         obs, _, _, _ = s.process_actions("[native tool_call 1/1: t]\n{}")
         assert obs and "imitates" in obs
 
