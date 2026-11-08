@@ -142,8 +142,29 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._approval = ApprovalGate(self.workdir, quiet=self.quiet)
         self._active_skill = None
         self.show_diff = False
+
+        # Connect MCP servers and register their tools BEFORE create_backend
+        # (field bug, 2026-11-08, SANDBOX glm-5.3-flash:cloud --mcp hybrid):
+        # _native_tools_schemas() snapshots the registry when the backend is
+        # created; MCP tools registered only later were absent from the wire
+        # tools array (and the native prompt carries no per-tool prose), so the
+        # model correctly reported "No GitHub MCP server is wired into this
+        # session". ApprovalGate must exist first — always_runs delegation.
+        if self.mcp:
+            from .tools.mcp import MCPManager
+            self._mcp_manager = MCPManager(workdir=self.workdir, quiet=self.quiet)
+            mcp_tools = self._mcp_manager.load_and_connect()
+            if mcp_tools:
+                from .tools import register
+                for tool in mcp_tools:
+                    register(tool)
+                    if getattr(tool, 'auto_approve', False):
+                        self.always_runs.add(tool.name)
+            agent_print(f"[MCP] {len(mcp_tools)} tool(s) registered from {len(self._mcp_manager.transports)} server(s)")
+
         # Initialize LLM backend (native Ollama or OpenAI-compatible) — after
-        # tools/native_solicit are set: _native_tools_schemas() reads them.
+        # tools/native_solicit are set AND MCP tools are registered:
+        # _native_tools_schemas() reads them.
         from .backends import create_backend
         self._backend = create_backend(
             api_type=api_type,
@@ -219,19 +240,6 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         if self.autosave:
             project_name = os.path.basename(self.workdir) or "session"
             self.autosave_name = f"{project_name}_{datetime.now().strftime('%Y%m%d_%H%M')}"
-
-        # Connect MCP servers and register their tools BEFORE building system prompt
-        if self.mcp:
-            from .tools.mcp import MCPManager
-            self._mcp_manager = MCPManager(workdir=self.workdir, quiet=self.quiet)
-            mcp_tools = self._mcp_manager.load_and_connect()
-            if mcp_tools:
-                from .tools import register
-                for tool in mcp_tools:
-                    register(tool)
-                    if getattr(tool, 'auto_approve', False):
-                        self.always_runs.add(tool.name)
-            agent_print(f"[MCP] {len(mcp_tools)} tool(s) registered from {len(self._mcp_manager.transports)} server(s)")
 
         # Load custom skills from multiple directories BEFORE building system prompt.
         # Precedence (first match wins on name collision — see dev-docs/UHU-HOME-ARCH.md):

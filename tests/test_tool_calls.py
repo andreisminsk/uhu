@@ -1113,3 +1113,49 @@ class TestToolsModeFlag:
         assert "native_tools" not in src or "channel" not in src.split("tools_mode")[0]
         # The old config-based resolution line is gone
         assert '.get("native_tools", {}).get("channel"' not in src
+
+
+class TestAuditToolsSchemasMCP:
+    """MCP-wrapped tools: server-declared input_schema is authoritative —
+    empty parameters mean the SERVER declared the tool parameterless
+    (field, 2026-11-08: mcp_huggingface_hf_whoami, mcp_playwright_browser_close,
+    mcp_github_get_me were false-positive warned). Prose-only tools stay flagged."""
+
+    def _with_registry(self, monkeypatch, registry):
+        from ollama_agent import tools as tools_mod
+        monkeypatch.setattr(tools_mod, "_registry", registry, raising=False)
+
+    def test_builtin_paramless_exempt(self):
+        from ollama_agent.tools import audit_tools_schemas
+        assert not any("sys_info" in w for w in audit_tools_schemas())
+
+    def test_mcp_empty_schema_exempt(self, monkeypatch, tmp_path):
+        from ollama_agent.tools import MCPTool, audit_tools_schemas
+        t = MCPTool("mcp_github_get_me", "get me", {}, "github", object())
+        assert t.parameters == {}  # server-declared parameterless
+        assert t.input_schema == {}
+        self._with_registry(monkeypatch, {"mcp_github_get_me": t})
+        assert not [w for w in audit_tools_schemas(str(tmp_path))
+                    if "mcp_github_get_me" in w]
+
+    def test_mcp_with_params_exempt(self, monkeypatch, tmp_path):
+        from ollama_agent.tools import MCPTool, audit_tools_schemas
+        schema = {"properties": {"owner": {"type": "string"}}, "required": ["owner"]}
+        t = MCPTool("mcp_github_get_repo", "repo", schema, "github", object())
+        assert t.parameters  # non-empty → exempt via the params branch
+        self._with_registry(monkeypatch, {"mcp_github_get_repo": t})
+        assert not audit_tools_schemas(str(tmp_path))
+
+    def test_prose_only_tool_still_flagged(self, monkeypatch, tmp_path):
+        from ollama_agent.tools import Tool, audit_tools_schemas
+
+        class ProseOnlyTool(Tool):
+            name = "prose_only_tool"
+            description = "docs only, parameters attr empty"
+
+        t = ProseOnlyTool()
+        assert not getattr(t, "parameters", None)
+        assert not hasattr(t, "input_schema")  # NOT an external schema
+        self._with_registry(monkeypatch, {"prose_only_tool": t})
+        warnings = audit_tools_schemas(str(tmp_path))
+        assert any("prose_only_tool" in w for w in warnings)

@@ -253,6 +253,14 @@ def audit_tools_schemas(workdir=None):
             continue
         if t.name in _PARAMLESS_TOOLS:
             continue
+        # Externally declared schemas (MCPTool): the parameters dict is built
+        # from the server-declared input_schema, so empty means the SERVER
+        # declared a parameterless tool — not a prose-docs bug (field,
+        # 2026-11-08: mcp_huggingface_hf_whoami, mcp_playwright_browser_close,
+        # mcp_github_get_me flagged as false positives). Duck-checked via
+        # input_schema so any future externally-schematized wrapper passes.
+        if hasattr(t, "input_schema"):
+            continue
         # No parameters attribute and not known-parameterless — the tool
         # likely takes params documented only in prose.
         warnings.append(
