@@ -165,7 +165,9 @@ def tools_native_prompt(channel="tools"):
     """
     parts = [
         "TOOLS: available via native tool calls — names, descriptions, and parameters "
-        "are provided by the runtime. Invoke tools ONLY via tool calls, not text.\n"
+        "are provided by the runtime. Invoke native tools ONLY via tool calls, not text. "
+        "Conversely, FILE:/WRITE:/EDIT:/RUN: action blocks are NOT native tools: "
+        "emit them only as normal assistant text, never inside a tool-call name or arguments.\n"
         "WHEN TO USE TOOLS:\n"
         "- Unsure about a fact, API, library, or current information — web_search first.\n"
         "- Need details from a URL — web_fetch (retry with larger max_length if truncated; "
@@ -178,11 +180,12 @@ def tools_native_prompt(channel="tools"):
     ]
     if channel == "hybrid":
         parts.append(
-            "- File content: PREFER the text blocks — the transparent path (diffs, "
-            "review, rollback, caching): READ with FILE:, CREATE with WRITE:, "
-            "MODIFY with EDIT:. The file tools (read_file, write_file, "
-            "replace_in_file) are available as BACKUP — use them when a text "
-            "block fails or feels unnatural.\n"
+            "- File content: PREFER text action blocks emitted as normal assistant "
+            "text — the transparent path (diffs, review, rollback, caching): "
+            "READ with FILE:, CREATE with WRITE:, MODIFY with EDIT:. Do not "
+            "wrap these blocks in native tool calls. If you choose the native "
+            "channel instead, call the exact backup tool names: read_file, "
+            "write_file, replace_in_file.\n"
         )
     else:
         parts.append(

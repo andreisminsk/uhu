@@ -249,13 +249,16 @@ class ActionMixin:
         # generic Unknown-tool error. The _raw preview carries the marker.
         if tool_name == "_text_action_mixing":
             raw = str(params.get("_raw", ""))[:80]
-            from .tool_calls import looks_like_text_action
             marker = raw.strip().split(":", 1)[0].split("`", 1)[0].upper() if raw else ""
             backup = {"WRITE": "write_file", "EDIT": "replace_in_file", "FILE": "read_file"}.get(marker, "run_command")
             msg = (
-                f"[TOOL FAILED: you tried to issue a text action ('{raw}') on the native tool-call channel. "
-                f"Re-emit it as a {marker or 'text'}: text block with a matching EOF: marker, "
-                f"or call the {backup} tool with proper parameters.]"
+                f"[TOOL FAILED: channel mixing — you put a {marker or 'text'} action block "
+                f"('{raw}') inside a native tool call. {marker or 'Text'} blocks are not tools. "
+                f"NEXT RESPONSE: choose exactly one channel. "
+                f"Option A: output the full {marker or 'text'} block as normal assistant text only "
+                f"(do not call any tool; include the matching EOF marker). "
+                f"Option B: call the native tool '{backup}' with JSON parameters only "
+                f"(do not include {marker or 'text'} block syntax in the tool call).]"
             )
             tool_print(msg + "\n")
             return msg

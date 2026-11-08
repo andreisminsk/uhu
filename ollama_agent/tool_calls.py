@@ -86,23 +86,21 @@ def normalize_tool_calls(raw):
                 args = getattr(tc, "arguments", None)
         if not name:
             continue
-        # Channel-mixing blob in the name slot (see _MAX_NATIVE_NAME_LEN):
-        # degrade to a _raw-style entry so the pipeline reports a clear,
-        # actionable failure instead of "Unknown tool '<500-char blob>'".
-        # Checked BEFORE the text-action marker: a long blob is unreconstructable
-        # (field case: RUN block + prose, 500 chars) — _malformed_native_call;
-        # a SHORT marker name (WRITE:`hello.py`) is steerable — see below.
-        if len(name) > _MAX_NATIVE_NAME_LEN:
-            out.append({"name": "_malformed_native_call",
-                        "params": {"_raw": name[:512]}})
-            continue
-        # Text-action marker in the name slot (session 2, hybrid-with-backup):
-        # the model tried to issue WRITE:/EDIT:/FILE:/RUN: on the native
-        # channel. Degrade to a steering entry — the pipeline tells the model
-        # to re-emit as a text block or call the backup tool. NOT auto-executed:
-        # the name slot may be truncated (field case: 12,810 tokens of content).
+        # Text-action marker in the native name slot (hybrid mode): the model
+        # tried to emit FILE:/WRITE:/EDIT:/RUN: as a function/tool call instead
+        # of plain assistant text. Detect this BEFORE the long-name guard so a
+        # full text block like "EDIT:`file`\n```search-replace..." is reported
+        # as channel mixing, not a generic malformed native call.
         if looks_like_text_action(name):
             out.append({"name": "_text_action_mixing",
+                        "params": {"_raw": name[:512]}})
+            continue
+        # Channel-mixing / corruption blob in the name slot (see
+        # _MAX_NATIVE_NAME_LEN): degrade to a _raw-style entry so the pipeline
+        # reports a clear, actionable failure instead of "Unknown tool
+        # '<500-char blob>'".
+        if len(name) > _MAX_NATIVE_NAME_LEN:
+            out.append({"name": "_malformed_native_call",
                         "params": {"_raw": name[:512]}})
             continue
         name = _clean_native_name(str(name))

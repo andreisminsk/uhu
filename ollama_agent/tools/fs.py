@@ -49,7 +49,7 @@ def _resolve_path(path, workdir):
 class ReadFileTool(FilesystemTool):
     """Read a file's contents. Cross-platform replacement for cat/type/head/tail."""
     name = "read_file"
-    description = "Read the contents of a file. Use instead of cat/type/head/tail commands."
+    description = "[FALLBACK TOOL] Read the contents of a file. In hybrid mode, prefer FILE: text blocks emitted as normal assistant text."
     system_prompt = (
         "## read_file\n"
         "Read a file's contents. Cross-platform replacement for cat/type/head/tail.\n"
@@ -504,7 +504,7 @@ class PeekFileTool(FilesystemTool):
 class WriteFileTool(FilesystemTool):
     """Create or overwrite a file with the given content."""
     name = "write_file"
-    description = "Create or overwrite a file with the given content. Auto-creates parent directories."
+    description = "[FALLBACK TOOL] Create or overwrite a file with the given content. In hybrid mode, prefer WRITE: text blocks emitted as normal assistant text."
     system_prompt = (
         "## write_file\n"
         "Create or overwrite a file with the given content. Auto-creates parent directories.\n"
@@ -559,7 +559,7 @@ class WriteFileTool(FilesystemTool):
 class ReplaceInFileTool(FilesystemTool):
     """Replace exact string matches in a file."""
     name = "replace_in_file"
-    description = "Replace one or more exact string matches in a file. Preferred over write_file for small edits."
+    description = "[FALLBACK TOOL] Replace exact string matches in a file. In hybrid mode, prefer EDIT: text blocks emitted as normal assistant text."
     system_prompt = (
         "## replace_in_file\n"
         "Replace one or more exact string matches in a file. Preferred over write_file for small edits — saves context.\n"

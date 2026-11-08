@@ -800,9 +800,10 @@ class TestStreamingFragments:
 
     def test_channel_mixing_blob_name_degrades(self):
         """Field case (glm-5.3-flash:cloud): a text RUN block + prose poured
-        into the native name slot during failed-call recovery. The blob must
-        degrade to a _malformed_native_call entry — clear, actionable failure
-        instead of a 500-char 'Unknown tool' message."""
+        into the native name slot during failed-call recovery. Because it
+        starts with a text-action marker, classify it as channel mixing so the
+        model is steered to emit the block as assistant text, not as a native
+        tool call."""
         from ollama_agent.tool_calls import normalize_tool_calls
         # Marker text is assembled from parts so this file never contains a
         # complete marker sequence (uhu's own parser would false-positive).
@@ -813,10 +814,37 @@ class TestStreamingFragments:
         merged = normalize_tool_calls(
             [{"function": {"name": blob, "arguments": {"path": "snake-3.py"}}}])
         assert len(merged) == 1
-        assert merged[0]["name"] == "_malformed_native_call"
+        assert merged[0]["name"] == "_text_action_mixing"
         assert "_raw" in merged[0]["params"]
         # The blob is truncated, not passed whole
         assert len(merged[0]["params"]["_raw"]) <= 512
+
+    def test_non_action_blob_name_still_malformed(self):
+        """Long native names without FILE/WRITE/EDIT/RUN markers are still
+        generic malformed calls."""
+        from ollama_agent.tool_calls import normalize_tool_calls
+        blob = "this is not a real tool name " * 20
+        merged = normalize_tool_calls(
+            [{"function": {"name": blob, "arguments": {"path": "snake-3.py"}}}])
+        assert len(merged) == 1
+        assert merged[0]["name"] == "_malformed_native_call"
+        assert "_raw" in merged[0]["params"]
+
+    def test_long_file_text_block_in_native_name_is_channel_mixing(self):
+        """Regression for hybrid-mode failure: a full FILE/EDIT/WRITE block
+        routed into the native tool-call name slot must steer as channel
+        mixing, even when longer than the generic malformed-name threshold."""
+        from ollama_agent.tool_calls import normalize_tool_calls
+        blob = ("EDIT:`local.properties`\n```search-replace\n<<<<<<< SEARCH\n"
+                "sdk.dir=/Users/andreis/Library/Android/sdk\n=======\n"
+                "sdk.dir=/Users/andreis/Library/Android/sdk\n"
+                "PIXELCAM_STORE_FILE=/Users/andreis/Projects/GitHub/pixel-stream/pixelcam-release.jks\n"
+                ">>>>>>> REPLACE\n```")
+        merged = normalize_tool_calls(
+            [{"function": {"name": blob, "arguments": {}}}])
+        assert len(merged) == 1
+        assert merged[0]["name"] == "_text_action_mixing"
+        assert merged[0]["params"]["_raw"].startswith("EDIT:`local.properties`")
 
     def test_normal_names_unaffected_by_blob_guard(self):
         from ollama_agent.tool_calls import normalize_tool_calls
@@ -877,11 +905,16 @@ class TestNativeSchemaExclusions:
 
     def test_hybrid_channel_includes_file_tools_as_backup(self):
         from ollama_agent.tools import tools_schemas
-        names = {t["function"]["name"] for t in tools_schemas(workdir=".", channel="hybrid")}
+        schemas = tools_schemas(workdir=".", channel="hybrid")
+        names = {t["function"]["name"] for t in schemas}
         # Session 2: hybrid INCLUDES the file tools as backup (exclusion reversed)
         assert {"read_file", "write_file", "replace_in_file"} <= names
         assert {"list_files", "search_in_files", "find_file", "peek_file",
                 "copy_file", "move_file", "mkdir"} <= names
+        by_name = {t["function"]["name"]: t["function"] for t in schemas}
+        for name in ("read_file", "write_file", "replace_in_file"):
+            assert by_name[name]["description"].startswith("[FALLBACK TOOL]")
+            assert "normal assistant text" in by_name[name]["description"]
 
     def test_hybrid_rules_guide_to_text_blocks(self):
         from ollama_agent.constants import AGENT_NATIVE_TOOLS_RULES_HYBRID
@@ -895,8 +928,9 @@ class TestNativeSchemaExclusions:
     def test_hybrid_native_prompt_backup_wording(self):
         from ollama_agent.tools import tools_native_prompt
         p = tools_native_prompt(channel="hybrid")
-        assert "PREFER the text blocks" in p
-        assert "BACKUP" in p
+        assert "PREFER text action blocks emitted as normal assistant text" in p
+        assert "Do not wrap these blocks in native tool calls" in p
+        assert "backup tool names" in p
         # Single-channel variant keeps the tool-only wording
         p_tools = tools_native_prompt(channel="tools")
         assert "read_file to study" in p_tools
@@ -1044,9 +1078,10 @@ class TestApprovalGateParity:
         obs, _, _, _ = s.process_actions("")
         assert obs
         assert "Unknown tool" not in obs
-        assert "text action" in obs
+        assert "channel mixing" in obs
         assert "read_file" in obs  # FILE → read_file backup
-        assert "text block" in obs
+        assert "normal assistant text" in obs
+        assert "choose exactly one channel" in obs
 
     def test_malformed_native_call_synthetic_entry_observation(self, tmp_path):
         """The blob case (>64-char name) degrades to _malformed_native_call;
