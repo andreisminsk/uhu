@@ -493,7 +493,8 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         # swaps never leak stale calls into a later merge.
         native = getattr(self._backend, 'last_tool_calls', None) or []
         # NATIVE-TOOLS-SWITCH-ARCH: snapshot unconditionally — the merge catch
-        # is always active. --no-native-tools gates SOLICITATION only.
+        # is always active. --tools-mode text gates SOLICITATION only.
+        # (The former deprecated --no-native-tools alias was removed 2026-11-08.)
         self._pending_native_calls = list(native)
         # Loss-detector signal (prose false-positive fix): True only when uhu
         # itself rendered native sections into this response — never set by

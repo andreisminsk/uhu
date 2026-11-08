@@ -1063,8 +1063,8 @@ class TestApprovalGateParity:
 
 class TestToolsModeFlag:
     """Session 2: --tools-mode {native,hybrid,text} — CLI-only tri-state,
-    hybrid default, no config fallback. --no-native-tools = deprecated alias
-    for --tools-mode text."""
+    hybrid default, no config fallback. The deprecated --no-native-tools
+    alias was removed 2026-11-08 (--tools-mode text is the legacy mode)."""
 
     def test_default_is_hybrid(self):
         """The CLI default must be hybrid (owner decision, session 2)."""
@@ -1077,17 +1077,18 @@ class TestToolsModeFlag:
         args = parser.parse_args([])
         assert args.tools_mode == "hybrid"
 
-    def test_no_native_tools_alias_conflict(self, capsys):
-        """--no-native-tools + explicit --tools-mode native|hybrid must fail
-        fast; + --tools-mode text is accepted (alias)."""
+    def test_no_native_tools_flag_removed(self, capsys):
+        """Regression: --no-native-tools was removed — argparse must reject it
+        with the standard unrecognized-argument error, and the error message
+        must not leak the removed alias handling."""
         import subprocess
         import sys as _sys
         r = subprocess.run(
             [_sys.executable, "-m", "ollama_agent.cli", "--no-native-tools",
-             "--tools-mode", "native", "--version"],
+             "--version"],
             capture_output=True, text=True, timeout=30)
         assert r.returncode != 0
-        assert "--no-native-tools means --tools-mode text" in (r.stdout + r.stderr)
+        assert "unrecognized arguments" in (r.stdout + r.stderr)
 
     def test_session_tools_mode_mapping(self, tmp_path):
         """ChatSession maps tools_mode → internal channel: native→tools,

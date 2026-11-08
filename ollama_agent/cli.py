@@ -107,8 +107,7 @@ def main():
                         help="How the model issues actions. native: all actions via native tool calls. "
                              "hybrid (default): file content via FILE/WRITE/EDIT text blocks (diffs, review, rollback), "
                              "other tools native; file tools available as backup. text: no native tool calls, text protocol only")
-    parser.add_argument("--no-native-tools", action="store_true",
-                        help="[deprecated] Alias for --tools-mode text — legacy text-protocol mode. Use --tools-mode text instead")
+
     parser.add_argument("--no-llm-parsing", action="store_true",
                         help="Disable LLM fallback parsing (configured via llm_parser section in .ollama_agent.json)")
     parser.add_argument("--prompt-file", default=None, dest="prompt_file",
@@ -119,16 +118,8 @@ def main():
                         help="One-shot prompt — execute and exit (no interactive loop)")
     args = parser.parse_args()
 
-    # --tools-mode / --no-native-tools resolution (NATIVE-TOOLS-SWITCH-ARCH, session 2):
-    # --no-native-tools is a deprecated alias for --tools-mode text.
-    # Conflict (explicit --tools-mode + --no-native-tools) fails fast —
-    # before the --version short-circuit so flag errors surface even there.
-    if args.no_native_tools:
-        if args.tools_mode != "text":
-            print(f"[Error: --no-native-tools means --tools-mode text; cannot combine with --tools-mode {args.tools_mode}]")
-            sys.exit(1)
-        print("[Deprecated: --no-native-tools is now --tools-mode text]")
-        args.tools_mode = "text"
+    # --tools-mode text is the legacy text-protocol mode (former
+    # --no-native-tools alias, removed 2026-11-08).
 
     # Strip surrounding quotes that Windows shell may include in arguments
     if args.version:

@@ -545,7 +545,7 @@ uhu --no-autosave --no-cache
 | `--workdir`       | `.`                        | Working directory for file operations                                    |
 | `--no-tools`      | off (tools on)             | Disable structured tool calls                                            |
 | `--tools-mode`    | `hybrid`                   | How the model issues actions: `native` (all via tool calls), `hybrid` (default — file content via FILE/WRITE/EDIT text blocks for transparency: diffs, review, rollback; file tools as backup; other tools native), `text` (no native tool calls, text protocol only) |
-| `--no-native-tools` | off                      | [deprecated] Alias for `--tools-mode text` — legacy text-protocol mode |
+
 | `--skills`        | off                        | Enable skill invocations                                                 |
 | `--skills-dir`    | `./.skills`                | Custom skill definitions directory                                       |
 | `--no-autosave`   | off                        | Disable automatic session saving                                         |
