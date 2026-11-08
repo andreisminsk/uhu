@@ -1,5 +1,57 @@
 # Native Tool_calls Switch — Architecture Notes (design phase)
 
+## CURRENT STATE (2026-11-08, session restart point)
+
+**Shipped and tested (full suite green):**
+
+- Native-first is the DEFAULT for tool-capable models: `tools` param sent on
+  /api/chat + /v1, capability auto-detected via /api/tags (cached, re-checked
+  on /llm swaps). `--no-native-tools` = legacy text-protocol mode
+  (solicitation off; the merge catch for unsolicited native calls is
+  UNCONDITIONAL — never disabled).
+- **Channel policy is TUNABLE** via `native_tools.channel` in
+  .ollama_agent.json:
+  - `"tools"` (default): single-channel — text-block docs stripped from the
+    prompt (AGENT_SYSTEM_PROMPT_NATIVE), ALL actions via tool calls, file
+    tools included. Field-evidenced anti-confusion default.
+  - `"hybrid"`: text blocks (FILE/WRITE/EDIT) documented + preferred for
+    file content; read_file/write_file/replace_in_file EXCLUDED from the
+    schemas array. The transparency play, opt-in.
+- 39 schemas built from the flat `parameters` attribute (all tools covered;
+  py_compile/token_count/calculator/google_calendar gained parameters after
+  the empty-schema field case). `audit_tools_schemas()` warns at session
+  start if any tool ships an empty schema.
+- Native names >64 chars degrade to `_malformed_native_call` (channel-mixing
+  blob guard, glm field case).
+- Tests: streaming fragments, approval-gate parity, schema exclusions,
+  channel branches — all in tests/test_tool_calls.py.
+
+**Field lessons recorded below (read before changing prompt policy):**
+1. The `tools` param alone flips the channel (PoC: B went native with the
+   full text prompt present); prompt-stripping is a cost lever (24x), not a
+   channel lever.
+2. Empty schemas cause failed calls → channel-mixing recovery attempts
+   (RUN blob, WRITE-in-name cases). In native mode, GLM-class models route
+   ALL action-intent through the tool-call structure — text-block docs in
+   native mode invite collisions. Hence the "tools" default.
+3. uhu's failure handling is correct end-to-end: fail safe, observation fed
+   back, model self-recovers.
+
+**Open items (not started):**
+- `--native-channel` CLI flag override (config-only today)
+- Transparency parity: diff-style confirmation for write_file/
+  replace_in_file instead of raw JSON dump — would make the "tools" channel
+  match the text blocks' review experience (the real fix for the original
+  transparency concern)
+- MODELS-TEST.md absorption of the probe
+- Model-variance replication (qwen3-coder-next:cloud, local qwen2.5)
+
+**Key files:** ollama_agent/{constants,system_prompt,session,actions,
+tool_calls,backends,persistence}.py, ollama_agent/tools/__init__.py,
+tests/test_tool_calls.py, tests/poc_native_tools_switch.py
+
+---
+
 Status: IMPLEMENTED (2026-11-08) — native-first default for tool-capable models,
 --no-native-tools = legacy text-protocol mode. E2E verified on glm-5.3-flash:cloud.
 See "PoC results", "Decision", "Implementation notes" below.
@@ -200,12 +252,109 @@ final answer, 34% KV-cache on the follow-up call).
 - **Init order**: backend creation moved after tools/native_solicit are
   set (schema building reads them).
 - **Tests**: flag-semantics tests updated (merge always-on; flag gates
-  solicitation). Remaining from the roadmap: streaming-fragment test,
-  approval-gate parity test, MODELS-TEST.md absorption.
+  solicitation). Streaming-fragment tests (split args, parallel calls keyed
+  by index, native dict-args continuation, interrupted stream → no
+  malformed call, empty-args single chunk) and approval-gate parity tests
+  (risky native call prompts, auto-safe skips gate, decline → [Skipped]
+  observation, parallel risky calls gated individually, params_explicit
+  empty-params legitimacy) added in tests/test_tool_calls.py
+  (TestStreamingFragments, TestApprovalGateParity). Remaining:
+  MODELS-TEST.md absorption.
 
 E2E numbers (glm-5.3-flash:cloud, "list files" task): native call = 6
 output tokens vs 43 text-protocol; full agent prompt with 39 schemas =
 7,033 prompt tokens vs ~9,976 for the old text tools section alone.
+
+# Field case: channel-mixing blob in the native name slot (2026-11-08)
+
+First real-world native-mode session (glm-5.3-flash:cloud, "three snakes"
+task) surfaced the empty-schema bug the e2e missed:
+
+1. Model called py_compile natively with only {"path": ...} — the required
+   `action` param was invisible because py_compile had NO `parameters`
+   attribute; its schema shipped as {"properties": {}, "required": []}.
+2. After the "Unknown action ''" failure, the model attempted text-protocol
+   recovery (RUN block + prose + a TOOL: marker) while the chat template
+   forced native tool-call structure — the text poured into the name slot.
+3. uhu failed it as "Unknown tool '<500-char blob>'" (fail-safe, correct).
+4. Round 3: clean native run_command recovery. The model was fine; the
+   environment was broken.
+
+Fixes shipped:
+- `parameters` attributes added to the four prose-only tools missed by the
+  first pass: py_compile (with action enum), token_count, calculator,
+  google_calendar. All 39 schemas now populated.
+- `audit_tools_schemas()` in tools/__init__.py: session-start warning for
+  any tool that takes params but ships an empty schema (parameterless
+  tools exempt via _PARAMLESS_TOOLS). The gap is now visible, not silent.
+- `normalize_tool_calls` degrades >64-char native names to a
+  `_malformed_native_call` entry with a 512-char `_raw` preview — clear
+  actionable failure instead of a blob in the "Unknown tool" message.
+- Regression tests: blob degradation + normal-name pass-through
+  (TestStreamingFragments).
+
+Lesson: schema generation assumed every tool carries `parameters`; the
+"list files" e2e never exercised a multi-param tool, so the gap sailed
+through. The audit makes the class of bug self-announcing.
+
+# Channel split: file content stays on the text blocks (2026-11-08)
+
+Design decision after the first real-world sessions: WRITE/EDIT/FILE text
+blocks are the TRANSPARENT path for file content — colored diffs, review
+prompts, in-memory rollback, .uhu/.cache/ file caching. The duplicating
+tools (read_file, write_file, replace_in_file) show a raw JSON params dump
+at confirmation instead — no diff, no rollback integration.
+
+Native mode now enforces the split structurally, not just by prompt:
+
+- `tools_schemas()` excludes read_file/write_file/replace_in_file
+  (_NATIVE_TEXT_DUPLICATES) — the model can't be tempted by what it
+  can't see. 36 schemas ship instead of 39.
+- AGENT_NATIVE_TOOLS_RULES actively guides: FILE: to read, WRITE: to
+  create, EDIT: to modify — "the transparent path (diffs, review,
+  rollback)".
+- tools_native_prompt() carries the same guidance.
+- No-text-equivalent fs tools stay native: search_in_files, list_files,
+  find_file, peek_file, copy_file, move_file, mkdir.
+- The merge catch still handles unsolicited calls to excluded tools
+  (beam/mistral reflex), and text mode (--no-native-tools) keeps the
+  full tool set — the exclusion is native-mode only.
+
+Tests: TestNativeSchemaExclusions (exclusion set + guidance text).
+
+# Channel policy: tunable "tools" vs "hybrid" (2026-11-08)
+
+Second field case (WRITE-in-name): the model, told to CREATE a file via a
+WRITE: text block, poured the marker + 12,810 tokens of content into the
+native tool_call structure — same channel-mixing as the RUN blob. The
+channel-split hypothesis was falsified: in native mode, GLM-class models
+route ALL action-intent through the tool-call structure; text-block docs
+in native mode are an invitation to collide, not a usable second channel.
+
+Hardcoding either policy was rejected (user decision): the fix is a TUNABLE
+channel policy instead of a bet.
+
+- **"tools" (default)**: single-channel native mode. Text-block docs
+  STRIPPED from the base prompt (AGENT_SYSTEM_PROMPT_NATIVE), all actions
+  via tool calls, file tools included in the schemas array. Anti-confusion
+  default, field-evidenced.
+- **"hybrid"**: the transparency play — text blocks documented + preferred
+  for file content, duplicating tools (read_file/write_file/
+  replace_in_file) excluded from schemas. Available for users who want
+  diffs/review/rollback on file ops and accept the mixing risk.
+
+Configuration: `native_tools.channel` in .ollama_agent.json ("tools" |
+"hybrid", default "tools"). Startup banner shows the active channel.
+
+Implementation: build_system_prompt(native_channel=...),
+tools_schemas(channel=...), tools_native_prompt(channel=...),
+session reads config into _native_channel. Tests:
+TestNativeSchemaExclusions (both channels + prompt branches).
+
+Open: a CLI flag override (--native-channel) and transparency parity for
+the file tools (diff-style confirmation instead of raw JSON dump) — the
+latter would make "tools" channel fully match the text blocks' review
+experience and is the real fix for the original transparency concern.
 
 # Open questions
 

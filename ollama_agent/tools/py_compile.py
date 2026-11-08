@@ -8,6 +8,18 @@ import traceback
 class PyCompileTool:
     name = "py_compile"
     description = "Check Python syntax, import modules, or run Python expressions"
+    parameters = {
+        "action": {
+            "type": "string",
+            "description": "One of: 'syntax' (check syntax of a file, no execution), 'import' (import a module and report success or error), 'run' (run a Python expression and return the result)",
+            "required": True,
+            "enum": ["syntax", "import", "run"],
+        },
+        "path": {"type": "string", "description": "File path for 'syntax' action", "required": False},
+        "module": {"type": "string", "description": "Module name(s) for 'import' action: single 'pkg.mod', comma-separated 'pkg.a,pkg.b', or from-style 'from pkg.mod import name'", "required": False},
+        "code": {"type": "string", "description": "Python code for 'run' action", "required": False},
+        "workdir": {"type": "string", "description": "Working directory for 'run' action", "required": False},
+    }
     system_prompt = (
         "## py_compile\n"
         "Check Python syntax, import modules, or run Python expressions.\n"

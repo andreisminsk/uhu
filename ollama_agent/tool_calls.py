@@ -19,6 +19,12 @@ import re
 
 __all__ = ["normalize_tool_calls", "merge_tool_call_fragments"]
 
+# Native names longer than this are almost certainly channel-mixing blobs
+# (field, 2026-11-08, glm-5.3-flash:cloud: a text RUN block + prose poured
+# into the name slot during a failed-call recovery). Real tool names are
+# short; degrade instead of passing the blob to the registry.
+_MAX_NATIVE_NAME_LEN = 64
+
 # Marker-wrapped native tool names (field, 2026-11-08, mistral-large-4:cloud):
 # the model emitted "TOOL:`py_compile`" — uhu's TEXT action syntax glued
 # around the real name — as the native tool name. Strip the text-marker
@@ -66,6 +72,13 @@ def normalize_tool_calls(raw):
             continue
         name = _clean_native_name(str(name))
         if not name:
+            continue
+        # Channel-mixing blob in the name slot (see _MAX_NATIVE_NAME_LEN):
+        # degrade to a _raw-style entry so the pipeline reports a clear,
+        # actionable failure instead of "Unknown tool '<500-char blob>'".
+        if len(name) > _MAX_NATIVE_NAME_LEN:
+            out.append({"name": "_malformed_native_call",
+                        "params": {"_raw": name[:512]}})
             continue
         if isinstance(args, str):
             try:

@@ -3,6 +3,11 @@
 
 class TokenCountTool:
     name = "token_count"
+    parameters = {
+        "text": {"type": "string", "description": "Text to count tokens for. Mutually exclusive with path", "required": False},
+        "path": {"type": "string", "description": "Path to a file to read and count tokens for. Mutually exclusive with text", "required": False},
+        "model": {"type": "string", "description": "Model encoding for tiktoken: cl100k_base (default), p50k_base, r50k_base. Only used if tiktoken is installed", "required": False},
+    }
     description = (
         "Estimate token count for text or a file. "
         "Returns character count, word count, line count, and token estimates "

@@ -11,9 +11,17 @@ NUDGE_TEXT = (
     "the user's most recent request. If the goal is already achieved, say so and stop."
 )
 
-AGENT_SYSTEM_PROMPT = (
+_AGENT_IDENTITY = (
     "Your name is 'uhu'.\n\n"
     "You are a concise coding assistant with file access.\n\n"
+)
+
+# Text action blocks (WRITE/EDIT/FILE/RUN) — documented in text mode and in
+# the "hybrid" native channel; STRIPPED in the "tools" native channel.
+# Field evidence (NATIVE-TOOLS-SWITCH-ARCH): text-block docs in native mode
+# invite channel-mixing — the model routes text actions into the tool_call
+# structure (RUN blob, WRITE-in-name cases).
+_AGENT_TEXT_BLOCKS = (
     "To WRITE a new file (or completely rewrite one), use this format:\n\n"
     "**WRITE:`hello.py`**\n"
     "```python\n"
@@ -70,6 +78,9 @@ AGENT_SYSTEM_PROMPT = (
     "- Parent directories are created automatically — just use paths like src/app.py in WRITE.\n"
     "- To read a file, use **FILE:**`path` with **EOF:**`path`, or ask the user to /attach or /search it.\n"
     "- You may explain your changes briefly before or after the write/edit/run block.\n\n"
+)
+
+_AGENT_DISCIPLINE = (
     "OUTPUT DISCIPLINE:\n"
     "- Be CONCISE. Do NOT produce long repetitive lists, enumerations, or descriptions.\n"
     "- Do NOT repeat the same instruction or explanation multiple times.\n"
@@ -83,6 +94,18 @@ AGENT_SYSTEM_PROMPT = (
     "- If the user is interested, use list_files or find_file to discover available guide files in the project, then read and summarize them.\n"
     "- Keep the initial offer to 2-3 sentences. Do not repeat it in later messages.\n"
     "- If the user declines or jumps straight to a task, proceed without mentioning guides again."
+)
+
+AGENT_SYSTEM_PROMPT = _AGENT_IDENTITY + _AGENT_TEXT_BLOCKS + _AGENT_DISCIPLINE
+
+# "tools" native channel: single-channel prompt — all actions via tool
+# calls, no text-block docs (anti-confusion default, field-evidenced).
+AGENT_SYSTEM_PROMPT_NATIVE = (
+    _AGENT_IDENTITY
+    + "All actions — reading, creating, and editing files, running shell commands — "
+    "are performed via native tool calls. Do NOT use text action formats; "
+    "emit tool calls only.\n\n"
+    + _AGENT_DISCIPLINE
 )
 
 # Rules appended to the system prompt when tools are enabled.
@@ -124,13 +147,37 @@ AGENT_CALL_RULE = (
 # Native-tools mode (NATIVE-TOOLS-SWITCH-ARCH): appended INSTEAD of
 # AGENT_TOOLS_RULES when the backend solicits native tool_calls (tools param
 # sent on /api/chat). The text TOOL: protocol docs are suppressed — they
-# compete with the model's tool-calling training. WRITE/EDIT/FILE/RUN text
-# blocks remain (more context-efficient for large content).
+# compete with the model's tool-calling training. File-CONTENT operations
+# are actively guided back to the text blocks (FILE/WRITE/EDIT) — the
+# transparent path: colored diffs, review prompts, rollback, file caching.
+# The duplicating tools (read_file, write_file, replace_in_file) are
+# excluded from the native schemas array (see tools/__init__.py).
+# "tools" channel (default): single-channel native mode — everything via
+# tool calls, text formats explicitly discouraged.
 AGENT_NATIVE_TOOLS_RULES = (
     "\n\nNATIVE TOOLS:\n"
-    "- Tools are available via native tool calls — their names, descriptions, and "
-    "parameters are provided by the runtime. Invoke tools ONLY via tool calls, never as text.\n"
-    "- WRITE/EDIT/FILE/RUN text blocks remain available for file writes, edits, and shell commands.\n"
+    "- ALL actions — file reads, writes, edits, shell commands — go through native "
+    "tool calls. Names, descriptions, and parameters are provided by the runtime.\n"
+    "- Do NOT use text action formats; emit tool calls only.\n"
+    "- read_file to study files, write_file to create, replace_in_file to modify, "
+    "run_command for shell commands, job_submit for long-running tasks.\n"
+)
+
+# "hybrid" channel: text blocks documented and preferred for file content
+# (the transparency play — diffs, review, rollback — at the cost of
+# channel-mixing risk on models that route text actions into tool calls).
+AGENT_NATIVE_TOOLS_RULES_HYBRID = (
+    "\n\nNATIVE TOOLS:\n"
+    "- Structured tools (search, list, find, web, git, jobs, ...) are available via "
+    "native tool calls — names, descriptions, and parameters are provided by the "
+    "runtime. Invoke them ONLY via tool calls, never as text.\n"
+    "- For FILE CONTENT, prefer the text blocks — they are the transparent path "
+    "(diffs, review, rollback, caching):\n"
+    "  - READ a file into context with a FILE: block\n"
+    "  - CREATE or completely rewrite a file with a WRITE: block\n"
+    "  - MODIFY an existing file with an EDIT: block (preferred — saves context)\n"
+    "- RUN: blocks remain for shell commands; the run_command tool is for structured "
+    "needs (exit codes, timeouts), job_submit for long-running tasks.\n"
 )
 
 # Call-and-wait rule for native tool calls (replaces the text-channel variant

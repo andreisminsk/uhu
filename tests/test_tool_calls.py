@@ -731,3 +731,260 @@ class TestNativeSessionPhases45:
         render = '[native tool_call 1/1: ?]\n{}'
         obs, _, _, _ = s.process_actions(render)
         assert obs is None or "vanished" in obs
+
+
+class TestStreamingFragments:
+    """NATIVE-TOOLS-SWITCH-ARCH: streaming merge is now the hot path —
+    every tool-capable model's every tool call arrives as fragments."""
+
+    def test_split_arguments_merge(self):
+        # One call's JSON args split across chunks (OpenAI /v1 string form)
+        from ollama_agent.tool_calls import merge_tool_call_fragments, normalize_tool_calls
+        frags = [
+            {"index": 0, "function": {"name": "read_file", "arguments": '{"pa'}},
+            {"index": 0, "function": {"arguments": 'th": "a.'}},
+            {"index": 0, "function": {"arguments": 'txt"}'}},
+        ]
+        merged = normalize_tool_calls(merge_tool_call_fragments(frags))
+        assert merged == [{"name": "read_file", "params": {"path": "a.txt"}}]
+
+    def test_parallel_calls_keyed_by_index(self):
+        # Realistic /v1 shape: ONE JSON string per call, split across chunks,
+        # interleaved with another call's fragments. Index keys the merge.
+        from ollama_agent.tool_calls import merge_tool_call_fragments, normalize_tool_calls
+        frags = [
+            {"index": 0, "function": {"name": "read_file", "arguments": '{"path": "a.'}},
+            {"index": 1, "function": {"name": "list_files", "arguments": '{"path": "."}'}},
+            {"index": 0, "function": {"arguments": 'txt", "offset": 5}'}},  # late fragment for call 0
+        ]
+        merged = normalize_tool_calls(merge_tool_call_fragments(frags))
+        assert len(merged) == 2
+        by_name = {c["name"]: c["params"] for c in merged}
+        assert by_name["read_file"] == {"path": "a.txt", "offset": 5}
+        assert by_name["list_files"] == {"path": "."}
+
+    def test_native_dict_args_extended_field_by_field(self):
+        # Native Ollama format: dict args spread across chunks, no index
+        from ollama_agent.tool_calls import merge_tool_call_fragments, normalize_tool_calls
+        frags = [
+            {"function": {"name": "write_file", "arguments": {"path": "a.py"}}},
+            {"function": {"arguments": {"content": "print(1)"}}},  # nameless continuation
+        ]
+        merged = normalize_tool_calls(merge_tool_call_fragments(frags))
+        assert merged == [{"name": "write_file",
+                           "params": {"path": "a.py", "content": "print(1)"}}]
+
+    def test_interrupted_stream_partial_args_not_executed(self, tmp_path):
+        """Ctrl+C / timeout mid-fragment must not produce a malformed call
+        that executes with truncated params (e.g. run_command with half a
+        command line). Partial fragments stay unmerged → no call."""
+        from ollama_agent.tool_calls import merge_tool_call_fragments, normalize_tool_calls
+        frags = [
+            {"index": 0, "function": {"name": "run_command", "arguments": '{"comm'}},
+            {"index": 0, "function": {"arguments": 'and": "rm -rf '}},  # stream cut here
+        ]
+        merged = normalize_tool_calls(merge_tool_call_fragments(frags))
+        # The JSON string is incomplete — normalize must NOT parse it into
+        # a half-command; it degrades to {"_raw": ...} which the pipeline
+        # treats as unexecutable.
+        assert len(merged) == 1
+        assert "_raw" in merged[0]["params"]
+        assert merged[0]["params"].get("_raw") == '{"command": "rm -rf '
+
+    def test_empty_args_call_complete_in_one_chunk(self):
+        # e2e-observed shape: list_files({}) arrives complete in the final chunk
+        from ollama_agent.tool_calls import merge_tool_call_fragments, normalize_tool_calls
+        merged = normalize_tool_calls(merge_tool_call_fragments(
+            [{"function": {"name": "list_files", "arguments": {}}}]))
+        assert merged == [{"name": "list_files", "params": {}}]
+
+    def test_channel_mixing_blob_name_degrades(self):
+        """Field case (glm-5.3-flash:cloud): a text RUN block + prose poured
+        into the native name slot during failed-call recovery. The blob must
+        degrade to a _malformed_native_call entry — clear, actionable failure
+        instead of a 500-char 'Unknown tool' message."""
+        from ollama_agent.tool_calls import normalize_tool_calls
+        # Marker text is assembled from parts so this file never contains a
+        # complete marker sequence (uhu's own parser would false-positive).
+        _m = "**TO" + "OL:**" + "`py_compile`"
+        blob = ("RUN:**\n```sh\npython3 -m py_compile snake-3.py\n```\n"
+                "Wait — let me also check the collision logic. "
+                + _m + " — via the native path instead")
+        merged = normalize_tool_calls(
+            [{"function": {"name": blob, "arguments": {"path": "snake-3.py"}}}])
+        assert len(merged) == 1
+        assert merged[0]["name"] == "_malformed_native_call"
+        assert "_raw" in merged[0]["params"]
+        # The blob is truncated, not passed whole
+        assert len(merged[0]["params"]["_raw"]) <= 512
+
+    def test_normal_names_unaffected_by_blob_guard(self):
+        from ollama_agent.tool_calls import normalize_tool_calls
+        merged = normalize_tool_calls(
+            [{"function": {"name": "replace_in_file", "arguments": {"path": "a.py"}}}])
+        assert merged == [{"name": "replace_in_file", "params": {"path": "a.py"}}]
+
+
+class TestNativeSchemaExclusions:
+    """NATIVE-TOOLS-SWITCH-ARCH: channel policy is tunable.
+    "tools" (default): single-channel — all actions via tool calls, text-block
+    docs stripped (anti-confusion, field-evidenced). "hybrid": text blocks
+    documented + preferred for file content, duplicating tools excluded."""
+
+    def test_tools_channel_includes_file_tools(self):
+        from ollama_agent.tools import tools_schemas
+        names = {t["function"]["name"] for t in tools_schemas(workdir=".", channel="tools")}
+        # Single-channel: file-content tools ARE available natively
+        assert {"read_file", "write_file", "replace_in_file"} <= names
+        assert {"list_files", "search_in_files", "find_file", "peek_file",
+                "copy_file", "move_file", "mkdir"} <= names
+
+    def test_hybrid_channel_excludes_file_tools(self):
+        from ollama_agent.tools import tools_schemas
+        names = {t["function"]["name"] for t in tools_schemas(workdir=".", channel="hybrid")}
+        assert "read_file" not in names
+        assert "write_file" not in names
+        assert "replace_in_file" not in names
+        assert {"list_files", "search_in_files", "find_file", "peek_file",
+                "copy_file", "move_file", "mkdir"} <= names
+
+    def test_hybrid_rules_guide_to_text_blocks(self):
+        from ollama_agent.constants import AGENT_NATIVE_TOOLS_RULES_HYBRID
+        assert "FILE:" in AGENT_NATIVE_TOOLS_RULES_HYBRID
+        assert "WRITE:" in AGENT_NATIVE_TOOLS_RULES_HYBRID
+        assert "EDIT:" in AGENT_NATIVE_TOOLS_RULES_HYBRID
+        assert "transparent" in AGENT_NATIVE_TOOLS_RULES_HYBRID
+
+    def test_tools_channel_prompt_strips_text_blocks(self):
+        from ollama_agent.constants import AGENT_SYSTEM_PROMPT_NATIVE
+        # Single-channel prompt: no text-block docs, explicit tool-calls-only
+        assert "To WRITE a new file" not in AGENT_SYSTEM_PROMPT_NATIVE
+        assert "tool calls only" in AGENT_SYSTEM_PROMPT_NATIVE
+        # Text mode prompt keeps them
+        from ollama_agent.constants import AGENT_SYSTEM_PROMPT
+        assert "To WRITE a new file" in AGENT_SYSTEM_PROMPT
+
+    def test_build_system_prompt_channel_branch(self, tmp_path):
+        from ollama_agent.system_prompt import build_system_prompt
+        tools_ch = build_system_prompt(str(tmp_path), agent=True, tools=True,
+                                       native_tools=True, native_channel="tools")
+        hybrid_ch = build_system_prompt(str(tmp_path), agent=True, tools=True,
+                                        native_tools=True, native_channel="hybrid")
+        # tools channel: no text-block docs, single-channel rules
+        assert "To WRITE a new file" not in tools_ch
+        assert "tool calls only" in tools_ch
+        # hybrid channel: text-block docs present, hybrid rules
+        assert "To WRITE a new file" in hybrid_ch
+        assert "transparent" in hybrid_ch
+
+
+class TestApprovalGateParity:
+    """NATIVE-TOOLS-SWITCH-ARCH: native calls must flow through the same
+    ApprovalGate as text-channel calls — no bypass for the native channel."""
+
+    def _min_session(self, tmp_path, **attrs):
+        from ollama_agent.session import ChatSession
+        s = ChatSession.__new__(ChatSession)
+        s.native_tools = True
+        s._pending_native_calls = None
+        s.quiet = True
+        s.workdir = str(tmp_path)
+        s.agent = True
+        s.tools = True
+        s.skills = False
+        s.ctx_size = 4096
+        s.history = []
+        s.stream = True
+        s.cache_files = False
+        s.show_diff = False
+        for k, v in attrs.items():
+            setattr(s, k, v)
+        return s
+
+    def test_risky_native_tool_prompts(self, tmp_path):
+        """Native run_command must hit the confirmation prompt, identical to
+        the text channel. FakeApproveAll returns True but RECORDS the prompt —
+        the assertion is that the gate was consulted at all."""
+        prompts = []
+
+        class RecordingGate(FakeApproveAll):
+            def confirm(self, prompt, **kwargs):
+                prompts.append(prompt)
+                return True
+
+        s = self._min_session(tmp_path)
+        s._approval = RecordingGate()
+        s._pending_native_calls = [{"name": "run_command",
+                                    "params": {"command": "echo hi"}}]
+        obs, _, has_non_read, _ = s.process_actions("")
+        # run_command is NOT in SAFE_TOOLS — the gate must have been consulted
+        assert any("run_command" in p for p in prompts)
+        assert has_non_read is True
+
+    def test_safe_native_tool_skips_gate(self, tmp_path, capsys):
+        """Native list_files is auto-safe — executes without any gate prompt
+        (parity with the text channel's [auto-safe: ...] path)."""
+        prompts = []
+
+        class RecordingGate(FakeApproveAll):
+            def confirm(self, prompt, **kwargs):
+                prompts.append(prompt)
+                return True
+
+        s = self._min_session(tmp_path)
+        s._approval = RecordingGate()
+        s._pending_native_calls = [{"name": "list_files", "params": {}}]
+        obs, _, _, _ = s.process_actions("")
+        assert obs and "list_files" in obs
+        assert prompts == []  # auto-safe path never consults the gate
+
+    def test_native_call_declined_by_gate(self, tmp_path):
+        """Gate returning False must skip the native call — identical to the
+        text channel: decline → [Skipped] → no execution, no non-read flag
+        (has_non_read tracks EXECUTED actions). The native channel has no
+        way around a declined confirmation."""
+        class DenyGate(FakeApproveAll):
+            def confirm(self, prompt, **kwargs):
+                return False
+
+        s = self._min_session(tmp_path)
+        s._approval = DenyGate()
+        s._pending_native_calls = [{"name": "run_command",
+                                    "params": {"command": "echo hi"}}]
+        obs, _, has_non_read, _ = s.process_actions("")
+        assert has_non_read is False  # declined = not executed (text-channel parity)
+        # The skip is reported to the model as an observation (so it can
+        # adapt), but the tool never executed — no result marker.
+        assert obs and obs.startswith("[Skipped: TOOL run_command]")
+        assert "[TOOL run_command]:" not in obs  # no execution result
+
+    def test_parallel_risky_native_calls_each_gated(self, tmp_path):
+        """3 parallel native run_command calls in one response — each must
+        be gated individually (no batch bypass)."""
+        prompts = []
+
+        class RecordingGate(FakeApproveAll):
+            def confirm(self, prompt, **kwargs):
+                prompts.append(prompt)
+                return True
+
+        s = self._min_session(tmp_path)
+        s._approval = RecordingGate()
+        s._pending_native_calls = [
+            {"name": "run_command", "params": {"command": "echo 1"}},
+            {"name": "run_command", "params": {"command": "echo 2"}},
+            {"name": "run_command", "params": {"command": "echo 3"}},
+        ]
+        obs, _, _, _ = s.process_actions("")
+        assert len(prompts) == 3  # each call gated separately
+        assert obs and "run_command" in obs
+
+    def test_native_params_explicit_flag(self, tmp_path):
+        """Native dicts carry params_explicit=True — empty params are
+        legitimate (no parser-truncation warning), unlike bare text calls."""
+        s = self._min_session(tmp_path)
+        s._pending_native_calls = [{"name": "job_list", "params": {}}]
+        obs, _, _, _ = s.process_actions("")
+        # job_list takes no required params; empty {} must execute cleanly
+        # without the PARSING WARNING that fires for non-explicit empty params
+        assert obs and "PARSING WARNING" not in obs

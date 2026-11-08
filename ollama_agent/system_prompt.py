@@ -8,18 +8,26 @@ from datetime import date
 from pathlib import Path
 
 from .constants import (
-    AGENT_SYSTEM_PROMPT, AGENT_TOOLS_RULES, AGENT_CALL_RULE,
-    AGENT_NATIVE_TOOLS_RULES, AGENT_NATIVE_CALL_RULE,
+    AGENT_SYSTEM_PROMPT, AGENT_SYSTEM_PROMPT_NATIVE,
+    AGENT_TOOLS_RULES, AGENT_CALL_RULE,
+    AGENT_NATIVE_TOOLS_RULES, AGENT_NATIVE_TOOLS_RULES_HYBRID,
+    AGENT_NATIVE_CALL_RULE,
     get_platform_info, get_platform_shell_guidance,
 )
 
 
-def build_system_prompt(workdir, agent=True, tools=False, skills=False, native_tools=False):
+def build_system_prompt(workdir, agent=True, tools=False, skills=False,
+                        native_tools=False, native_channel="tools"):
     """Build the complete system prompt for a chat session.
 
     native_tools=True selects the native-tools mode prompt (NATIVE-TOOLS-SWITCH-ARCH):
     tool schemas travel via the /api/chat tools param, so the text TOOL: protocol
     docs are replaced by compact native-mode rules. Skills stay on the text channel.
+
+    native_channel tunes the policy (see the doc for field evidence):
+    - "tools" (default): single-channel — text-block docs stripped from the
+      base prompt, ALL actions via tool calls (anti-confusion).
+    - "hybrid": text blocks documented + preferred for file content.
 
     Assembles in order:
     1. Agent base prompt (with date and shell_lang placeholder replaced)
@@ -37,11 +45,12 @@ def build_system_prompt(workdir, agent=True, tools=False, skills=False, native_t
     parts = []
 
     if agent:
-        system_prompt = f"Current date: {date.today().isoformat()}\n\n" + AGENT_SYSTEM_PROMPT
+        base = AGENT_SYSTEM_PROMPT_NATIVE if (native_tools and native_channel == "tools") else AGENT_SYSTEM_PROMPT
+        system_prompt = f"Current date: {date.today().isoformat()}\n\n" + base
         info = get_platform_info()
         system_prompt = system_prompt.replace("{shell_lang}", info["shell_lang"])
         if tools and native_tools:
-            system_prompt += AGENT_NATIVE_TOOLS_RULES
+            system_prompt += AGENT_NATIVE_TOOLS_RULES_HYBRID if native_channel == "hybrid" else AGENT_NATIVE_TOOLS_RULES
             if skills:
                 system_prompt += AGENT_CALL_RULE  # SKILL: stays on the text channel
             system_prompt += AGENT_NATIVE_CALL_RULE
@@ -55,7 +64,7 @@ def build_system_prompt(workdir, agent=True, tools=False, skills=False, native_t
     if tools:
         if native_tools:
             from .tools import tools_native_prompt
-            parts.append(tools_native_prompt())
+            parts.append(tools_native_prompt(channel=native_channel))
         else:
             from .tools import tools_system_prompt
             parts.append(tools_system_prompt(workdir=workdir))

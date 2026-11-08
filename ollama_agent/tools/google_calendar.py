@@ -84,6 +84,23 @@ def _format_event(event):
 
 class GoogleCalendarTool:
     name = "google_calendar"
+    parameters = {
+        "action": {
+            "type": "string",
+            "description": "One of: create, list, quick_add, delete, update",
+            "required": True,
+            "enum": ["create", "list", "quick_add", "delete", "update"],
+        },
+        "summary": {"type": "string", "description": "Event title (create/update)", "required": False},
+        "start": {"type": "string", "description": "Event start, ISO format 2025-01-15T10:00:00 (create/update)", "required": False},
+        "end": {"type": "string", "description": "Event end, ISO format (create/update)", "required": False},
+        "description": {"type": "string", "description": "Event description (create/update)", "required": False},
+        "location": {"type": "string", "description": "Event location (create/update)", "required": False},
+        "days": {"type": "integer", "description": "List events N days ahead (list, default 7)", "required": False},
+        "query": {"type": "string", "description": "Filter events by keyword (list)", "required": False},
+        "text": {"type": "string", "description": "Natural language event description (quick_add)", "required": False},
+        "event_id": {"type": "string", "description": "Event ID (delete/update)", "required": False},
+    }
     description = (
         "Manage Google Calendar events. "
         "Actions: create, list, quick_add, delete, update. "

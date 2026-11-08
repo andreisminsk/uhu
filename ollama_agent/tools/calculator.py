@@ -103,6 +103,10 @@ def _safe_eval(expr):
 class CalculatorTool:
     name = "calculator"
     description = "Evaluate mathematical expressions safely"
+    parameters = {
+        "expression": {"type": "string", "description": "The mathematical expression to evaluate (arithmetic, math functions, constants, parentheses)", "required": True},
+        "precision": {"type": "integer", "description": "Round result to this many decimal places. Omit for full precision", "required": False},
+    }
     system_prompt = """## calculator
 
 Evaluates mathematical expressions safely. ALWAYS use this tool for ANY mathematical computation — never attempt mental arithmetic, even for simple calculations. LLMs are unreliable at math; this tool guarantees correct results. If a user asks you to compute, calculate, solve, or evaluate any numeric expression, invoke this tool rather than computing yourself.

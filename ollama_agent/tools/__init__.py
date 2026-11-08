@@ -149,13 +149,14 @@ def tools_system_prompt(enabled_names=None, workdir=None):
     return "\n".join(parts)
 
 
-def tools_native_prompt():
+def tools_native_prompt(channel="tools"):
     """Compact tools section for native-tools mode (NATIVE-TOOLS-SWITCH-ARCH).
 
     Replaces the per-tool prose listing — schemas travel via the /api/chat
-    tools param. Keeps only channel-agnostic guidance.
+    tools param. Keeps only channel-agnostic guidance. channel="hybrid"
+    adds the text-block preference for file content (transparency play).
     """
-    return (
+    parts = [
         "TOOLS: available via native tool calls — names, descriptions, and parameters "
         "are provided by the runtime. Invoke tools ONLY via tool calls, not text.\n"
         "WHEN TO USE TOOLS:\n"
@@ -163,27 +164,50 @@ def tools_native_prompt():
         "- Need details from a URL — web_fetch (retry with larger max_length if truncated; "
         "escalate to browser for JS-rendered pages; http_request for APIs/raw HTTP; "
         "curl/wget in run_command is a last resort).\n"
-        "- File operations — use the fs tools (read_file, search_in_files, list_files, ...) "
-        "instead of shell commands.\n"
         "- When asked to perform multiple operations, emit ALL tool calls in a single response.\n"
         "- Use /attach-bin <path> to make the model aware of binary files (images, audio) "
         "before using image-analysis or other binary-handling tools.\n"
         "- For commands that may take longer than 30s, use job_submit; then sleep, job_list, job_result.\n"
-    )
+    ]
+    if channel == "hybrid":
+        parts.append(
+            "- File content: READ via FILE: blocks, CREATE via WRITE:, MODIFY via EDIT: — "
+            "the transparent path (diffs, review, rollback). Tools cover the rest: "
+            "search_in_files, list_files, find_file, peek_file, copy_file, move_file, mkdir.\n"
+        )
+    else:
+        parts.append(
+            "- File content: read_file to study, write_file to create, replace_in_file to modify.\n"
+        )
+    return "".join(parts)
 
 
-def tools_schemas(enabled_names=None, workdir=None):
+# Tools that duplicate the FILE/WRITE/EDIT text blocks (NATIVE-TOOLS-SWITCH-ARCH).
+# File-content ops stay on the text channel — the transparent path (colored
+# diffs, review prompts, rollback, file caching). The tool versions show a raw
+# JSON params dump at confirmation instead of a diff. Excluded from the
+# native schemas array so the model isn't tempted; the merge catch still
+# handles unsolicited calls, and the text channel (text mode) keeps them.
+_NATIVE_TEXT_DUPLICATES = frozenset({"read_file", "write_file", "replace_in_file"})
+
+
+def tools_schemas(enabled_names=None, workdir=None, channel="tools"):
     """Build the native tools array for /api/chat (NATIVE-TOOLS-SWITCH-ARCH).
 
     Same config filtering as tools_system_prompt: tools disabled in
     .ollama_agent.json are excluded. Tools whose schema can't be built are
-    skipped (they stay reachable via the text channel).
+    skipped (they stay reachable via the text channel). channel="hybrid"
+    excludes the text-block duplicates (read_file/write_file/replace_in_file)
+    — file content goes through FILE/WRITE/EDIT blocks; channel="tools"
+    (default) includes everything: single-channel, all actions via calls.
     """
     from ._config import load_config
     config = load_config(workdir)
     tools_config = config.get("tools", {})
     tools = all_tools() if enabled_names is None else [t for t in all_tools() if t.name in enabled_names]
     tools = [t for t in tools if tools_config.get(t.name, {}).get("enabled", True)]
+    if channel == "hybrid":
+        tools = [t for t in tools if t.name not in _NATIVE_TEXT_DUPLICATES]
     out = []
     for t in tools:
         # Duck-typed: most tool classes don't subclass Tool, so build the
@@ -197,6 +221,37 @@ def tools_schemas(enabled_names=None, workdir=None):
         if isinstance(s, dict) and s.get("function", {}).get("name"):
             out.append(s)
     return out
+
+
+# Tools that legitimately take no parameters (empty schema is correct).
+# Anything else shipping an empty schema is a bug — the model would see a
+# parameterless tool and guess (field case: py_compile's required 'action'
+# was invisible, causing failed calls and channel-mixing recovery).
+_PARAMLESS_TOOLS = {"sys_info", "job_list"}
+
+
+def audit_tools_schemas(workdir=None):
+    """Verify every registered tool ships a usable schema for native mode.
+
+    Returns a list of warning strings for tools that take parameters but
+    have no `parameters` attribute (prose-only docs). Session start prints
+    them so the gap is visible instead of silently degrading the model's
+    view. Parameterless tools are exempt via _PARAMLESS_TOOLS.
+    """
+    warnings = []
+    for t in all_tools():
+        params = getattr(t, "parameters", None)
+        if params:
+            continue
+        if t.name in _PARAMLESS_TOOLS:
+            continue
+        # No parameters attribute and not known-parameterless — the tool
+        # likely takes params documented only in prose.
+        warnings.append(
+            f"tool '{t.name}' has no parameters attribute — native schema "
+            f"will be empty; add a parameters attribute (see py_compile.py)"
+        )
+    return warnings
 
 
 # Register built-in tools

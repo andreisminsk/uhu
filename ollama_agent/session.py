@@ -69,6 +69,12 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.skills = skills
         self.skills_dir = skills_dir
         self.workdir = os.path.abspath(workdir)
+        # Channel policy (field-evidenced, see the doc): "tools" = single-channel
+        # (all actions via tool calls, no text-block docs — anti-confusion);
+        # "hybrid" = text blocks for file content + tools for the rest.
+        # Read AFTER workdir is set (config is per-project).
+        from .tools._config import load_config as _load_channel_cfg
+        self._native_channel = _load_channel_cfg(self.workdir).get("native_tools", {}).get("channel", "tools")
         self.autosave = autosave
         self.sessions_dir = sessions_dir or os.path.join(os.path.abspath(self.workdir), ".uhu", ".sessions")
 
@@ -210,13 +216,19 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         from .system_prompt import build_system_prompt, get_memory_warnings
         system_prompt = build_system_prompt(
             self.workdir, agent=self.agent, tools=self.tools, skills=self.skills,
-            native_tools=self._native_solicit
+            native_tools=self._native_solicit, native_channel=self._native_channel
         )
         if system_prompt:
             self.history.append({"role": "system", "content": system_prompt})
         if not self.quiet:
             for w in get_memory_warnings(self.workdir):
                 agent_print(f"[⚠ {w}]")
+            # Native-mode schema audit: tools with params but no parameters
+            # attribute would ship empty schemas — surface the gap at start.
+            if getattr(self, '_native_solicit', False):
+                from .tools import audit_tools_schemas
+                for w in audit_tools_schemas(self.workdir):
+                    agent_print(f"[⚠ native tools: {w}]")
 
         # Auto-create parent directory for log file
         if log_path:
@@ -371,13 +383,14 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
     def _native_tools_schemas(self):
         """Tools array for native solicitation, or None in text mode.
 
-        Only when tools mode is on AND solicitation is active. MCP tools are
-        excluded in v1 (schema generation for them is follow-up work).
+        Only when tools mode is on AND solicitation is active. Channel policy
+        ("tools"/"hybrid") tunes the exclusion set — see NATIVE-TOOLS-SWITCH-ARCH.
         """
         if not (self.tools and getattr(self, '_native_solicit', False)):
             return None
         from .tools import tools_schemas
-        schemas = tools_schemas(workdir=self.workdir)
+        schemas = tools_schemas(workdir=self.workdir,
+                                channel=getattr(self, '_native_channel', 'tools'))
         return schemas or None
 
     @staticmethod
@@ -1128,7 +1141,10 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         topp_part = f" | TopP: {self._top_p}" if getattr(self, '_top_p', None) is not None else ""
         native_part = ""
         if self.tools:
-            native_part = " | Native tools: on" if getattr(self, '_native_solicit', False) else " | Native tools: off (text protocol)"
+            if getattr(self, '_native_solicit', False):
+                native_part = f" | Native tools: on ({getattr(self, '_native_channel', 'tools')})"
+            else:
+                native_part = " | Native tools: off (text protocol)"
         agent_print(f"Connected | {backend_info} | Model: {self.model} | "
               f"Context: {self.ctx_size}{think_part}{topp_part} | Stream: {self.stream} | Agent: {self.agent} | "
               f"Tools: {self.tools}{native_part} | Skills: {self.skills} | Thinking: {self.thinking} | "
