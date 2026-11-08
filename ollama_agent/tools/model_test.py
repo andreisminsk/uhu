@@ -409,12 +409,12 @@ class ModelTestTool:
             "required": False,
         },
         "temperature": {
-            "type": "float",
+            "type": "number",
             "description": "Sampling temperature for test calls (default: 0.1)",
             "required": False,
         },
         "top_p": {
-            "type": "float",
+            "type": "number",
             "description": "Top-p sampling for test calls; omitted = model default",
             "required": False,
         },

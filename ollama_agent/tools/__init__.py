@@ -52,7 +52,14 @@ def _flat_params_to_schema(name, description, params):
     for pname, pdef in params.items():
         if not isinstance(pdef, dict):
             continue
-        prop = {"type": pdef.get("type", "string")}
+        # JSON Schema type guard (field-found 2026-11-08, mistral-large-4:cloud):
+        # "float" is Python-ish, not JSON Schema — Ollama's wire validator
+        # hard-rejects the whole tools array with 400 "Invalid tool schema".
+        # Map common aliases so one bad declaration can't break the wire.
+        t = pdef.get("type", "string")
+        if t == "float":
+            t = "number"
+        prop = {"type": t}
         if pdef.get("description"):
             prop["description"] = pdef["description"]
         if pdef.get("enum"):
