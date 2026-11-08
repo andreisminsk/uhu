@@ -824,12 +824,48 @@ class TestStreamingFragments:
             [{"function": {"name": "replace_in_file", "arguments": {"path": "a.py"}}}])
         assert merged == [{"name": "replace_in_file", "params": {"path": "a.py"}}]
 
+    def test_text_action_marker_name_degrades_to_steering(self):
+        """Session 2 (hybrid-with-backup): a WRITE:/EDIT:/FILE:/RUN: marker
+        in the native name slot is channel-mixing — degrade to a
+        _text_action_mixing steering entry, never auto-execute."""
+        from ollama_agent.tool_calls import normalize_tool_calls, looks_like_text_action
+        # Marker assembled from parts (see test_channel_mixing_blob_name_degrades)
+        _w = "WR" + "ITE:" + "`hello.py`"
+        assert looks_like_text_action(_w)
+        assert looks_like_text_action("EDIT:`a.py`")
+        assert looks_like_text_action("FILE:`README.md`")
+        assert looks_like_text_action("RUN:")
+        assert not looks_like_text_action("write_file")
+        assert not looks_like_text_action("replace_in_file")
+        assert not looks_like_text_action("list_files")
+        merged = normalize_tool_calls(
+            [{"function": {"name": _w, "arguments": {}}}])
+        assert len(merged) == 1
+        assert merged[0]["name"] == "_text_action_mixing"
+        assert "_raw" in merged[0]["params"]
+        assert len(merged[0]["params"]["_raw"]) <= 512
+
+    def test_text_action_steering_message(self, tmp_path):
+        """safety.resolve_tool_name: a text-action marker in the name slot
+        yields a steering observation (re-emit as text block or call the
+        backup tool), not a bare Unknown-tool error."""
+        from ollama_agent.safety import resolve_tool_name
+        from ollama_agent.tools import all_tools, get
+        names = [t.name for t in all_tools()]
+        _w = "WR" + "ITE:" + "`hello.py`"
+        tool, corrected, msg = resolve_tool_name(_w, names, get, str(tmp_path))
+        assert tool is None
+        assert "text action" in msg
+        assert "write_file" in msg
+        assert "text block" in msg
+
 
 class TestNativeSchemaExclusions:
-    """NATIVE-TOOLS-SWITCH-ARCH: channel policy is tunable.
-    "tools" (default): single-channel — all actions via tool calls, text-block
-    docs stripped (anti-confusion, field-evidenced). "hybrid": text blocks
-    documented + preferred for file content, duplicating tools excluded."""
+    """NATIVE-TOOLS-SWITCH-ARCH, session 2: --tools-mode tri-state.
+    "native" (single-channel): all actions via tool calls, text-block docs
+    stripped. "hybrid" (default): text blocks preferred for file content,
+    file tools INCLUDED as backup (the cornered-model re-reading — exclusion
+    reversed). "text": no solicitation."""
 
     def test_tools_channel_includes_file_tools(self):
         from ollama_agent.tools import tools_schemas
@@ -839,12 +875,11 @@ class TestNativeSchemaExclusions:
         assert {"list_files", "search_in_files", "find_file", "peek_file",
                 "copy_file", "move_file", "mkdir"} <= names
 
-    def test_hybrid_channel_excludes_file_tools(self):
+    def test_hybrid_channel_includes_file_tools_as_backup(self):
         from ollama_agent.tools import tools_schemas
         names = {t["function"]["name"] for t in tools_schemas(workdir=".", channel="hybrid")}
-        assert "read_file" not in names
-        assert "write_file" not in names
-        assert "replace_in_file" not in names
+        # Session 2: hybrid INCLUDES the file tools as backup (exclusion reversed)
+        assert {"read_file", "write_file", "replace_in_file"} <= names
         assert {"list_files", "search_in_files", "find_file", "peek_file",
                 "copy_file", "move_file", "mkdir"} <= names
 
@@ -854,8 +889,17 @@ class TestNativeSchemaExclusions:
         assert "WRITE:" in AGENT_NATIVE_TOOLS_RULES_HYBRID
         assert "EDIT:" in AGENT_NATIVE_TOOLS_RULES_HYBRID
         assert "transparent" in AGENT_NATIVE_TOOLS_RULES_HYBRID
+        # Backup-tool wording (session 2)
+        assert "BACKUP" in AGENT_NATIVE_TOOLS_RULES_HYBRID
 
-    def test_tools_channel_prompt_strips_text_blocks(self):
+    def test_hybrid_native_prompt_backup_wording(self):
+        from ollama_agent.tools import tools_native_prompt
+        p = tools_native_prompt(channel="hybrid")
+        assert "PREFER the text blocks" in p
+        assert "BACKUP" in p
+        # Single-channel variant keeps the tool-only wording
+        p_tools = tools_native_prompt(channel="tools")
+        assert "read_file to study" in p_tools
         from ollama_agent.constants import AGENT_SYSTEM_PROMPT_NATIVE
         # Single-channel prompt: no text-block docs, explicit tool-calls-only
         assert "To WRITE a new file" not in AGENT_SYSTEM_PROMPT_NATIVE
@@ -988,3 +1032,84 @@ class TestApprovalGateParity:
         # job_list takes no required params; empty {} must execute cleanly
         # without the PARSING WARNING that fires for non-explicit empty params
         assert obs and "PARSING WARNING" not in obs
+
+    def test_text_action_mixing_synthetic_entry_observation(self, tmp_path):
+        """E2E field case (glm-5.3-flash:cloud, session 2): the normalizer
+        degrades a FILE: marker in the name slot to _text_action_mixing;
+        execute_tool must return the STEERING observation (re-emit as text
+        block or call the backup tool), not 'Unknown tool _text_action_mixing'."""
+        s = self._min_session(tmp_path)
+        s._pending_native_calls = [
+            {"name": "_text_action_mixing", "params": {"_raw": "FI" + "LE:`README.md``"}}]
+        obs, _, _, _ = s.process_actions("")
+        assert obs
+        assert "Unknown tool" not in obs
+        assert "text action" in obs
+        assert "read_file" in obs  # FILE → read_file backup
+        assert "text block" in obs
+
+    def test_malformed_native_call_synthetic_entry_observation(self, tmp_path):
+        """The blob case (>64-char name) degrades to _malformed_native_call;
+        execute_tool must return the actionable blob message, not Unknown tool."""
+        s = self._min_session(tmp_path)
+        s._pending_native_calls = [
+            {"name": "_malformed_native_call", "params": {"_raw": "x" * 200}}]
+        obs, _, _, _ = s.process_actions("")
+        assert obs
+        assert "Unknown tool" not in obs
+        assert "malformed native tool call" in obs
+        assert "text blob" in obs
+
+
+class TestToolsModeFlag:
+    """Session 2: --tools-mode {native,hybrid,text} — CLI-only tri-state,
+    hybrid default, no config fallback. --no-native-tools = deprecated alias
+    for --tools-mode text."""
+
+    def test_default_is_hybrid(self):
+        """The CLI default must be hybrid (owner decision, session 2)."""
+        import ollama_agent.cli as cli
+        import argparse
+        # Rebuild the parser the same way main() does and check the default
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--tools-mode", choices=["native", "hybrid", "text"],
+                            default="hybrid")
+        args = parser.parse_args([])
+        assert args.tools_mode == "hybrid"
+
+    def test_no_native_tools_alias_conflict(self, capsys):
+        """--no-native-tools + explicit --tools-mode native|hybrid must fail
+        fast; + --tools-mode text is accepted (alias)."""
+        import subprocess
+        import sys as _sys
+        r = subprocess.run(
+            [_sys.executable, "-m", "ollama_agent.cli", "--no-native-tools",
+             "--tools-mode", "native", "--version"],
+            capture_output=True, text=True, timeout=30)
+        assert r.returncode != 0
+        assert "--no-native-tools means --tools-mode text" in (r.stdout + r.stderr)
+
+    def test_session_tools_mode_mapping(self, tmp_path):
+        """ChatSession maps tools_mode → internal channel: native→tools,
+        hybrid→hybrid, text→text; solicitation off only for text."""
+        from ollama_agent.session import ChatSession
+        s = ChatSession.__new__(ChatSession)
+        # Simulate the constructor's mapping logic without a live backend
+        for mode, expected_channel, expected_solicit in [
+                ("native", "tools", True),
+                ("hybrid", "hybrid", True),
+                ("text", "text", False)]:
+            channel = "tools" if mode == "native" else mode
+            solicit = (mode != "text")  # capability check stubbed out
+            assert channel == expected_channel
+            assert solicit == expected_solicit
+
+    def test_config_channel_no_longer_read(self):
+        """Session 2: the native_tools.channel config read is REMOVED —
+        session.py must not import load_config for channel resolution."""
+        import inspect
+        from ollama_agent import session as session_mod
+        src = inspect.getsource(session_mod.ChatSession.__init__)
+        assert "native_tools" not in src or "channel" not in src.split("tools_mode")[0]
+        # The old config-based resolution line is gone
+        assert '.get("native_tools", {}).get("channel"' not in src

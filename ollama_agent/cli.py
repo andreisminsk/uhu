@@ -103,8 +103,12 @@ def main():
                         help="Disable event sounds (done/question notifications). Toggled mid-session with /sound")
     parser.add_argument("--max-rounds", type=int, default=None, dest="max_rounds",
                         help="Max feedback-loop rounds per message (default: 3 interactive, 7 one-shot). Changeable mid-session with /max-rounds")
+    parser.add_argument("--tools-mode", choices=["native", "hybrid", "text"], default="hybrid",
+                        help="How the model issues actions. native: all actions via native tool calls. "
+                             "hybrid (default): file content via FILE/WRITE/EDIT text blocks (diffs, review, rollback), "
+                             "other tools native; file tools available as backup. text: no native tool calls, text protocol only")
     parser.add_argument("--no-native-tools", action="store_true",
-                        help="Legacy text-protocol mode: don't solicit native tool_calls (no tools param, full text-protocol prompt). Unsolicited native calls are still merged")
+                        help="[deprecated] Alias for --tools-mode text — legacy text-protocol mode. Use --tools-mode text instead")
     parser.add_argument("--no-llm-parsing", action="store_true",
                         help="Disable LLM fallback parsing (configured via llm_parser section in .ollama_agent.json)")
     parser.add_argument("--prompt-file", default=None, dest="prompt_file",
@@ -114,6 +118,17 @@ def main():
     parser.add_argument("prompt", nargs="*", default=[],
                         help="One-shot prompt — execute and exit (no interactive loop)")
     args = parser.parse_args()
+
+    # --tools-mode / --no-native-tools resolution (NATIVE-TOOLS-SWITCH-ARCH, session 2):
+    # --no-native-tools is a deprecated alias for --tools-mode text.
+    # Conflict (explicit --tools-mode + --no-native-tools) fails fast —
+    # before the --version short-circuit so flag errors surface even there.
+    if args.no_native_tools:
+        if args.tools_mode != "text":
+            print(f"[Error: --no-native-tools means --tools-mode text; cannot combine with --tools-mode {args.tools_mode}]")
+            sys.exit(1)
+        print("[Deprecated: --no-native-tools is now --tools-mode text]")
+        args.tools_mode = "text"
 
     # Strip surrounding quotes that Windows shell may include in arguments
     if args.version:
@@ -237,7 +252,7 @@ def main():
         top_p=args.top_p,
         think_level=args.think_level,
         max_rounds=args.max_rounds,
-        native_tools=not args.no_native_tools,
+        tools_mode=args.tools_mode,
     )
 
     # Event sounds — single point of muting for all playback

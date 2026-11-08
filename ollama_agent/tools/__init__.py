@@ -171,9 +171,11 @@ def tools_native_prompt(channel="tools"):
     ]
     if channel == "hybrid":
         parts.append(
-            "- File content: READ via FILE: blocks, CREATE via WRITE:, MODIFY via EDIT: — "
-            "the transparent path (diffs, review, rollback). Tools cover the rest: "
-            "search_in_files, list_files, find_file, peek_file, copy_file, move_file, mkdir.\n"
+            "- File content: PREFER the text blocks — the transparent path (diffs, "
+            "review, rollback, caching): READ with FILE:, CREATE with WRITE:, "
+            "MODIFY with EDIT:. The file tools (read_file, write_file, "
+            "replace_in_file) are available as BACKUP — use them when a text "
+            "block fails or feels unnatural.\n"
         )
     else:
         parts.append(
@@ -183,11 +185,12 @@ def tools_native_prompt(channel="tools"):
 
 
 # Tools that duplicate the FILE/WRITE/EDIT text blocks (NATIVE-TOOLS-SWITCH-ARCH).
-# File-content ops stay on the text channel — the transparent path (colored
-# diffs, review prompts, rollback, file caching). The tool versions show a raw
-# JSON params dump at confirmation instead of a diff. Excluded from the
-# native schemas array so the model isn't tempted; the merge catch still
-# handles unsolicited calls, and the text channel (text mode) keeps them.
+# Session 2 redefinition: hybrid mode INCLUDES them as backup — the
+# "cornered model" re-reading of the two field cases showed mixing was caused
+# by removing the native option while demanding text output, not by having
+# both. Pre-tools-param field history: models switched fluently between
+# WRITE blocks and write_file when both paths were available. The set is kept
+# for reference/tests and any future exclusion policy.
 _NATIVE_TEXT_DUPLICATES = frozenset({"read_file", "write_file", "replace_in_file"})
 
 
@@ -197,17 +200,15 @@ def tools_schemas(enabled_names=None, workdir=None, channel="tools"):
     Same config filtering as tools_system_prompt: tools disabled in
     .ollama_agent.json are excluded. Tools whose schema can't be built are
     skipped (they stay reachable via the text channel). channel="hybrid"
-    excludes the text-block duplicates (read_file/write_file/replace_in_file)
-    — file content goes through FILE/WRITE/EDIT blocks; channel="tools"
-    (default) includes everything: single-channel, all actions via calls.
+    includes the file tools as BACKUP (text blocks preferred via prompt
+    guidance — transparency: diffs, review, rollback); channel="tools"
+    (single-channel native) also includes everything.
     """
     from ._config import load_config
     config = load_config(workdir)
     tools_config = config.get("tools", {})
     tools = all_tools() if enabled_names is None else [t for t in all_tools() if t.name in enabled_names]
     tools = [t for t in tools if tools_config.get(t.name, {}).get("enabled", True)]
-    if channel == "hybrid":
-        tools = [t for t in tools if t.name not in _NATIVE_TEXT_DUPLICATES]
     out = []
     for t in tools:
         # Duck-typed: most tool classes don't subclass Tool, so build the

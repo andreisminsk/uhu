@@ -178,6 +178,8 @@ AGENT_NATIVE_TOOLS_RULES_HYBRID = (
     "  - MODIFY an existing file with an EDIT: block (preferred — saves context)\n"
     "- RUN: blocks remain for shell commands; the run_command tool is for structured "
     "needs (exit codes, timeouts), job_submit for long-running tasks.\n"
+    "- The file tools (read_file, write_file, replace_in_file) are available as "
+    "BACKUP — use them when a text block fails or feels unnatural.\n"
 )
 
 # Call-and-wait rule for native tool calls (replaces the text-channel variant

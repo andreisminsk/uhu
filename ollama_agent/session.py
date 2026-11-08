@@ -30,7 +30,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
                 tpm_limit=None, max_context=None, no_llm_parsing=False,
                 openai_extra_body=None, temperature=None, max_rounds=None,
-                think_level=None, top_p=None, native_tools=True):
+                think_level=None, top_p=None, tools_mode="hybrid"):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -52,29 +52,33 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self.client = None  # Deprecated: use _backend instead
         self.model = model
         self.ctx_size = ctx_size
-        # Native-tools mode (NATIVE-TOOLS-SWITCH-ARCH): --no-native-tools now
-        # disables SOLICITATION (tools param + stripped prompt) — legacy
-        # text-protocol mode. The merge catch for unsolicited native calls
-        # (beam/mistral-class reflex) stays active in ALL modes.
-        self._native_solicit = native_tools and self._model_supports_tools(host, model)
+        # Tools mode (NATIVE-TOOLS-SWITCH-ARCH, session 2): --tools-mode tri-state.
+        #   "native" — single-channel: all actions via tool calls, text-block
+        #              docs stripped from the prompt.
+        #   "hybrid" (default) — native tools solicited; text blocks (FILE/WRITE/
+        #              EDIT) preferred for file content (transparency: diffs,
+        #              review, rollback, caching); file tools included as backup.
+        #   "text"    — no tools param, full text-protocol prompt (legacy mode).
+        # The merge catch for unsolicited native calls (beam/mistral-class
+        # reflex) stays active in ALL modes. Run-specific: CLI flag only,
+        # no config fallback (owner decision — session 2).
+        self.tools_mode = tools_mode
+        self._native_channel = "tools" if tools_mode == "native" else tools_mode
+        self._native_solicit = (tools_mode != "text") and self._model_supports_tools(host, model)
+        # Channel-mixing counter (hybrid mode): marker-name steering events.
+        # 1st → yellow warning; 3rd → persistent notice suggesting --tools-mode native.
+        self._mix_events = 0
         # Accumulated output tokens for the session (reset by /reset, /restore, /llm)
         self._output_tokens_total = 0
         self.stream = stream
         self.agent = agent
         self.tools = tools
-        # Native tool_calls merge (Phase 5) — --no-native-tools disables the
-        # session-side merge for A/B experiments (backend still reports them).
-        self.native_tools = native_tools
+        # Tools mode retained for /llm backend swaps (re-evaluated per model).
+        self.native_tools = tools_mode != "text"
         self.mcp = mcp
         self.skills = skills
         self.skills_dir = skills_dir
         self.workdir = os.path.abspath(workdir)
-        # Channel policy (field-evidenced, see the doc): "tools" = single-channel
-        # (all actions via tool calls, no text-block docs — anti-confusion);
-        # "hybrid" = text blocks for file content + tools for the rest.
-        # Read AFTER workdir is set (config is per-project).
-        from .tools._config import load_config as _load_channel_cfg
-        self._native_channel = _load_channel_cfg(self.workdir).get("native_tools", {}).get("channel", "tools")
         self.autosave = autosave
         self.sessions_dir = sessions_dir or os.path.join(os.path.abspath(self.workdir), ".uhu", ".sessions")
 
@@ -363,8 +367,10 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 args_json = (args_json[:self.NATIVE_CALL_ARGS_DISPLAY_CHARS]
                              + f"\n[... {n_chars} chars total, truncated for display]")
             sections.append(f"[native tool_call {i}/{total}: {name}]\n{args_json}")
-            agent_print(self.NATIVE_COLOR + f"[native tool_call {i}/{total}: {name}]" + ANSI_RESET)
-            agent_print(self.NATIVE_COLOR + preview + ANSI_RESET + "\n")
+            # Native-call render: the MODEL's emission, not agent voice —
+            # print directly in NATIVE_COLOR, no [AGENT] prefix.
+            print(self.NATIVE_COLOR + f"[native tool_call {i}/{total}: {name}]" + ANSI_RESET)
+            print(self.NATIVE_COLOR + preview + ANSI_RESET + "\n")
         native_text = "\n\n".join(sections)
         return (content + "\n\n" + native_text) if content else native_text
 
@@ -490,7 +496,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._pending_native_calls = None
         # Re-evaluate native solicitation for the NEW model (capability may
         # differ), then pass the schemas to the fresh backend.
-        self._native_solicit = getattr(self, 'native_tools', True) and self._model_supports_tools(host, model)
+        self._native_solicit = (getattr(self, 'tools_mode', 'hybrid') != "text") and self._model_supports_tools(host, model)
 
         self._backend = create_backend(
             api_type=api_type, host=host, model=model, ctx_size=ctx_size,
@@ -936,7 +942,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     continue
                 else:
                     self._play_done_sound()
-                    agent_print("AGENT: Done — no more actions\n")
+                    agent_print("Done — no more actions\n")
                     return
             self._log("system", obs)
             self.history.append({"role": "user", "content": obs})
@@ -1032,7 +1038,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                     self.history.append({"role": "assistant", "content": "Noted."})
         self.history.append({"role": "assistant", "content": "Noted."})
         self._play_done_sound()
-        agent_print(f"AGENT: Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
+        agent_print(f"Max feedback rounds ({max_rounds}) reached — send a message to continue\n")
 
     def _send(self, message, images=None, max_rounds=None):
         # Resolve feedback rounds: explicit arg > session setting (--max-rounds
@@ -1142,7 +1148,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         native_part = ""
         if self.tools:
             if getattr(self, '_native_solicit', False):
-                native_part = f" | Native tools: on ({getattr(self, '_native_channel', 'tools')})"
+                native_part = f" | Native tools: on ({getattr(self, 'tools_mode', 'hybrid')})"
             else:
                 native_part = " | Native tools: off (text protocol)"
         agent_print(f"Connected | {backend_info} | Model: {self.model} | "
@@ -1158,7 +1164,6 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         if not self.quiet:
             self._check_version()
         agent_print()
-
         try:
             while True:
                 try:

@@ -105,6 +105,22 @@ def resolve_tool_name(tool_name, all_tool_names, get_tool_fn, workdir):
     if tool:
         return (tool, tool_name, None)
 
+    # Channel-mixing steering (NATIVE-TOOLS-SWITCH-ARCH, session 2): a
+    # text-action marker in the name slot (WRITE:/EDIT:/FILE:/RUN:) means the
+    # model tried to issue a text block on the native channel. Tell it to
+    # re-emit as a text block or call the backup tool — never auto-execute
+    # (the name slot may be truncated).
+    from .tool_calls import looks_like_text_action
+    if looks_like_text_action(tool_name):
+        marker = tool_name.strip().split(":", 1)[0].split("`", 1)[0].upper()
+        backup = {"WRITE": "write_file", "EDIT": "replace_in_file", "FILE": "read_file"}.get(marker, "run_command")
+        msg = (
+            f"[TOOL FAILED: '{tool_name[:80]}' is a text action emitted on the native tool-call channel. "
+            f"Re-emit it as a {marker}: text block (with matching EOF: marker), or call the "
+            f"{backup} tool with proper parameters.]"
+        )
+        return (None, None, msg)
+
     close_match = None
     for candidate_name in all_tool_names:
         if tool_name + "s" == candidate_name or tool_name.rstrip("s") == candidate_name.rstrip("s"):

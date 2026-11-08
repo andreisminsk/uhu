@@ -52,6 +52,96 @@ tests/test_tool_calls.py, tests/poc_native_tools_switch.py
 
 ---
 
+# DESIGN UPDATE (2026-11-08, session 2): --tools-mode + hybrid-with-backup
+
+Owner decision (Andrei), superseding the config-based channel policy above:
+
+**Status: IMPLEMENTED (2026-11-08, session 2) — full test suite green.**
+Shipped: --tools-mode tri-state (hybrid default), config read removed,
+hybrid includes file tools as backup, marker-name steering
+(_text_action_mixing) + safety.py steering message, mixing counter
+(1st → warning, 3rd → suggest --tools-mode native), --no-native-tools
+deprecated alias (conflict fails fast, one-time notice). Remaining:
+transparency parity (phase 2), live e2e on glm-5.3-flash:cloud.
+
+## 1. `--tools-mode {native,hybrid,text}` — CLI-only, hybrid default
+
+The channel policy moves OUT of .ollama_agent.json (run-specific, not
+project config) onto the CLI as a tri-state flag:
+
+- `native` — single-channel: all actions via tool calls, text-block docs
+  stripped (AGENT_SYSTEM_PROMPT_NATIVE). The old "tools" channel.
+- `hybrid` (DEFAULT) — native tools solicited; text blocks (FILE/WRITE/EDIT)
+  documented + PREFERRED for file content (transparency: diffs, review,
+  rollback, .uhu/.cache/); file tools INCLUDED as backup (see §2).
+- `text` — no tools param, full text-protocol prompt. The old
+  `--no-native-tools` mode.
+
+`--no-native-tools` becomes a deprecated alias for `--tools-mode text`
+(error on conflict with an explicit --tools-mode, one-time deprecation
+warning). The merge catch stays UNCONDITIONAL in all modes.
+
+Default resolution: CLI flag only — no config fallback, no per-model
+memory. Capability downgrade: non-tool model (via /api/tags) → text mode
+regardless of flag.
+
+## 2. Hybrid redefinition: backup tools, not exclusion
+
+The exclusion of read_file/write_file/replace_in_file from the hybrid
+schemas array is REVERSED. Rationale — re-reading the two field cases:
+
+- Both mixing blobs (RUN blob, WRITE-in-name) occurred when the model was
+  CORNERED: hybrid excluded write_file from schemas while the prompt
+  demanded text-block output the native chat template makes hard to emit.
+  The text had nowhere to go, so it poured into the tool_call name slot.
+- Mixing was caused by REMOVING the native option while demanding text
+  output — not by having both options. Pre-tools-param field history:
+  models switched fluently and safely between WRITE blocks and write_file
+  when both paths were genuinely available and parseable.
+- Exclusion also destroys the fallback: a failed text block (parse error,
+  EOF mismatch) leaves the model with no native recovery path.
+
+Hybrid now: text blocks preferred (prompt guidance), file tools included
+as backup. The model has a real native fallback when a text block fails
+or feels unnatural — the same fluency as the pre-native era, now with
+solicitation on.
+
+## 3. Mixing mitigation (the precise handling this session targets)
+
+- **Marker-name detection** (tool_calls.py): extend `_MARKER_NAME_RE` to
+  WRITE:/EDIT:/FILE: — a name like "WRITE:`hello.py`" yields a STEERING
+  observation ("emit a WRITE: text block, or call write_file with
+  {path, content}"), not auto-execution (name slot may be truncated).
+- **Blob guard stays**: >64-char names degrade to `_malformed_native_call`
+  with a 512-char `_raw` preview — the unreconstructable case; fail-safe
+  observation, model self-recovers (field-proven, round 3).
+- **Mixing counter**: 1st event → yellow warning; 3rd → persistent notice
+  suggesting `--tools-mode native` for this model.
+- **Transparency parity (phase 2)**: diff-style confirmation + rollback/
+  caching integration for write_file/replace_in_file, so the backup path
+  is also transparent. Dissolves the preference question — both paths
+  reviewable.
+
+## 4. Implementation surface
+
+- cli.py: `--tools-mode` arg + post-parse validation (conflict with
+  --no-native-tools, deprecation warning)
+- session.py: `tools_mode` constructor param (default "hybrid"); DELETE the
+  config read at session.py:77; `_native_solicit = mode != "text" and
+  _model_supports_tools(...)`; mixing counter
+- system_prompt.py: hybrid branch keeps text-block docs + preference
+  guidance; tools_native_prompt(channel="hybrid") gains backup-tool wording
+- tools/__init__.py: tools_schemas(channel="hybrid") INCLUDES the file
+  tools again (drop _NATIVE_TEXT_DUPLICATES exclusion in hybrid)
+- tool_calls.py: extended marker regex + steering observation
+- Banner: `Native tools: on (hybrid|native)` / `off (text protocol)`
+- Tests: update TestNativeSchemaExclusions (hybrid now includes file tools),
+  channel-branch tests, flag-conflict + default-resolution tests,
+  marker-name steering tests
+- README: flag docs; this doc's open-items list updated
+
+---
+
 Status: IMPLEMENTED (2026-11-08) — native-first default for tool-capable models,
 --no-native-tools = legacy text-protocol mode. E2E verified on glm-5.3-flash:cloud.
 See "PoC results", "Decision", "Implementation notes" below.
@@ -355,6 +445,15 @@ Open: a CLI flag override (--native-channel) and transparency parity for
 the file tools (diff-style confirmation instead of raw JSON dump) — the
 latter would make "tools" channel fully match the text blocks' review
 experience and is the real fix for the original transparency concern.
+
+**SUPERSEDED (2026-11-08, session 2):** the config-based policy above is
+replaced by the `--tools-mode` CLI flag (hybrid default, no config) and the
+hybrid redefinition (backup tools, not exclusion) — see the DESIGN UPDATE
+section at the top of this doc. The "cornered model" re-reading of the two
+field cases reverses the exclusion decision: mixing was caused by removing
+the native option while demanding text output, not by having both options.
+Pre-tools-param field history: models switched fluently and safely between
+WRITE blocks and write_file when both paths were genuinely available.
 
 # Open questions
 

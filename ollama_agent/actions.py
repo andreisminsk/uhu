@@ -229,7 +229,7 @@ class ActionMixin:
                 f"(ollama_agent.tools failed to import: {all_tools}). "
                 f"Restart the session to recover.]"
             )
-            agent_print(msg + "\n")
+            tool_print(msg + "\n")
             return msg
         tool_name = action["name"]
         params = action.get("params", {})
@@ -240,12 +240,38 @@ class ActionMixin:
                 f"Please fix the JSON syntax and retry. "
                 f"Use: **TOOL:`{tool_name}`** then a ```json block with valid JSON, then **EOF:`{tool_name}`**]"
             )
-            agent_print(msg + "\n")
+            tool_print(msg + "\n")
+            return msg
+        # Channel-mixing steering (session 2, hybrid-with-backup): the
+        # normalizer degraded a text-action marker in the native name slot
+        # to a synthetic entry. Give the model the steering observation —
+        # re-emit as a text block or call the backup tool — instead of the
+        # generic Unknown-tool error. The _raw preview carries the marker.
+        if tool_name == "_text_action_mixing":
+            raw = str(params.get("_raw", ""))[:80]
+            from .tool_calls import looks_like_text_action
+            marker = raw.strip().split(":", 1)[0].split("`", 1)[0].upper() if raw else ""
+            backup = {"WRITE": "write_file", "EDIT": "replace_in_file", "FILE": "read_file"}.get(marker, "run_command")
+            msg = (
+                f"[TOOL FAILED: you tried to issue a text action ('{raw}') on the native tool-call channel. "
+                f"Re-emit it as a {marker or 'text'}: text block with a matching EOF: marker, "
+                f"or call the {backup} tool with proper parameters.]"
+            )
+            tool_print(msg + "\n")
+            return msg
+        if tool_name == "_malformed_native_call":
+            raw = str(params.get("_raw", ""))[:80]
+            msg = (
+                f"[TOOL FAILED: malformed native tool call — the tool name slot contains a text blob "
+                f"('{raw}...'). Emit a clean native tool call (short name + JSON params), "
+                f"or use text action blocks for file/shell operations.]"
+            )
+            tool_print(msg + "\n")
             return msg
         all_tool_names = [t.name for t in all_tools()]
         tool, corrected_name, error_msg = resolve_tool_name(tool_name, all_tool_names, get_tool, self.workdir)
         if not tool:
-            agent_print(error_msg + "\n")
+            tool_print(error_msg + "\n")
             return error_msg
         if corrected_name != tool_name:
             agent_print(f"[Auto-corrected tool name: '{tool_name}' → '{corrected_name}']")
@@ -301,12 +327,12 @@ class ActionMixin:
                         msg = (f"[TOOL FAILED: {tool_name} — '{target}' is a sensitive file "
                                f"({decision.reason}) and privacy mode is strict. "
                                f"Ask the user to read it manually if needed.]")
-                        agent_print(msg + "\n")
+                        tool_print(msg + "\n")
                         return msg
                     if decision.action == "confirm":
                         if not self._confirm_or_auto(f"[SENSITIVE FILE] read {target}", force_confirm=True):
                             msg = f"[TOOL FAILED: {tool_name} — reading '{target}' declined by user (sensitive file: {decision.reason})]"
-                            agent_print(msg + "\n")
+                            tool_print(msg + "\n")
                             return msg
                         agent_print(f"[Privacy: user approved reading sensitive file '{target}']")
                     elif decision.action == "redact":
@@ -371,11 +397,11 @@ class ActionMixin:
             # terminate the whole agent process.
             msg = (f"[TOOL FAILED: {tool_name} — SystemExit({e.code}) raised inside tool "
                    f"(executed code called sys.exit). Converted to failure, session continues.]")
-            agent_print(msg + "\n")
+            tool_print(msg + "\n")
             return msg
         except Exception as e:
             msg = f"[TOOL FAILED: {tool_name}: {e}]"
-            agent_print(msg + "\n")
+            tool_print(msg + "\n")
             return msg
 
     def execute_skill(self, action):
@@ -390,12 +416,12 @@ class ActionMixin:
                 f"Please fix the JSON syntax and retry. "
                 f"Use: **SKILL:`{skill_name}`** then a ```json block with valid JSON, then **EOF:`{skill_name}`**]"
             )
-            agent_print(msg + "\n")
+            tool_print(msg + "\n")
             return msg
         skill = get_skill(skill_name)
         if not skill:
             msg = f"[SKILL FAILED: Unknown skill '{skill_name}']"
-            agent_print(msg + "\n")
+            tool_print(msg + "\n")
             return msg
         params_preview = json.dumps(params, ensure_ascii=False)
         if len(params_preview) > 60:
@@ -453,13 +479,14 @@ class ActionMixin:
             return msg
         except SystemExit as e:
             msg = f"[SKILL FAILED: {skill_name} — SystemExit({e.code}) raised inside skill, session continues]"
-            agent_print(msg + "\n")
+            tool_print(msg + "\n")
             return msg
         except Exception as e:
             agent_print(f"\n{'─'*60}")
             agent_print(f"⚡ SKILL FAILED: {skill_name}: {e}")
             agent_print(f"{'─'*60}\n")
             msg = f"[SKILL FAILED: {skill_name}: {e}]"
+            tool_print(msg + "\n")
             return msg
 
     def _native_action_dicts(self, native_calls):
@@ -574,6 +601,17 @@ class ActionMixin:
             if native_actions:
                 agent_print(f"[native tool_calls merged into action pipeline: {len(native_actions)}]\n")
                 actions.extend(native_actions)
+                # Mixing counter (session 2, hybrid-with-backup): text-action
+                # markers in the name slot are steering events. 1st → warning;
+                # 3rd → suggest --tools-mode native for this model.
+                from .tool_calls import looks_like_text_action
+                mixed = [tc for tc in native_actions if looks_like_text_action(tc["name"]) or tc["name"] in ("_text_action_mixing", "_malformed_native_call")]
+                if mixed:
+                    self._mix_events = getattr(self, '_mix_events', 0) + len(mixed)
+                    if self._mix_events == len(mixed):
+                        agent_print(f"[⚠ channel mixing: text action in the native name slot ({mixed[0]['name'][:60]}) — steering sent]")
+                    elif self._mix_events >= 3:
+                        agent_print(f"[⚠ channel mixing x{self._mix_events}: this model keeps routing text actions into tool calls — consider --tools-mode native]")
         elif (not native_pending and self.tools
               and getattr(self, '_native_rendered_last_call', False)):
             # Field-found failure mode (see NATIVE-TOOL-CALLS-ARCH): uhu's own
