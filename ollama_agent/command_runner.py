@@ -11,7 +11,7 @@ import sys
 import threading
 import time
 
-from .display import agent_print, neutralize_screen_controls
+from .display import agent_print, neutralize_screen_controls, tool_print
 from .process import kill_proc_tree
 from .platform import terminal
 from .safety import CommandSafetyGate, get_base_command
@@ -206,7 +206,10 @@ class CommandRunner:
                     if streamed <= MAX_STREAMED_LINES:
                         # Console copy: sanitized (no screen wipes/alt-screen)
                         # and capped — animations must not flood scrollback.
-                        agent_print(neutralize_screen_controls(line), end='')
+                        # tool_print, not agent_print: streamed output belongs
+                        # to the command (tool lane), not agent voice — no
+                        # [AGENT] prefix / no agent color on command output.
+                        tool_print(neutralize_screen_controls(line), end='')
                         sys.stdout.flush()
                     elif streamed == MAX_STREAMED_LINES + 1:
                         agent_print(f"\n[... console streaming suppressed after {MAX_STREAMED_LINES} lines — output still being captured]\n")

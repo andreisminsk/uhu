@@ -6,7 +6,7 @@ import re
 import sys
 
 from .constants import MIME_TYPES, IMAGE_MIME_TYPES, SKIP_EXT, MODEL_TEMPERATURE
-from .actions import agent_print
+from .actions import agent_print, tool_print
 from .input_utils import read_full_input
 from . import sound
 
@@ -35,7 +35,7 @@ class CommandMixin:
             status = j["status"]
             progress = f" ({j['progress']:.0%})" if j.get("progress", 0) > 0 else ""
             elapsed = j.get("elapsed", "")
-            agent_print(f"  {j['id']}: {status}{progress} — {j['name']} {elapsed}")
+            tool_print(f"  {j['id']}: {status}{progress} — {j['name']} {elapsed}")
         agent_print()
 
     def do_skills(self):
@@ -63,7 +63,7 @@ class CommandMixin:
                 extras += f" [{len(s.references)} ref(s)]"
             if s.skill_dir:
                 extras += f" (from {os.path.relpath(s.skill_dir, self.workdir)})"
-            agent_print(f"  {s.name}: {s.description}{extras}{param_str}")
+            tool_print(f"  {s.name}: {s.description}{extras}{param_str}")
         agent_print()
 
     def show_ctx(self, exact_tokens=None):
@@ -535,7 +535,7 @@ class CommandMixin:
             suffix = f"\n  ... {skipped} file(s) skipped" if skipped else ""
             agent_print(f"[Attached {len(parts)} file(s) from {path}{suffix}]")
             for line in lines:
-                agent_print(line)
+                tool_print(line)
             agent_print()
         else:
             rel, cnt = file_info[0]
@@ -660,7 +660,7 @@ class CommandMixin:
             # Try decoding as UTF-8
             with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
-            agent_print(content, end="" if content.endswith("\n") else "\n")
+            tool_print(content, end="" if content.endswith("\n") else "\n")
         except UnicodeDecodeError:
             agent_print(f"[Error: {os.path.basename(path)} is not a valid text file (UTF-8 decode failed) — use /attach-bin instead]\n")
         except Exception as e:
@@ -694,7 +694,7 @@ class CommandMixin:
         lines = (dirs or []) + (files or [])
         agent_print(f"[{path}] ({len(dirs)} dirs, {len(files)} files)")
         for line in lines:
-            agent_print(f"  {line}")
+            tool_print(f"  {line}")
         agent_print()
 
     def do_tree(self, args_str):
@@ -720,7 +720,7 @@ class CommandMixin:
                     return
                 agent_print(f"[{path}] ({len(entries)} files, plain)")
                 for e in entries:
-                    agent_print(f"  {e}")
+                    tool_print(f"  {e}")
                 agent_print()
             else:
                 # Hierarchical tree
@@ -760,7 +760,7 @@ class CommandMixin:
                 _build_tree(path, "")
                 agent_print(f"[{path}] ({dir_count} dirs, {file_count} files)")
                 for line in lines:
-                    agent_print(f"  {line}")
+                    tool_print(f"  {line}")
                 agent_print()
         except Exception as e:
             agent_print(f"[Tree failed: {e}]\n")
@@ -1113,20 +1113,20 @@ class CommandMixin:
             agent_print(f"  Auto-writes ({len(self.auto_writes)}):")
             for p in sorted(self.auto_writes):
                 tag = " (always)" if p in self.always_writes else ""
-                agent_print(f"    {p}{tag}")
+                tool_print(f"    {p}{tag}")
         if self.auto_run_prefixes:
             agent_print(f"  Auto-run commands ({len(self.auto_run_prefixes)}):")
             for p in sorted(self.auto_run_prefixes):
                 tag = " (always)" if p in self.always_runs else ""
-                agent_print(f"    {p}{tag}")
+                tool_print(f"    {p}{tag}")
         if self.always_writes and not self.auto_writes:
             agent_print(f"  Always-writes ({len(self.always_writes)}):")
             for p in sorted(self.always_writes):
-                agent_print(f"    {p}")
+                tool_print(f"    {p}")
         if self.always_runs and not self.auto_run_prefixes:
             agent_print(f"  Always-run commands ({len(self.always_runs)}):")
             for p in sorted(self.always_runs):
-                agent_print(f"    {p}")
+                tool_print(f"    {p}")
         if not self.auto_writes and not self.auto_run_prefixes and not self.always_writes and not self.always_runs:
             agent_print("  (no specific auto-approvals)")
         agent_print(f"  Config: {self._coder_config_path()}")
@@ -1172,9 +1172,9 @@ class CommandMixin:
         if not copied and not skipped:
             agent_print("[Nothing to migrate — no config/secrets found in workdir]")
         for line in copied:
-            agent_print(f"[Copied]{line}")
+            tool_print(f"[Copied]{line}")
         for line in skipped:
-            agent_print(f"[Skipped]{line}")
+            tool_print(f"[Skipped]{line}")
 
         # Starter .env — never overwrite, never auto-copy inline tokens into it
         env_path = dotenv_path()

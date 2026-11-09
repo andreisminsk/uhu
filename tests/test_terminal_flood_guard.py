@@ -74,8 +74,9 @@ class TestCommandRunnerStreamCap:
         import ollama_agent.command_runner as cr
 
         printed = []
-        monkeypatch.setattr(cr, "agent_print",
-                            lambda *a, **k: printed.append("".join(a)))
+        _record = lambda *a, **k: printed.append("".join(a))
+        monkeypatch.setattr(cr, "agent_print", _record)
+        monkeypatch.setattr(cr, "tool_print", _record)
 
         flood = tmp_path / "flood.py"
         flood.write_text(
