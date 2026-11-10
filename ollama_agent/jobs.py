@@ -28,6 +28,23 @@ _INTERRUPTED = "interrupted"
 _TERMINAL_STATUSES = {_COMPLETED, _FAILED, _CANCELLED, _INTERRUPTED}
 
 
+def coerce_timeout(value: Any) -> Optional[float]:
+    """Coerce a timeout to a positive float in seconds, or None.
+
+    Model-supplied tool params aren't guaranteed numeric — a string like
+    "300" makes the watchdog's ``elapsed > job.timeout`` raise TypeError
+    (float vs str). Accepts int/float and numeric strings; anything
+    unparsable, bool, or non-positive becomes None (no timeout).
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        t = float(value)
+    except (TypeError, ValueError):
+        return None
+    return t if t > 0 else None
+
+
 class Job:
     """A single background job executed in a worker thread.
 
@@ -57,7 +74,8 @@ class Job:
         self.error: Optional[str] = None
         self.log: list[str] = []
         self.cancel_event = threading.Event()
-        self.timeout = timeout
+        # Normalize: tool params / persisted JSON may carry non-numeric junk.
+        self.timeout = coerce_timeout(timeout)
         self._worker_fn = worker_fn
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()

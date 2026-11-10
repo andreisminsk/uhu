@@ -167,6 +167,14 @@ Examples:
         tool_name = params.get("tool")
         job_params = params.get("params", {})
         timeout = params.get("timeout")
+        if timeout is not None:
+            from ..jobs import coerce_timeout
+            timeout = coerce_timeout(timeout)
+            if timeout is None:
+                return {
+                    "error": "Parameter 'timeout' must be a positive number "
+                             "of seconds (e.g. 300, not \"300\" or \"5m\")."
+                }
 
         if command:
             worker_fn = lambda j: _subprocess_worker(j, command, workdir)
