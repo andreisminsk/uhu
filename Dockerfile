@@ -4,6 +4,7 @@ FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 python3-pip python3-venv \
         curl git vim nano procps zstd openssh-server \
+        libatomic1 \
     && rm -rf /var/lib/apt/lists/* && \
     mkdir -p /run/sshd && \
     echo "PermitRootLogin yes" >> /etc/ssh/sshd_config && \
