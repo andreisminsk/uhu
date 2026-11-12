@@ -77,7 +77,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
                 thinking=True, quiet=False, mcp=False, api_type="ollama", api_key=None,
                 tpm_limit=None, max_context=None, no_llm_parsing=False,
                 openai_extra_body=None, temperature=None, max_rounds=None,
-                think_level=None, top_p=None, tools_mode="hybrid"):
+                think_level=None, top_p=None, max_out=None, tools_mode="hybrid"):
         _reconfigure_stdout()
         self.quiet = quiet
         
@@ -95,6 +95,9 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
         self._top_p = top_p
         # Thinking effort — None = omit the param (model default)
         self._think_level = think_level
+        # Output cap per model call (--max-out; OpenAI-compatible only). None =
+        # 16384 default, 0 = omit the cap (server default applies).
+        self._max_out = max_out
 
         self.client = None  # Deprecated: use _backend instead
         self.model = model
@@ -179,6 +182,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             temperature=temperature,
             top_p=top_p,
             think_level=think_level,
+            max_out=max_out,
             tools_schemas=self._native_tools_schemas(),
             quiet=quiet
         )
@@ -564,6 +568,7 @@ class ChatSession(CommandMixin, ActionMixin, PersistenceMixin):
             temperature=self._temperature,
             top_p=self._top_p,
             think_level=think_level,
+            max_out=getattr(self, "_max_out", None),
             tools_schemas=self._native_tools_schemas(),
             quiet=self.quiet
         )

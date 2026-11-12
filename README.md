@@ -45,6 +45,7 @@ uhu --model yourmodel
 - **OpenAI-compatible API** (`--api-openai`): Use OpenAI-compatible endpoints (e.g., Ollama's `/v1` or cloud providers)
 - **Context management** (OpenAI-compatible): Client-side history trimming with summarization and tool-call pair preservation — the OpenAI protocol doesn't guarantee server-side context eviction
 - **TPM rate limiting** (`--tpm`): Proactive tokens-per-minute tracking with rolling 60s window, aggressive 429 retry with jittered backoff and Retry-After parsing
+- **Output cap control** (`--max-out`): Max output tokens per model call (OpenAI-compatible: `max_completion_tokens`) — thinking models can burn the old hardcoded 8192 cap on hidden reasoning before a single visible token, so the default is now 16384; `--max-out 0` omits the cap (provider default applies). Clamped by `--ctx`; ignored by the native Ollama API (it sends no `num_predict` by default)
 - **Clipboard image paste** (`Alt+V`): Paste screenshots from clipboard — saves to `.uhu/.cache/` and references in context for analysis with the `image-analysis` tool (requires `Pillow` on Windows/macOS, `xclip`/`wl-paste` on Linux)
 - **Ollama balance indicator** (native API only): Shows session/weekly usage and remaining balance from ollama.com alongside the context indicator (requires `beautifulsoup4` + exported cookies in `ollama.com_cookies.txt`)
 - **LLM fallback parser** (off by default, `--no-llm-parsing` to disable): When the regex parser detects suspicious results (risky markers in fenced content, empty tool params, unclosed blocks), a configurable "Parser LLM" verifies and corrects the parse. Configured via the `llm_parser` section in `.ollama_agent.json` (`model`, `base_url`, `api_type`, `api_key`, `timeout`). Uses the main model by default.
@@ -375,6 +376,12 @@ If your OpenAI dashboard says `gpt-5.5` has **200k TPM** or more, you can use:
 
 Avoid setting `--max-context` near full `--ctx` on Tier 1. In this agent, each feedback round resends conversation history, so a 100k-token context can burn TPM very quickly and trigger 429s.
 
+On OpenAI-compatible endpoints uhu also caps output per model call: `--max-out` (default 16384, clamped by `--ctx`; `0` omits the cap so the provider default applies). With thinking models billed by output tokens, sizing the output budget matters as much as the input budget — reasoning tokens count against it:
+
+```bash
+--api-openai --model gpt-5.5 --ctx 128000 --max-context 16000 --max-out 32768 --tpm 30000
+```
+
 ### Provider-Specific Request Params (`--openai-extra-body`)
 
 Some OpenAI-compatible providers accept non-standard request body fields that the OpenAI SDK doesn't have typed parameters for (e.g. OpenRouter's `reasoning` and `provider` routing). Use `--openai-extra-body` to pass a JSON file whose contents are merged into every request body:
@@ -556,6 +563,7 @@ uhu --no-autosave --no-cache
 | `--no-sound`      | off (sound on)             | Disable event sounds — "done" when user feedback is needed, "question" on confirmation prompts. macOS: `afplay`; Windows: `winsound` system scheme; Linux: `paplay`/`pw-play` + freedesktop theme; fallback: terminal bell. Toggled mid-session with `/sound` |
 | `--tpm`           | —                          | TPM limit for OpenAI-compatible backends (enables proactive rate-limit tracking + aggressive 429 retry) |
 | `--max-context`   | `16384` (with `--tpm`)     | Max context cap for history trimming (OpenAI-compatible + `--tpm` only; without `--tpm`, uses `--ctx`) |
+| `--max-out`       | `16384`                    | Max output tokens per model call (OpenAI-compatible: `max_completion_tokens`), clamped by `--ctx`. `0` omits the cap — provider default applies. Ignored by the native Ollama API (no `num_predict` by default) |
 | `--temperature`   | `0.0` (Ollama) / not sent (OpenAI-compat) | Sampling temperature 0.0–2.0 — applies to both API types; change mid-session with `/temperature` |
 | `--think-level`   | model default              | Thinking effort for reasoning models: `off`, `low`, `medium`, `high`, `max` — Ollama native sends top-level `think`, OpenAI-compatible sends `reasoning_effort`; change mid-session with `/think` |
 | `--max-rounds`   | `3` (interactive) / `7` (one-shot) | Max feedback-loop rounds per message — how many action→observation→model iterations the agent runs before handing back to you. Changeable mid-session with `/max-rounds` |

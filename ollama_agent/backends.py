@@ -4,6 +4,10 @@ Provides unified interface for different LLM APIs:
 - OllamaNativeBackend: Uses ollama.Client with /api/chat endpoint
 - OpenAIBackend: Uses openai.Client with /v1/chat/completions endpoint
 
+Note: the output cap knob (--max-out, max_out) applies to the OpenAI-compatible
+backend only (max_completion_tokens). The native Ollama backend ignores it —
+it already sends no num_predict unless told so explicitly (tools/llm_query.py).
+
 Optional components (OpenAI-compatible only, None for Ollama):
 - TokenCounter: tiktoken-based token counting with char/4 fallback
 - HistoryTrimmer: client-side context trimming with summarization
@@ -764,6 +768,7 @@ class OpenAIBackend(LLMBackend):
                  temperature: Optional[float] = None,
                  think_level: Optional[str] = None,
                  top_p: Optional[float] = None,
+                 max_out: Optional[int] = None,
                  tools_schemas: Optional[List[Dict]] = None):
         super().__init__()
         try:
@@ -783,6 +788,10 @@ class OpenAIBackend(LLMBackend):
         # Thinking effort — None = don't send reasoning_effort (model default);
         # "off" → reasoning_effort "none"; otherwise sent as the level name.
         self.think_level = think_level
+        # Output cap per model call (--max-out). None = 16384 default, 0 = omit
+        # max_completion_tokens (server default applies). Clamped by ctx_size in
+        # _resolved_out_cap(). See dev-docs/MAX-OUTPUT-TOKENS-FLAG.md.
+        self.max_out = max(0, max_out) if max_out is not None else None
         # Native tools solicitation (see OllamaNativeBackend) — /v1 uses the
         # same {"type": "function", "function": {...}} tools shape.
         self._tools_schemas = tools_schemas or None
@@ -966,10 +975,27 @@ class OpenAIBackend(LLMBackend):
         # Some models (e.g. o1/o3 series) don't support temperature or max_tokens.
         # We try max_completion_tokens first (newer API), fall back to max_tokens,
         # and if both fail, retry without any max parameter.
-        max_val = min(self.ctx_size, 8192)
-        kwargs["max_completion_tokens"] = max_val
+        # Output cap resolution (--max-out, dev-docs/MAX-OUTPUT-TOKENS-FLAG.md):
+        # explicit value wins, clamped by ctx_size (output can never exceed the
+        # assumed window); omitted → 16384 (the de-facto modern-server default;
+        # thinking models routinely spend >8K on hidden reasoning before a single
+        # visible token); 0 → omit the param entirely, server default applies.
+        max_val = self._resolved_out_cap()
+        if max_val > 0:
+            kwargs["max_completion_tokens"] = max_val
         return kwargs
-    
+
+    def _resolved_out_cap(self) -> int:
+        """Resolved per-request output cap: --max-out or 16384, clamped by ctx_size.
+
+        0 means "omit the cap parameter" (server default applies). Replaces the
+        old hardcoded min(ctx_size, 8192), which starved thinking models that
+        spend >8K tokens on hidden reasoning before a visible token (observed:
+        [out: 8192 tokens (0|8192)] — zero visible output).
+        """
+        max_val = self.max_out if self.max_out is not None else 16384
+        return min(max_val, self.ctx_size)
+
     def _call_create(self, messages: List[Dict], stream: bool):
         """Call create with fallback for max_tokens parameter incompatibility."""
         kwargs = self._build_create_kwargs(messages, stream)
@@ -1010,7 +1036,9 @@ class OpenAIBackend(LLMBackend):
             if "max_completion_tokens" in err_str or "unrecognized" in err_str:
                 logger.warning("OpenAI fallback: switching max_completion_tokens → max_tokens (%s)", e)
                 kwargs.pop("max_completion_tokens", None)
-                kwargs["max_tokens"] = min(self.ctx_size, 8192)
+                out_cap = self._resolved_out_cap()
+                if out_cap > 0:
+                    kwargs["max_tokens"] = out_cap
                 try:
                     return self.client.chat.completions.create(**kwargs)
                 except Exception as e2:
@@ -1025,7 +1053,9 @@ class OpenAIBackend(LLMBackend):
             if "unsupported" in err_str and "max" in err_str:
                 logger.warning("OpenAI fallback: unsupported-max path, switching to max_tokens (%s)", e)
                 kwargs.pop("max_completion_tokens", None)
-                kwargs["max_tokens"] = min(self.ctx_size, 8192)
+                out_cap = self._resolved_out_cap()
+                if out_cap > 0:
+                    kwargs["max_tokens"] = out_cap
                 try:
                     return self.client.chat.completions.create(**kwargs)
                 except Exception as e2:
@@ -1187,6 +1217,7 @@ def create_backend(
     temperature: Optional[float] = None,
     think_level: Optional[str] = None,
     top_p: Optional[float] = None,
+    max_out: Optional[int] = None,
     tools_schemas: Optional[List[Dict]] = None
 ) -> LLMBackend:
     """Factory function to create appropriate backend.
@@ -1205,6 +1236,10 @@ def create_backend(
         top_p: Top-p (nucleus) sampling 0.0-1.0 (None = model/provider default, not sent)
         think_level: Thinking effort (None = model default; "off" disables thinking;
             "low"/"high"/"max" sent as Ollama 'think' level or OpenAI 'reasoning_effort')
+        max_out: Output cap per model call, OpenAI-compatible only (max_completion_tokens).
+            None = 16384 default (clamped by ctx_size); 0 = omit the cap (server
+            default applies). Ignored by the native Ollama backend (no num_predict
+            by default).
         quiet: Suppress non-essential output
     
     Returns:
@@ -1229,6 +1264,7 @@ def create_backend(
             temperature=temperature,
             top_p=top_p,
             think_level=think_level,
+            max_out=max_out,
             tools_schemas=tools_schemas,
             quiet=quiet
         )

@@ -95,6 +95,10 @@ def main():
                         help="Tokens-per-minute limit for OpenAI-compatible backends (enables proactive TPM tracking and aggressive 429 retry)")
     parser.add_argument("--max-context", type=int, default=None,
                         help="Max context cap for history trimming (OpenAI-compatible + --tpm only, default: 16384)")
+    parser.add_argument("--max-out", type=int, default=None, dest="max_out",
+                        help="Max output tokens per model call (OpenAI-compatible: max_completion_tokens; "
+                             "default: 16384, or ctx if smaller; clamped by --ctx). 0 omits the cap — "
+                             "provider default applies")
     parser.add_argument("--temperature", type=float, default=None,
                         help="Sampling temperature 0.0-2.0 (default: 0.0 for Ollama native API; provider default for OpenAI-compatible API). Change mid-session with /temperature")
     parser.add_argument("--top-p", type=float, default=None, dest="top_p",
@@ -238,6 +242,7 @@ def main():
         openai_extra_body=args.openai_extra_body,
         tpm_limit=args.tpm,
         max_context=args.max_context,
+        max_out=args.max_out,
         no_llm_parsing=args.no_llm_parsing,
         temperature=args.temperature,
         top_p=args.top_p,
