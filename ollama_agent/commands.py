@@ -1240,7 +1240,7 @@ class CommandMixin:
         ("/timeout ", "_cmd_timeout", 8),
         ("/temperature ", "_cmd_temperature", 13),
         ("/top-p ", "_cmd_top_p", 6),
-        ("/think-level ", "_cmd_think_level", 14),
+        ("/think-level ", "_cmd_think_level", 13),
         ("/max-rounds ", "_cmd_max_rounds", 12),
         ("/attach-bin", "_cmd_attach_bin", 11),
         ("/embed-bin", "_cmd_embed_bin", 10),
@@ -1275,9 +1275,12 @@ class CommandMixin:
             return getattr(self, method_name)("")
 
         # Prefix match (sorted by length desc to avoid collisions)
+        # Slice offset derived from the prefix itself — the hardcoded numeric
+        # element in the tuples has drifted before (/think-level 14 vs 13 chars
+        # cut 'low' → 'ow' → [Invalid level], field 2026-11-12).
         for prefix, method_name, offset in self._PREFIX_COMMANDS:
             if lower.startswith(prefix):
-                return getattr(self, method_name)(user_input[offset:])
+                return getattr(self, method_name)(user_input[len(prefix):])
 
         return None
 
