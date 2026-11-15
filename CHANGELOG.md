@@ -2,6 +2,10 @@
 
 All notable changes per release. Versions tracked in `uhu-ver.txt`; commits landing between version bumps accumulate under the following bump.
 
+## [2.2.3] - 2026-11-15
+
+- Remove duplicate "AGENT:" prefix from shell-chaining safety message (lane marker `[AGENT]` already added by agent_print).
+
 ## [2.2.2] - 2026-11-15
 
 - Fix think-level value parsing.
