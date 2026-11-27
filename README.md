@@ -1,6 +1,6 @@
 Project demo video: https://youtu.be/heG0QWUt4Lw
 
-![uhu logo](uhu-logo.png){width=50%}
+![uhu logo](uhu-logo-small.png)
 
 # ollama-chat-agentic
 
