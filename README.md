@@ -993,8 +993,6 @@ uhu is free under standard PolyForm licenses for:
 - individuals and non-commercial use — **PolyForm Noncommercial 1.0.0** ([text](https://polyformproject.org/licenses/noncommercial/1.0.0));
 - small businesses — any use, including internal commercial use — with fewer than 100 workers (employees + independent contractors) and less than $1,000,000 prior-year revenue (2019, CPI-adjusted) — **PolyForm Small Business 1.0.0** ([text](https://polyformproject.org/licenses/small-business/1.0.0)).
 
-Use by larger organizations (including evaluation and production) requires a separate license from the copyright holder — contact: [@MartiAi_Feedback_bot](https://t.me/MartiAi_Feedback_bot).
-
 If you qualify under more than one license, you may pick whichever you prefer. See [LICENSE](LICENSE) for full terms.
 
 This project is AI-assisted — code was produced with the help of large language models under paid accounts. The license applies to the curated work as a whole, including human direction, review, and creative choices.

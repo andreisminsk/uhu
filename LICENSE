@@ -6,9 +6,7 @@ This entire file (title through the Required Notice line) is the
 LICENSE for uhu. It contains two verbatim, unmodified standard
 PolyForm licenses. Your rights are the UNION of the two: you may
 use the software under any of these licenses whose terms you meet;
-each stands independently. Production use by organizations beyond
-these terms requires a separate license from the copyright holder
-(Telegram [@MartiAi_Feedback_bot](https://t.me/MartiAi_Feedback_bot)).
+each stands independently.
 
 ## Which license covers you?
 
@@ -17,10 +15,9 @@ these terms requires a separate license from the copyright holder
 | An individual using uhu for personal study, hobby, research, or any noncommercial purpose | PolyForm Noncommercial 1.0.0 (License 1) |
 | A charitable, educational, public research, public safety or health, environmental, or government organization | PolyForm Noncommercial 1.0.0 (License 1) |
 | A company (incl. a sole proprietor) with fewer than 100 workers (employees + independent contractors) AND less than $1,000,000 (2019, CPI-adjusted) prior-year revenue — any use, including internal business use and distribution | PolyForm Small Business 1.0.0 (License 2) |
-| A larger organization — any use, incl. evaluation and production | None of the above — contact the licensor for a negotiated license |
 
 If you qualify under more than one license, you may pick whichever
-you prefer. The Required Notice line at the bottom applies to both licenses and must travel with every copy.
+you prefer. A Required Notice line follows each license — it applies to that license and must travel with every copy.
 
 ---
 
@@ -156,6 +153,8 @@ software under these terms.
 **Use** means anything you do with the software requiring one
 of your licenses.
 
+Required Notice: Andrei Suvorov (c) 2026 (https://github.com/andreisminsk)
+
 ---
 
 # License 2 of 2 — PolyForm Small Business License 1.0.0
@@ -223,7 +222,5 @@ The **licensor** is the individual or entity offering these terms, and the **sof
 **Your licenses** are all the licenses granted to you for the software under these terms.
 
 **Use** means anything you do with the software requiring one of your licenses.
-
----
 
 Required Notice: Andrei Suvorov (c) 2026 (https://github.com/andreisminsk)
