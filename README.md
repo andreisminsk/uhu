@@ -988,18 +988,16 @@ We welcome feedback, bug reports, and suggestions:
 
 ## License
 
-This project is licensed under **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)**.
+uhu is free under standard PolyForm licenses for:
 
-You are free to use, modify, and share this work for **non-commercial purposes only**, provided you:
+- individuals and non-commercial use — **PolyForm Noncommercial 1.0.0** ([text](https://polyformproject.org/licenses/noncommercial/1.0.0));
+- small businesses — any use, including internal commercial use — with fewer than 100 workers (employees + independent contractors) and less than $1,000,000 prior-year revenue (2019, CPI-adjusted) — **PolyForm Small Business 1.0.0** ([text](https://polyformproject.org/licenses/small-business/1.0.0)).
 
-- Give appropriate credit (attribution)
-- Distribute derivatives under the same license (share-alike)
+Use by larger organizations (including evaluation and production) requires a separate license from the copyright holder — contact: [@MartiAi_Feedback_bot](https://t.me/MartiAi_Feedback_bot).
 
-**Commercial use is not permitted** under this license. As the copyright holder, the author retains full commercial rights.
+If you qualify under more than one license, you may pick whichever you prefer. See [LICENSE](LICENSE) for full terms.
 
 This project is AI-assisted — code was produced with the help of large language models under paid accounts. The license applies to the curated work as a whole, including human direction, review, and creative choices.
-
-Full license text: [LICENSE](LICENSE) · https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
 
 **Disclaimer:** This project is provided "as is", without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors be liable for any claim, damages, or other liability arising from the use of this software.
 

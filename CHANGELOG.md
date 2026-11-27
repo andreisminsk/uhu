@@ -2,6 +2,10 @@
 
 All notable changes per release. Versions tracked in `uhu-ver.txt`; commits landing between version bumps accumulate under the following bump.
 
+## [3.0.0] - 2026-11-27
+
+- License change: CC BY-NC-SA 4.0 → PolyForm two-tier stack (PolyForm Noncommercial 1.0.0 + PolyForm Small Business 1.0.0). Free use for individuals, non-commercial purposes, and small businesses (fewer than 100 workers and less than $1M prior-year revenue); use by larger organizations requires a separate license from the copyright holder. Major version bump: the governing license terms change.
+
 ## [2.2.3] - 2026-11-15
 
 - Remove duplicate "AGENT:" prefix from shell-chaining safety message (lane marker `[AGENT]` already added by agent_print).
